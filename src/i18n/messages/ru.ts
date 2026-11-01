@@ -12,6 +12,7 @@ const ru: Messages = {
     back: "Назад",
     export: "Экспорт",
     loading: "Загрузка …",
+    sort: "Сортировка",
     all: "Все",
     none: "—",
     yes: "Да",

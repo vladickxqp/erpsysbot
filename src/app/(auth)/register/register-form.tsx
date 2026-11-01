@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { registerAction, type AuthState } from "../actions";
 export function RegisterForm() {
   const { t } = useI18n();
   const [state, action, pending] = useActionState<AuthState, FormData>(registerAction, undefined);
+  const [, startSubmit] = useTransition();
   const bad = (field: string) => state?.fields?.includes(field) || undefined;
   return (
     <Card className="shadow-sm">
@@ -19,7 +20,15 @@ export function RegisterForm() {
         <CardTitle className="text-xl">{t("auth.register")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={action} className="grid gap-4">
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            // By hand, so a wrong password does not also empty the email.
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startSubmit(() => action(data));
+          }}
+        >
           <div className="grid gap-2">
             <Label htmlFor="company">{t("auth.company")}</Label>
             <Input id="company" name="company" required minLength={2} maxLength={120} aria-invalid={bad("company")} autoFocus />

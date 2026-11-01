@@ -1,0 +1,77 @@
+# AI Business OS on one machine: database, app, nightly backup and — with
+# `--profile tunnel` — the Cloudflare tunnel of kleinbot.online.
+#
+#   docker compose --profile tunnel up -d --build
+#
+# The app service is called `frontend` and listens on port 80, exactly what
+# the tunnel's public hostname already points at (http://frontend:80), so
+# nothing has to change in Cloudflare when switching over from the old bot.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-erp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-erp}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp} -d ${POSTGRES_DB:-erp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Only the app reaches the database; no port on the laptop.
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-erp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # For a look on the laptop itself: http://localhost:8080
+      - "127.0.0.1:8080:80"
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      # A folder a cloud client syncs (OneDrive, Dropbox) keeps a copy off the laptop.
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          ts=$$(date +%Y%m%d-%H%M%S)
+          if pg_dump -h postgres -U ${POSTGRES_USER:-erp} -d ${POSTGRES_DB:-erp} -Z 6 -f /backups/erp-$$ts.sql.gz.partial; then
+            mv /backups/erp-$$ts.sql.gz.partial /backups/erp-$$ts.sql.gz && echo "backup ok: erp-$$ts.sql.gz"
+          else
+            echo "BACKUP FAILED at $$ts" >&2
+          fi
+          find /backups -name '*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          sleep 86400
+        done
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      - frontend
+
+volumes:
+  pgdata:

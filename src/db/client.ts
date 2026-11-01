@@ -32,7 +32,12 @@ export function getDb(): Database {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PGlite } = require("@electric-sql/pglite") as typeof import("@electric-sql/pglite");
     const where = url.slice("pglite:".length);
-    const client = where === "memory" || where === "" ? new PGlite() : new PGlite(where);
+    const inMemory = where === "memory" || where === "";
+    if (!inMemory) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      (require("node:fs") as typeof import("node:fs")).mkdirSync(where, { recursive: true });
+    }
+    const client = inMemory ? new PGlite() : new PGlite(where);
     h.db = drizzleLite(client, { schema }) as unknown as Database;
     h.close = () => client.close();
   } else {

@@ -109,7 +109,7 @@ export function ClientsView({
           </SelectContent>
         </Select>
         <Select value={params.get("sort") ?? "newest"} onValueChange={(v) => go({ sort: v === "newest" ? null : v })}>
-          <SelectTrigger className="w-[140px]" aria-label="Sort">
+          <SelectTrigger className="w-[140px]" aria-label={t("common.sort")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -5,6 +5,13 @@ import { displayName, getClient, NotFoundError } from "@/server/clients";
 import { requireContext } from "@/server/request";
 import { ClientDetail } from "./client-detail";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireContext();
+  const { id } = await params;
+  const client = await getClient(ctx, id).catch(() => null);
+  return { title: client ? displayName(client) : undefined };
+}
+
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
   const { id } = await params;

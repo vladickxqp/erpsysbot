@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,22 @@ import { loginAction, type AuthState } from "../actions";
 export function LoginForm() {
   const { t } = useI18n();
   const [state, action, pending] = useActionState<AuthState, FormData>(loginAction, undefined);
+  const [, startSubmit] = useTransition();
   return (
     <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="text-xl">{t("auth.login")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={action} className="grid gap-4">
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            // By hand, so a wrong password does not also empty the email.
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startSubmit(() => action(data));
+          }}
+        >
           <div className="grid gap-2">
             <Label htmlFor="email">{t("auth.email")}</Label>
             <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />

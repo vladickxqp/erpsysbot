@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,7 +77,7 @@ export function ClientDialog({
   const [type, setType] = useState(values.type);
   const [status, setStatus] = useState(values.status);
   const [state, action, pending] = useActionState<ClientFormState, FormData>(saveClientAction, undefined);
-  const allowDuplicate = useRef<HTMLInputElement>(null);
+  const [, startSubmit] = useTransition();
   const editing = Boolean(values.id);
 
   useEffect(() => {
@@ -101,17 +101,28 @@ export function ClientDialog({
           <DialogTitle>{editing ? t("clients.editTitle") : t("clients.new")}</DialogTitle>
           <DialogDescription className="sr-only">{t("clients.details")}</DialogDescription>
         </DialogHeader>
-        <form action={action} className="grid gap-5">
+        <form
+          className="grid gap-5"
+          onSubmit={(e) => {
+            // Sent by hand, not through the form's action: React would
+            // otherwise empty every field after each answer, the typed
+            // values included when the answer is "check this".
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+            if (submitter?.dataset.force === "1") data.set("allowDuplicate", "1");
+            startSubmit(() => action(data));
+          }}
+        >
           {values.id && <input type="hidden" name="id" value={values.id} />}
           <input type="hidden" name="type" value={type} />
           <input type="hidden" name="status" value={status} />
-          <input ref={allowDuplicate} type="hidden" name="allowDuplicate" value="" />
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label>{t("clients.type")}</Label>
               <Select value={type} onValueChange={(v) => setType(v as ClientValues["type"])}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label={t("clients.type")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -123,7 +134,7 @@ export function ClientDialog({
             <div className="grid gap-1.5">
               <Label>{t("clients.status")}</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as ClientValues["status"])}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label={t("clients.status")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,13 +204,7 @@ export function ClientDialog({
               {t("common.cancel")}
             </Button>
             {state?.duplicates?.length ? (
-              <Button
-                type="submit"
-                disabled={pending}
-                onClick={() => {
-                  if (allowDuplicate.current) allowDuplicate.current.value = "1";
-                }}
-              >
+              <Button type="submit" disabled={pending} data-force="1">
                 {t("clients.createAnyway")}
               </Button>
             ) : (
