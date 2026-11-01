@@ -250,7 +250,6 @@ const de = {
     income: "Einnahmen",
     expenses: "Ausgaben",
     result: "Ergebnis",
-    resultHint: "Einnahmen − Erstattungen − Ausgaben, keine Buchhaltung",
     refunds: "Erstattungen",
     thisMonth: "Dieser Monat",
     lastMonth: "Letzter Monat",

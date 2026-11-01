@@ -1,14 +1,15 @@
 /**
  * The business overview — every figure from a database query, none invented.
  *
- * Grows with the modules: today it knows clients; orders, invoices and
- * money join as those modules land, and a figure whose module does not exist
- * yet is not shown at all rather than shown as zero.
+ * Each figure is only computed (and shown) for people allowed to see the
+ * module behind it.
  */
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
-import { clients } from "@/db/schema";
+import { clients, invoices, orders } from "@/db/schema";
+import { OPEN_STATUSES } from "@/lib/domain";
 import type { Context } from "./context";
+import { today } from "./money";
 import { requirePermission } from "./permissions";
 
 export type ClientStats = {
@@ -46,5 +47,43 @@ export async function clientStats(ctx: Context, months = 6): Promise<ClientStats
     const result = rows as unknown as { rows?: { month: string; count: number }[] } | { month: string; count: number }[];
     const growth = Array.isArray(result) ? result : (result.rows ?? []);
     return { ...counts, growth: growth.map((g) => ({ month: g.month, count: Number(g.count) })) };
+  });
+}
+
+export type InvoiceStats = { outstandingCents: number; outstanding: number; overdue: number; overdueCents: number };
+
+/** What clients still owe: issued, not fully paid invoices (credit notes excluded). */
+export async function invoiceStats(ctx: Context): Promise<InvoiceStats> {
+  requirePermission(ctx.permissions, "invoices.read");
+  const now = today(ctx.organization.timezone);
+  return withTenant(ctx.organization.id, async (tx) => {
+    const open = sql`${invoices.grossCents} - ${invoices.paidCents}`;
+    const late = sql`${invoices.dueDate} < ${now}`;
+    const [row] = await tx
+      .select({
+        outstandingCents: sql<number>`coalesce(sum(${open}), 0)::bigint`,
+        outstanding: sql<number>`count(*)::int`,
+        overdue: sql<number>`count(*) filter (where ${late})::int`,
+        overdueCents: sql<number>`coalesce(sum(${open}) filter (where ${late}), 0)::bigint`,
+      })
+      .from(invoices)
+      .where(and(eq(invoices.kind, "INVOICE"), inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID"])));
+    return {
+      outstandingCents: Number(row.outstandingCents),
+      outstanding: Number(row.outstanding),
+      overdue: Number(row.overdue),
+      overdueCents: Number(row.overdueCents),
+    };
+  });
+}
+
+export async function openOrderStats(ctx: Context): Promise<{ count: number; netCents: number }> {
+  requirePermission(ctx.permissions, "orders.read");
+  return withTenant(ctx.organization.id, async (tx) => {
+    const [row] = await tx
+      .select({ count: sql<number>`count(*)::int`, netCents: sql<number>`coalesce(sum(${orders.netCents}), 0)::bigint` })
+      .from(orders)
+      .where(inArray(orders.status, OPEN_STATUSES));
+    return { count: Number(row.count), netCents: Number(row.netCents) };
   });
 }

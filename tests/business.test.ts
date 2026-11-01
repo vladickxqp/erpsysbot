@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { withTenant } from "@/db/tenant";
 import { invoices } from "@/db/schema";
 import { createClient } from "@/server/clients";
+import { invoiceStats, openOrderStats } from "@/server/dashboard";
 import { updateCompany } from "@/server/company";
 import type { Context } from "@/server/context";
 import { contextFor } from "@/server/context";
@@ -204,5 +205,19 @@ describe("finance", () => {
     expect(sum).toMatchObject({ incomeCents: 100000, expenseCents: 30000, refundCents: 5000, resultCents: 65000 });
     const flow = await monthlyFlow(ctx);
     expect(flow.at(-1)).toMatchObject({ income: 95000, expense: 30000 });
+  });
+});
+
+describe("dashboard", () => {
+  it("shows what clients owe, what is late and what is still open", async () => {
+    const ctx = await withCompanyData(await newCompany("Übersicht GmbH"));
+    const client = await createClient(ctx, { lastName: "Kunde" });
+    const paidLate = await issueInvoice(ctx, (await createInvoiceDraft(ctx, { clientId: client.id, dueDate: "2020-01-31", items: [line("x", 1, 100)] })).id);
+    await recordPayment(ctx, paidLate.id, { amountCents: 1900, paidOn: today() });
+    await issueInvoice(ctx, (await createInvoiceDraft(ctx, { clientId: client.id, items: [line("y", 1, 10)] })).id);
+    await createInvoiceDraft(ctx, { clientId: client.id, items: [line("Entwurf", 1, 500)] });
+    await createOrder(ctx, { clientId: client.id, items: [line("Arbeit", 2, 50)] });
+    expect(await invoiceStats(ctx)).toEqual({ outstandingCents: 10000 + 1190, outstanding: 2, overdue: 1, overdueCents: 10000 });
+    expect(await openOrderStats(ctx)).toEqual({ count: 1, netCents: 10000 });
   });
 });

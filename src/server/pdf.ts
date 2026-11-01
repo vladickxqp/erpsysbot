@@ -222,7 +222,7 @@ export async function invoicePdf({ invoice, items, seller, buyer, corrects, loca
     right(page, value, RIGHT, y, strong ? 10.5 : 9, strong ? bold : regular);
     y -= strong ? 18 : 13;
   };
-  totalRow(L.net, money(sum.netCents));
+  totalRow(L.net, money(invoice.netCents));
   if (!invoice.smallBusiness) {
     for (const group of sum.byRate) totalRow(fill(L.vatOn, { rate: String(group.rate), net: money(group.netCents) }), money(group.vatCents));
   }

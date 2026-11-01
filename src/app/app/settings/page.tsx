@@ -3,53 +3,56 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getT } from "@/i18n/server";
 import { requireContext } from "@/server/request";
+import { CompanyForm } from "./company-form";
 
 export async function generateMetadata() {
   const { t } = await getT();
   return { title: t("settings.title") };
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[140px_1fr] gap-3 py-2 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
 export default async function SettingsPage() {
   const ctx = await requireContext();
   const { t } = await getT();
-  const org = ctx.organization;
+  const o = ctx.organization;
   return (
     <>
       <PageHeader title={t("settings.title")} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("settings.company")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="divide-y">
-              <Row label={t("auth.company")} value={org.name} />
-              <Row label={t("clients.vatId")} value={org.vatId ?? "—"} />
-              <Row label={t("clients.country")} value={org.country} />
-              <Row label="Währung / Currency" value={org.currency} />
-              <Row label="Zeitzone / Timezone" value={org.timezone} />
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <CompanyForm
+            canEdit={ctx.permissions.has("settings.manage")}
+            initial={{
+              name: o.name,
+              legalName: o.legalName ?? "",
+              street: o.street ?? "",
+              postalCode: o.postalCode ?? "",
+              city: o.city ?? "",
+              country: o.country,
+              vatId: o.vatId ?? "",
+              taxNumber: o.taxNumber ?? "",
+              email: o.email ?? "",
+              phone: o.phone ?? "",
+              website: o.website ?? "",
+              iban: o.iban ?? "",
+              bic: o.bic ?? "",
+              bankName: o.bankName ?? "",
+              smallBusiness: o.smallBusiness,
+              paymentTermsDays: o.paymentTermsDays,
+              invoiceNumberFormat: o.invoiceNumberFormat,
+              invoiceFooter: o.invoiceFooter ?? "",
+            }}
+          />
+        </div>
+        <Card className="h-fit">
           <CardHeader>
             <CardTitle className="text-base">{t("settings.profile")}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <dl className="divide-y">
-              <Row label={t("auth.name")} value={ctx.user.name} />
-              <Row label={t("auth.email")} value={ctx.user.email} />
-              <Row label={t("settings.role")} value={<Badge variant="secondary">{t(`settings.${ctx.role}`)}</Badge>} />
-            </dl>
+          <CardContent className="grid gap-2 text-sm">
+            <div className="font-medium">{ctx.user.name}</div>
+            <div className="text-muted-foreground">{ctx.user.email}</div>
+            <div>
+              <Badge variant="secondary">{t(`settings.${ctx.role}`)}</Badge>
+            </div>
           </CardContent>
         </Card>
       </div>

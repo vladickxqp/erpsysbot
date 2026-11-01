@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, LogOut, Search } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, LogOut, MoreHorizontal, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -175,26 +175,50 @@ export function Shell({ user, company, companies, permissions, children }: Shell
       </div>
 
       {/* Mobile: bottom navigation */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-background/95 backdrop-blur lg:hidden"
-        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, paddingBottom: "env(safe-area-inset-bottom)" }}
-        aria-label="Main"
-      >
-        {items.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={isActive(pathname, href) ? "page" : undefined}
-            className={cn(
-              "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted-foreground",
-              isActive(pathname, href) && "text-primary",
-            )}
-          >
-            <Icon className="size-5" aria-hidden />
-            {t(label)}
-          </Link>
-        ))}
-      </nav>
+      <MobileNav items={items} pathname={pathname} />
     </div>
+  );
+}
+
+function MobileNav({ items, pathname }: { items: typeof NAV; pathname: string }) {
+  const { t } = useI18n();
+  const primary = items.filter((item) => item.primary);
+  const rest = items.filter((item) => !item.primary);
+  const tab = "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted-foreground";
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-background/95 backdrop-blur lg:hidden"
+      style={{ gridTemplateColumns: `repeat(${primary.length + (rest.length ? 1 : 0)}, minmax(0, 1fr))`, paddingBottom: "env(safe-area-inset-bottom)" }}
+      aria-label="Main"
+    >
+      {primary.map(({ href, label, icon: Icon }) => (
+        <Link
+          key={href}
+          href={href}
+          aria-current={isActive(pathname, href) ? "page" : undefined}
+          className={cn(tab, isActive(pathname, href) && "text-primary")}
+        >
+          <Icon className="size-5" aria-hidden />
+          {t(label)}
+        </Link>
+      ))}
+      {rest.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger className={cn(tab, rest.some((item) => isActive(pathname, item.href)) && "text-primary")}>
+            <MoreHorizontal className="size-5" aria-hidden />
+            {t("nav.more")}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="w-52">
+            {rest.map(({ href, label, icon: Icon }) => (
+              <DropdownMenuItem key={href} asChild>
+                <Link href={href}>
+                  <Icon className="size-4" /> {t(label)}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </nav>
   );
 }

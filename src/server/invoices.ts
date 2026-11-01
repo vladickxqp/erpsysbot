@@ -435,3 +435,14 @@ export async function listInvoices(
     };
   });
 }
+
+/** What the PDF shows: the frozen parties of an issued invoice, today's for a draft. */
+export async function pdfData(ctx: Context, id: string) {
+  const { invoice, items, related } = await getInvoice(ctx, id);
+  const buyer =
+    (invoice.buyerSnapshot as Party | null) ??
+    (await withTenant(ctx.organization.id, (tx) => clientParty(tx, invoice.clientId)));
+  const seller = (invoice.sellerSnapshot as Seller | null) ?? sellerOf(ctx.organization);
+  const corrects = invoice.correctsId ? related.find((r) => r.id === invoice.correctsId)?.number ?? null : null;
+  return { invoice, items, seller, buyer, corrects };
+}

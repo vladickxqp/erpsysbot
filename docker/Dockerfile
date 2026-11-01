@@ -20,6 +20,7 @@ COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/db ./db
+COPY --from=build --chown=app:app /app/assets ./assets
 USER app
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

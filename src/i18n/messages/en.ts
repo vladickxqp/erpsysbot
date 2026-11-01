@@ -252,7 +252,6 @@ const en: Messages = {
     income: "Income",
     expenses: "Expenses",
     result: "Result",
-    resultHint: "Income − refunds − expenses, not accounting",
     refunds: "Refunds",
     thisMonth: "This month",
     lastMonth: "Last month",

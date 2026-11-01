@@ -252,7 +252,6 @@ const ru: Messages = {
     income: "Доходы",
     expenses: "Расходы",
     result: "Результат",
-    resultHint: "Доходы − возвраты − расходы, не бухгалтерия",
     refunds: "Возвраты",
     thisMonth: "Этот месяц",
     lastMonth: "Прошлый месяц",
