@@ -43,7 +43,8 @@ export async function clientStats(ctx: Context, months = 6): Promise<ClientStats
                date_trunc('month', now() at time zone ${tz}),
                interval '1 month') as m
        order by m`);
-    const growth = ("rows" in rows ? rows.rows : rows) as { month: string; count: number }[];
+    const result = rows as unknown as { rows?: { month: string; count: number }[] } | { month: string; count: number }[];
+    const growth = Array.isArray(result) ? result : (result.rows ?? []);
     return { ...counts, growth: growth.map((g) => ({ month: g.month, count: Number(g.count) })) };
   });
 }
