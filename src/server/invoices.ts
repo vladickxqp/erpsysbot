@@ -23,6 +23,7 @@ import { addDays, formatNumber, linesInput, today, totals } from "./money";
 import { nextNumber } from "./numbers";
 import { asLines, lineRows } from "./orders";
 import { requirePermission } from "./permissions";
+import { PAYMENT_METHODS } from "@/lib/domain";
 
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
@@ -251,7 +252,7 @@ export async function issueInvoice(ctx: Context, id: string, via: Via = "web"): 
 export const paymentInput = z.object({
   amountCents: z.coerce.number().int().positive(),
   paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  method: z.enum(["TRANSFER", "CASH", "CARD", "PAYPAL", "OTHER"]).default("TRANSFER"),
+  method: z.enum(PAYMENT_METHODS).default("TRANSFER"),
   note: z
     .string()
     .trim()
@@ -364,7 +365,9 @@ export async function getInvoice(ctx: Context, id: string) {
   });
 }
 
-export type InvoiceFilter = "DRAFT" | "OPEN" | "OVERDUE" | "PAID" | "CANCELLED" | "CREDIT_NOTE";
+import type { InvoiceFilter } from "@/lib/domain";
+
+export type { InvoiceFilter };
 
 export async function listInvoices(
   ctx: Context,

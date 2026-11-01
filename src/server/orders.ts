@@ -16,10 +16,9 @@ import { lineNet, linesInput, totals, type Line } from "./money";
 import { nextNumber } from "./numbers";
 import { requirePermission } from "./permissions";
 
-export const ORDER_STATUSES = ["DRAFT", "NEW", "CONFIRMED", "IN_PROGRESS", "WAITING", "COMPLETED", "CANCELLED"] as const;
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-/** Still to be worked on. */
-export const OPEN_STATUSES: OrderStatus[] = ["NEW", "CONFIRMED", "IN_PROGRESS", "WAITING"];
+import { OPEN_STATUSES, ORDER_STATUSES, type OrderStatus } from "@/lib/domain";
+
+export { OPEN_STATUSES, ORDER_STATUSES, type OrderStatus };
 
 const isoDate = z
   .string()

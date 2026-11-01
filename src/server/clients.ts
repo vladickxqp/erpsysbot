@@ -251,3 +251,16 @@ export async function exportClientsCsv(ctx: Context): Promise<string> {
   const body = rows.map((r) => CSV_COLUMNS.map(([key]) => csvCell(r[key])).join(";"));
   return "﻿" + [head, ...body].join("\r\n");
 }
+
+/** Every client as id and name, for pickers (orders, invoices). */
+export async function clientOptions(ctx: Context): Promise<{ id: string; name: string; number: number }[]> {
+  requirePermission(ctx.permissions, "clients.read");
+  const rows = await withTenant(ctx.organization.id, (tx) =>
+    tx
+      .select({ id: clients.id, number: clients.number, companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName })
+      .from(clients)
+      .orderBy(asc(sql`lower(coalesce(${clients.companyName}, ${clients.lastName}, ${clients.firstName}))`))
+      .limit(2000),
+  );
+  return rows.map((r) => ({ id: r.id, number: r.number, name: displayName(r) }));
+}

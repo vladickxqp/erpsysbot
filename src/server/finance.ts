@@ -16,20 +16,9 @@ import type { Context } from "./context";
 import { requirePermission } from "./permissions";
 
 export type Transaction = typeof transactions.$inferSelect;
-export const TRANSACTION_TYPES = ["INCOME", "EXPENSE", "REFUND", "ADJUSTMENT"] as const;
+import { EXPENSE_CATEGORIES, TRANSACTION_TYPES } from "@/lib/domain";
 
-export const EXPENSE_CATEGORIES = [
-  "material",
-  "rent",
-  "salaries",
-  "vehicle",
-  "marketing",
-  "software",
-  "insurance",
-  "taxes",
-  "travel",
-  "other",
-] as const;
+export { EXPENSE_CATEGORIES, TRANSACTION_TYPES };
 
 export const transactionInput = z
   .object({

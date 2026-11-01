@@ -3,7 +3,7 @@
  * rate. Lines on orders and invoices may start from one and are then copied:
  * changing a price later never changes an order or an invoice.
  */
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { products } from "@/db/schema";
@@ -39,7 +39,7 @@ export type ProductInput = z.input<typeof productInput>;
 
 export async function listProducts(ctx: Context, opts: { q?: string; activeOnly?: boolean } = {}) {
   requirePermission(ctx.permissions, "orders.read");
-  const filters = [];
+  const filters: SQL[] = [];
   if (opts.activeOnly) filters.push(eq(products.active, true));
   if (opts.q?.trim()) {
     const like = `%${opts.q.trim().replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
