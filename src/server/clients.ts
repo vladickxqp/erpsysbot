@@ -8,9 +8,10 @@
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type Tx } from "@/db/tenant";
-import { clients, counters } from "@/db/schema";
+import { clients } from "@/db/schema";
 import { audit, type Via } from "./audit";
 import type { Context } from "./context";
+import { nextNumber } from "./numbers";
 import { requirePermission } from "./permissions";
 
 export type Client = typeof clients.$inferSelect;
@@ -64,18 +65,6 @@ export class DuplicateClientError extends Error {
 }
 
 const digits = (phone: string) => phone.replace(/\D/g, "").replace(/^49/, "0");
-
-async function nextNumber(tx: Tx, organizationId: string, key: string): Promise<number> {
-  const [row] = await tx
-    .insert(counters)
-    .values({ organizationId, key, value: 1 })
-    .onConflictDoUpdate({
-      target: [counters.organizationId, counters.key],
-      set: { value: sql`${counters.value} + 1` },
-    })
-    .returning({ value: counters.value });
-  return row.value;
-}
 
 async function duplicatesOf(tx: Tx, input: z.output<typeof clientInput>, except?: string) {
   const checks: SQL[] = [];

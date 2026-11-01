@@ -46,3 +46,98 @@ CREATE POLICY tenant_isolation ON audit_log
   USING (organization_id = app_org_id())
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT ON audit_log TO app_tenant;
+
+-- Products, orders and their lines.
+
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON products;
+CREATE POLICY tenant_isolation ON products
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON products TO app_tenant;
+
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orders;
+CREATE POLICY tenant_isolation ON orders
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON orders TO app_tenant;
+
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON order_items;
+CREATE POLICY tenant_isolation ON order_items
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_items TO app_tenant;
+
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON invoices;
+CREATE POLICY tenant_isolation ON invoices
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON invoices TO app_tenant;
+
+ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON invoice_items;
+CREATE POLICY tenant_isolation ON invoice_items
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON invoice_items TO app_tenant;
+
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON payments;
+CREATE POLICY tenant_isolation ON payments
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT ON payments TO app_tenant;
+
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON transactions;
+CREATE POLICY tenant_isolation ON transactions
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON transactions TO app_tenant;
+
+-- An issued invoice is a document: its figures and lines never change again.
+-- Only the payment state moves (paid_cents, status) and a credit note may
+-- mark it CANCELLED. Enforced here, below any application code.
+CREATE OR REPLACE FUNCTION invoices_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.status <> 'DRAFT' THEN
+      RAISE EXCEPTION 'issued invoice % cannot be deleted', OLD.number USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.status <> 'DRAFT' AND (
+       NEW.number IS DISTINCT FROM OLD.number OR NEW.net_cents <> OLD.net_cents
+    OR NEW.vat_cents <> OLD.vat_cents OR NEW.gross_cents <> OLD.gross_cents
+    OR NEW.client_id <> OLD.client_id OR NEW.issue_date IS DISTINCT FROM OLD.issue_date
+    OR NEW.buyer_snapshot IS DISTINCT FROM OLD.buyer_snapshot
+    OR NEW.seller_snapshot IS DISTINCT FROM OLD.seller_snapshot
+    OR NEW.kind <> OLD.kind OR NEW.status = 'DRAFT') THEN
+    RAISE EXCEPTION 'issued invoice % cannot be changed', OLD.number USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+DROP TRIGGER IF EXISTS invoices_guard ON invoices;
+CREATE TRIGGER invoices_guard BEFORE UPDATE OR DELETE ON invoices
+  FOR EACH ROW EXECUTE FUNCTION invoices_guard();
+
+CREATE OR REPLACE FUNCTION invoice_items_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  state text;
+BEGIN
+  SELECT status INTO state FROM invoices WHERE id = COALESCE(NEW.invoice_id, OLD.invoice_id);
+  IF state IS NOT NULL AND state <> 'DRAFT' THEN
+    RAISE EXCEPTION 'lines of an issued invoice cannot be changed' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END
+$$;
+DROP TRIGGER IF EXISTS invoice_items_guard ON invoice_items;
+CREATE TRIGGER invoice_items_guard BEFORE INSERT OR UPDATE OR DELETE ON invoice_items
+  FOR EACH ROW EXECUTE FUNCTION invoice_items_guard();

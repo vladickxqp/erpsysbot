@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   "orders.create",
   "orders.update",
   "orders.delete",
+  "products.manage",
   "invoices.read",
   "invoices.create",
   "invoices.issue",
@@ -41,6 +42,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   MANAGER: [
     "clients.read", "clients.create", "clients.update", "clients.delete",
     "orders.read", "orders.create", "orders.update", "orders.delete",
+    "products.manage",
     "invoices.read", "invoices.create",
     "finance.read",
     "employees.read",

@@ -17,9 +17,11 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -86,6 +88,18 @@ export const organizations = pgTable("organizations", {
   email: text("email"),
   phone: text("phone"),
   iban: text("iban"),
+  bic: text("bic"),
+  bankName: text("bank_name"),
+  /** Steuernummer — an invoice names it or the VAT ID. */
+  taxNumber: text("tax_number"),
+  website: text("website"),
+  /** Kleinunternehmer (§ 19 UStG): invoices without VAT, with the note. */
+  smallBusiness: boolean("small_business").notNull().default(false),
+  paymentTermsDays: integer("payment_terms_days").notNull().default(14),
+  /** {YYYY} year, {NNNN} running number (zero-padded to the N count). */
+  invoiceNumberFormat: text("invoice_number_format").notNull().default("RE-{YYYY}-{NNNN}"),
+  creditNoteNumberFormat: text("credit_note_number_format").notNull().default("GS-{YYYY}-{NNNN}"),
+  invoiceFooter: text("invoice_footer"),
   currency: text("currency").notNull().default("EUR"),
   locale: text("locale").notNull().default("de"),
   timezone: text("timezone").notNull().default("Europe/Berlin"),
@@ -157,6 +171,192 @@ export const clients = pgTable(
   ],
 );
 
+// --- Products and services ------------------------------------------------------------------
+export const productKindEnum = pgEnum("product_kind", ["PRODUCT", "SERVICE"]);
+
+export const products = pgTable(
+  "products",
+  {
+    id: id(),
+    organizationId: orgId(),
+    kind: productKindEnum("kind").notNull().default("SERVICE"),
+    name: text("name").notNull(),
+    sku: text("sku"),
+    description: text("description"),
+    unit: text("unit").notNull().default("Stk"),
+    /** Net price in cents. */
+    priceCents: integer("price_cents").notNull().default(0),
+    vatRate: integer("vat_rate").notNull().default(19),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("products_org_name_idx").on(t.organizationId, t.name)],
+);
+
+// --- Orders ------------------------------------------------------------------------------------
+export const orderStatusEnum = pgEnum("order_status", [
+  "DRAFT",
+  "NEW",
+  "CONFIRMED",
+  "IN_PROGRESS",
+  "WAITING",
+  "COMPLETED",
+  "CANCELLED",
+]);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: id(),
+    organizationId: orgId(),
+    number: integer("number").notNull(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    status: orderStatusEnum("status").notNull().default("NEW"),
+    title: text("title"),
+    notes: text("notes"),
+    dueDate: date("due_date"),
+    assignedUserId: uuid("assigned_user_id"),
+    netCents: integer("net_cents").notNull().default(0),
+    vatCents: integer("vat_cents").notNull().default(0),
+    grossCents: integer("gross_cents").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("orders_org_number_key").on(t.organizationId, t.number),
+    index("orders_org_status_idx").on(t.organizationId, t.status),
+    index("orders_client_idx").on(t.clientId),
+  ],
+);
+
+/** A line of an order or an invoice: what, how many, at which net price. */
+const lineColumns = () => ({
+  id: id(),
+  organizationId: orgId(),
+  position: integer("position").notNull(),
+  productId: uuid("product_id"),
+  description: text("description").notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: text("unit").notNull().default("Stk"),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  vatRate: integer("vat_rate").notNull(),
+  netCents: integer("net_cents").notNull(),
+});
+
+export const orderItems = pgTable(
+  "order_items",
+  {
+    ...lineColumns(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("order_items_order_idx").on(t.orderId)],
+);
+
+// --- Invoices ----------------------------------------------------------------------------------
+export const invoiceKindEnum = pgEnum("invoice_kind", ["INVOICE", "CREDIT_NOTE"]);
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "DRAFT",
+  "ISSUED",
+  "PARTIALLY_PAID",
+  "PAID",
+  "CANCELLED",
+]);
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: id(),
+    organizationId: orgId(),
+    kind: invoiceKindEnum("kind").notNull().default("INVOICE"),
+    status: invoiceStatusEnum("status").notNull().default("DRAFT"),
+    /** Given when issued, never before: drafts have none, numbers have no gaps. */
+    number: text("number"),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    /** The invoice a credit note corrects. */
+    correctsId: uuid("corrects_id"),
+    issueDate: date("issue_date"),
+    serviceDate: date("service_date"),
+    dueDate: date("due_date"),
+    notes: text("notes"),
+    /** Seller and buyer as they were when issued: later edits do not change it. */
+    sellerSnapshot: jsonb("seller_snapshot"),
+    buyerSnapshot: jsonb("buyer_snapshot"),
+    netCents: integer("net_cents").notNull().default(0),
+    vatCents: integer("vat_cents").notNull().default(0),
+    grossCents: integer("gross_cents").notNull().default(0),
+    paidCents: integer("paid_cents").notNull().default(0),
+    smallBusiness: boolean("small_business").notNull().default(false),
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("invoices_org_number_key").on(t.organizationId, t.number),
+    index("invoices_org_status_idx").on(t.organizationId, t.status),
+    index("invoices_client_idx").on(t.clientId),
+  ],
+);
+
+export const invoiceItems = pgTable(
+  "invoice_items",
+  {
+    ...lineColumns(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
+);
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "restrict" }),
+    amountCents: integer("amount_cents").notNull(),
+    paidOn: date("paid_on").notNull(),
+    method: text("method").notNull().default("TRANSFER"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("payments_invoice_idx").on(t.invoiceId)],
+);
+
+// --- Finance -----------------------------------------------------------------------------------
+export const transactionTypeEnum = pgEnum("transaction_type", ["INCOME", "EXPENSE", "REFUND", "ADJUSTMENT"]);
+
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: id(),
+    organizationId: orgId(),
+    type: transactionTypeEnum("type").notNull(),
+    /** Always positive; the type says which way the money went. */
+    amountCents: integer("amount_cents").notNull(),
+    bookedOn: date("booked_on").notNull(),
+    category: text("category"),
+    description: text("description"),
+    method: text("method"),
+    invoiceId: uuid("invoice_id"),
+    paymentId: uuid("payment_id"),
+    clientId: uuid("client_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("transactions_org_date_idx").on(t.organizationId, t.bookedOn)],
+);
+
 /** Who did what, from where (web, telegram, ai). Append-only. */
 export const auditLog = pgTable(
   "audit_log",
@@ -175,4 +375,15 @@ export const auditLog = pgTable(
 );
 
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
-export const TENANT_TABLES = ["counters", "clients", "audit_log"] as const;
+export const TENANT_TABLES = [
+  "counters",
+  "clients",
+  "audit_log",
+  "products",
+  "orders",
+  "order_items",
+  "invoices",
+  "invoice_items",
+  "payments",
+  "transactions",
+] as const;
