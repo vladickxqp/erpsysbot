@@ -17,7 +17,9 @@ export async function generateMetadata() {
 
 export default async function BillingPage() {
   const ctx = await requireContext();
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
+  // The plans are priced and charged in euro, whatever the company works in.
+  const eur = { ...region, currency: "EUR" };
   const enabled = billingEnabled();
   const ent = await entitlementsOf(ctx.organization.id);
   const plans = (await listPlans()).filter((p) => p.active);
@@ -38,10 +40,10 @@ export default async function BillingPage() {
             <CardContent className="flex flex-wrap items-center gap-3 pt-6 text-sm">
               <span className="text-lg font-semibold">{ent.plan?.name ?? "—"}</span>
               <Badge variant={ent.active ? "secondary" : "destructive"}>{t(`billing.${sub?.status ?? "NONE"}`)}</Badge>
-              {sub?.status === "TRIALING" && sub.trialEndsAt && <span className="text-muted-foreground">{t("billing.trialUntil", { date: formatDate(sub.trialEndsAt.toISOString(), locale) })}</span>}
+              {sub?.status === "TRIALING" && sub.trialEndsAt && <span className="text-muted-foreground">{t("billing.trialUntil", { date: formatDate(sub.trialEndsAt.toISOString(), locale, region) })}</span>}
               {sub?.currentPeriodEnd && (
                 <span className="text-muted-foreground">
-                  {t(sub.cancelAtPeriodEnd ? "billing.endsOn" : "billing.renewsOn", { date: formatDate(sub.currentPeriodEnd.toISOString(), locale) })}
+                  {t(sub.cancelAtPeriodEnd ? "billing.endsOn" : "billing.renewsOn", { date: formatDate(sub.currentPeriodEnd.toISOString(), locale, region) })}
                 </span>
               )}
               {canManage && sub?.stripeCustomerId && (
@@ -60,7 +62,7 @@ export default async function BillingPage() {
                     <CardTitle className="flex items-baseline justify-between">
                       {plan.name}
                       <span className="text-base font-normal">
-                        {formatMoney(plan.priceCents, locale)} <span className="text-muted-foreground">/ {t("billing.month")}</span>
+                        {formatMoney(plan.priceCents, locale, eur)} <span className="text-muted-foreground">/ {t("billing.month")}</span>
                       </span>
                     </CardTitle>
                   </CardHeader>
@@ -94,9 +96,9 @@ export default async function BillingPage() {
                 {history.map((h) => (
                   <div key={h.id} className="flex justify-between">
                     <span className="text-muted-foreground">
-                      {formatDate(h.createdAt.toISOString(), locale)} · {t(h.type === "invoice.paid" ? "billing.paid" : "billing.failed")}
+                      {formatDate(h.createdAt.toISOString(), locale, region)} · {t(h.type === "invoice.paid" ? "billing.paid" : "billing.failed")}
                     </span>
-                    <span className="tabular-nums">{h.amountCents != null ? formatMoney(h.amountCents, locale) : "—"}</span>
+                    <span className="tabular-nums">{h.amountCents != null ? formatMoney(h.amountCents, locale, eur) : "—"}</span>
                   </div>
                 ))}
               </CardContent>

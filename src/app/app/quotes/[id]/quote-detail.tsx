@@ -48,7 +48,7 @@ export function QuoteDetail({
   mail: boolean;
   can: { update: boolean; delete: boolean; order: boolean; invoice: boolean };
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -79,8 +79,8 @@ export function QuoteDetail({
               {clientName}
             </Link>
             {" · "}
-            {formatDate(quote.issueDate, locale)}
-            {quote.validUntil && ` · ${t("quotes.validUntil")} ${formatDate(quote.validUntil, locale)}`}
+            {formatDate(quote.issueDate, locale, region)}
+            {quote.validUntil && ` · ${t("quotes.validUntil")} ${formatDate(quote.validUntil, locale, region)}`}
           </p>
           {(quote.orderId || quote.invoiceId) && (
             <p className="mt-1 flex gap-3 text-sm">

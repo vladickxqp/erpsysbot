@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PageHeader, StatCard } from "@/components/app/page";
 import { getT } from "@/i18n/server";
+import { countryOptions } from "@/lib/countries";
 import { billingEnabled, MODULES } from "@/server/billing";
 import { listCompanies, listPlans, openPlatformInvites, platformStats } from "@/server/platform";
 import { requireContext } from "@/server/request";
@@ -31,17 +32,21 @@ export default async function AdminPage() {
         />
       </div>
       <AdminView
+        countries={countryOptions(locale)}
         billing={billingEnabled()}
         modules={[...MODULES]}
         companies={companies.map((c) => ({
           id: c.id,
           name: c.name,
           createdAt: c.createdAt.toISOString(),
+          country: c.country,
+          signupIpCountry: c.signupIpCountry,
           members: c.members,
           lastActivity: c.lastActivity,
           planId: c.planId,
           status: c.status,
           suspended: c.suspended,
+          review: c.suspensionKind === "REVIEW",
           mine: c.id === ctx.organization.id,
         }))}
         plans={plans.map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents, maxUsers: p.maxUsers, aiPerDay: p.aiPerDay, modules: p.modules, stripePriceId: p.stripePriceId, active: p.active }))}

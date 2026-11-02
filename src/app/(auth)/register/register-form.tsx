@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/client";
 import { registerAction, type AuthState } from "../actions";
 
-export function RegisterForm({ invite }: { invite?: string }) {
+export function RegisterForm({ invite, countries }: { invite?: string; countries: { code: string; name: string }[] }) {
   const { t } = useI18n();
   const [state, action, pending] = useActionState<AuthState, FormData>(registerAction, undefined);
   const [, startSubmit] = useTransition();
@@ -26,6 +26,7 @@ export function RegisterForm({ invite }: { invite?: string }) {
             // By hand, so a wrong password does not also empty the email.
             e.preventDefault();
             const data = new FormData(e.currentTarget);
+            data.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
             startSubmit(() => action(data));
           }}
         >
@@ -33,6 +34,27 @@ export function RegisterForm({ invite }: { invite?: string }) {
             <Label htmlFor="company">{t("auth.company")}</Label>
             <Input id="company" name="company" required minLength={2} maxLength={120} aria-invalid={bad("company")} autoFocus />
             {invite && <input type="hidden" name="invite" value={invite} />}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="country">{t("company.country")}</Label>
+            {/* Native: typing jumps through 247 countries, phones open their own picker. */}
+            <select
+              id="country"
+              name="country"
+              required
+              defaultValue=""
+              aria-invalid={bad("country")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive md:text-sm dark:bg-input/30 [&>option]:bg-background [&>option]:text-foreground"
+            >
+              <option value="" disabled>
+                —
+              </option>
+              {countries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="name">{t("auth.name")}</Label>

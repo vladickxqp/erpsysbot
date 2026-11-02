@@ -71,7 +71,7 @@ export function TasksView({
   clients: { id: string; name: string; number: number }[];
   tasks: TaskCard[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [tasks, setTasks] = useState(initial);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -159,7 +159,7 @@ export function TasksView({
   const due = (task: TaskCard) =>
     task.dueDate && (
       <span className={cn("flex items-center gap-1", task.status !== "DONE" && task.dueDate < today && "font-medium text-destructive")}>
-        <CalendarDays className="size-3" /> {formatDate(task.dueDate, locale)}
+        <CalendarDays className="size-3" /> {formatDate(task.dueDate, locale, region)}
       </span>
     );
 

@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/i18n/client";
-import { formatMoney } from "@/i18n";
-import { lineNet, parseMoney, totals, VAT_RATES } from "@/server/money";
+import { defaultUnit, formatMoney, intlTag, type Region } from "@/i18n";
+import { allowedRates, countryProfile } from "@/lib/countries";
+import { lineNet, parseMoney, totals } from "@/server/money";
 
 export type ProductOption = { id: string; name: string; unit: string; priceCents: number; vatRate: number; description: string | null };
 
@@ -25,8 +26,10 @@ export type EditableLine = {
 let seq = 0;
 const key = () => `l${(seq += 1)}`;
 
-export function blankLine(): EditableLine {
-  return { key: key(), productId: null, description: "", quantity: "1", unit: "Stk", price: "", discountPercent: "0", vatRate: 19 };
+/** An empty line at the company's standard rate, "piece" in the user's language. */
+export function blankLine(region?: Region, locale = "de"): EditableLine {
+  const vatRate = region ? allowedRates(region.taxRates, region.country)[0] : 19;
+  return { key: key(), productId: null, description: "", quantity: "1", unit: defaultUnit(locale), price: "", discountPercent: "0", vatRate };
 }
 
 export function toEditable(lines: { productId: string | null; description: string; quantity: string | number; unit: string; unitPriceCents: number; discountPercent: string | number; vatRate: number }[]): EditableLine[] {
@@ -76,8 +79,11 @@ export function LineEditor({
   products: ProductOption[];
   smallBusiness: boolean;
 }) {
-  const { t, locale } = useI18n();
-  const money = (cents: number) => formatMoney(cents, locale);
+  const { t, locale, region } = useI18n();
+  const money = (cents: number) => formatMoney(cents, locale, region);
+  const rates = allowedRates(region.taxRates, region.country);
+  const taxLabel = countryProfile(region.country).taxKind === "SALES_TAX" ? "lines.salesTax" : "lines.vat";
+  const rate = (r: number) => new Intl.NumberFormat(intlTag(locale, region), { maximumFractionDigits: 3 }).format(r);
   const set = (k: string, patch: Partial<EditableLine>) => onChange(lines.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   const valid = useMemo(() => serialize(lines), [lines]);
   const sum = valid ? totals(valid, smallBusiness) : null;
@@ -145,15 +151,15 @@ export function LineEditor({
             </label>
             {!smallBusiness && (
               <label className="grid gap-1 sm:col-span-1">
-                <span className="text-xs text-muted-foreground">{t("lines.vat")}</span>
+                <span className="text-xs text-muted-foreground">{t(taxLabel)}</span>
                 <Select value={String(l.vatRate)} onValueChange={(v) => set(l.key, { vatRate: Number(v) })}>
-                  <SelectTrigger className="w-full" aria-label={t("lines.vat")}>
+                  <SelectTrigger className="w-full" aria-label={t(taxLabel)}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {VAT_RATES.map((r) => (
+                    {[...new Set([...rates, l.vatRate])].map((r) => (
                       <SelectItem key={r} value={String(r)}>
-                        {r} %
+                        {rate(r)} %
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -177,7 +183,7 @@ export function LineEditor({
         );
       })}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <Button type="button" variant="outline" onClick={() => onChange([...lines, blankLine()])}>
+        <Button type="button" variant="outline" onClick={() => onChange([...lines, blankLine(region, locale)])}>
           <Plus className="size-4" /> {t("lines.add")}
         </Button>
         <dl className="min-w-56 text-sm">
@@ -192,7 +198,7 @@ export function LineEditor({
               ) : (
                 sum.byRate.map((g) => (
                   <div key={g.rate} className="flex justify-between gap-6 py-0.5">
-                    <dt className="text-muted-foreground">{t("lines.vatOn", { rate: g.rate })}</dt>
+                    <dt className="text-muted-foreground">{t(`${taxLabel}On`, { rate: rate(g.rate) })}</dt>
                     <dd className="tabular-nums">{money(g.vatCents)}</dd>
                   </div>
                 ))

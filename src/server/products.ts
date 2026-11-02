@@ -10,7 +10,7 @@ import { products } from "@/db/schema";
 import { audit, type Via } from "./audit";
 import type { Context } from "./context";
 import { NotFoundError } from "./clients";
-import { VAT_RATES } from "./money";
+import { checkRates, taxRate } from "./money";
 import { requirePermission } from "./permissions";
 
 export type Product = typeof products.$inferSelect;
@@ -32,7 +32,7 @@ export const productInput = z.object({
     .transform((v) => v || null),
   unit: z.string().trim().min(1).max(20).default("Stk"),
   priceCents: z.coerce.number().int().min(0).max(100_000_000),
-  vatRate: z.coerce.number().int().refine((r) => (VAT_RATES as readonly number[]).includes(r), "vat"),
+  vatRate: taxRate,
   active: z.boolean().default(true),
   category: z
     .string()
@@ -78,6 +78,7 @@ export async function listProducts(ctx: Context, opts: { q?: string; activeOnly?
 export async function saveProduct(ctx: Context, raw: ProductInput, id?: string, via: Via = "web"): Promise<Product> {
   requirePermission(ctx.permissions, "products.manage");
   const input = productInput.parse(raw);
+  checkRates([input], ctx.organization, () => ["vatRate"]);
   return withTenant(ctx.organization.id, async (tx) => {
     if (id) {
       const [row] = await tx

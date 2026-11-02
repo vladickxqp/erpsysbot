@@ -8,13 +8,14 @@ import type { Role } from "@/server/permissions";
 let n = 0;
 
 /** A new user with a new company; the context the server would build for them. */
-export async function newCompany(company = "Muster GmbH"): Promise<Context> {
+export async function newCompany(company = "Muster GmbH", country = "DE"): Promise<Context> {
   n += 1;
   const { userId, organizationId } = await registerAccount({
     name: `Owner ${n}`,
     email: `owner${n}-${Date.now()}@example.org`,
     password: "correct horse battery",
     company,
+    country,
   });
   return (await contextOf(userId, organizationId))!;
 }

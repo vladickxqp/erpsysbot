@@ -65,9 +65,9 @@ export function InvoiceDetail({
   reminders: { id: string; level: number; issueDate: string; dueDate: string; openCents: number; sentAt: string | null }[];
   can: { edit: boolean; issue: boolean; cancel: boolean; pay: boolean; settings: boolean };
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
-  const money = (c: number) => formatMoney(c, locale);
+  const money = (c: number) => formatMoney(c, locale, region);
   const [pending, start] = useTransition();
   const [dialog, setDialog] = useState<null | "issue" | "cancel" | "delete" | "pay">(null);
   const remaining = invoice.grossCents - invoice.paidCents;
@@ -128,8 +128,8 @@ export function InvoiceDetail({
             <Link href={`/app/clients/${invoice.clientId}`} className="text-primary hover:underline">
               {clientName}
             </Link>
-            {invoice.issueDate && ` · ${t("invoices.issueDate")} ${formatDate(invoice.issueDate, locale)}`}
-            {invoice.dueDate && invoice.kind === "INVOICE" && ` · ${t("invoices.dueDate")} ${formatDate(invoice.dueDate, locale)}`}
+            {invoice.issueDate && ` · ${t("invoices.issueDate")} ${formatDate(invoice.issueDate, locale, region)}`}
+            {invoice.dueDate && invoice.kind === "INVOICE" && ` · ${t("invoices.dueDate")} ${formatDate(invoice.dueDate, locale, region)}`}
           </p>
           {related.length > 0 && (
             <p className="mt-1 text-sm">
@@ -158,7 +158,7 @@ export function InvoiceDetail({
               <Download className="size-4" /> {t("invoices.pdf")}
             </a>
           </Button>
-          {!draft && invoice.kind === "INVOICE" && (
+          {!draft && invoice.kind === "INVOICE" && region.country === "DE" && (
             <Button variant="outline" asChild>
               <a href={`/app/invoices/${invoice.id}/xrechnung`} download>
                 <Download className="size-4" /> XRechnung
@@ -213,7 +213,7 @@ export function InvoiceDetail({
                 payments.map((p) => (
                   <div key={p.id} className="flex justify-between gap-4">
                     <span className="text-muted-foreground">
-                      {formatDate(p.paidOn, locale)} · {t(`invoices.${p.method}`)}
+                      {formatDate(p.paidOn, locale, region)} · {t(`invoices.${p.method}`)}
                     </span>
                     <span className="tabular-nums">{money(p.amountCents)}</span>
                   </div>
@@ -241,8 +241,8 @@ export function InvoiceDetail({
                     <span className="tabular-nums">{money(r.openCents)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {formatDate(r.issueDate, locale)} · {t("invoices.dueDate")} {formatDate(r.dueDate, locale)}
-                    {r.sentAt && ` · ${t("send.sentOn", { date: formatDate(r.sentAt, locale) })}`}
+                    {formatDate(r.issueDate, locale, region)} · {t("invoices.dueDate")} {formatDate(r.dueDate, locale, region)}
+                    {r.sentAt && ` · ${t("send.sentOn", { date: formatDate(r.sentAt, locale, region) })}`}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" asChild>

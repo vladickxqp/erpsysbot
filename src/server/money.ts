@@ -2,13 +2,24 @@
  * Amounts, lines and totals.
  *
  * Money is integer cents everywhere. A line's net is rounded once (quantity ×
- * unit price × (1 − discount)); VAT is computed per rate on the sum of that
- * rate's lines and rounded once per rate — the way German invoices state it
- * ("19 % USt. auf 1.234,56 €"). A small business (§ 19 UStG) charges none.
+ * unit price × (1 − discount)); tax is computed per rate on the sum of that
+ * rate's lines and rounded once per rate — the way invoices state it
+ * ("19 % USt. auf 1.234,56 €", "Sales tax 8.875 % on $1,234.56"). A small
+ * business (§ 19 UStG, or not VAT-registered elsewhere) charges none.
+ *
+ * Which rates a line may carry depends on the company (its own list, else its
+ * country's — src/lib/countries.ts): the shape is checked here, the list by
+ * `checkRates` in the services.
  */
 import { z } from "zod";
+import { allowedRates } from "@/lib/countries";
 
-export const VAT_RATES = [19, 7, 0] as const;
+/** Percent with up to three decimals (8.875). */
+export const taxRate = z.coerce
+  .number()
+  .min(0)
+  .max(99.999)
+  .refine((r) => Math.abs(Math.round(r * 1000) - r * 1000) < 1e-6, "vat");
 
 export const lineInput = z.object({
   productId: z.string().uuid().nullish(),
@@ -17,7 +28,7 @@ export const lineInput = z.object({
   unit: z.string().trim().min(1).max(20).default("Stk"),
   unitPriceCents: z.coerce.number().int().min(-100_000_000).max(100_000_000),
   discountPercent: z.coerce.number().min(0).max(100).default(0),
-  vatRate: z.coerce.number().int().refine((r) => (VAT_RATES as readonly number[]).includes(r), "vat"),
+  vatRate: taxRate,
 });
 export type LineInput = z.input<typeof lineInput>;
 export type Line = z.output<typeof lineInput>;
@@ -47,6 +58,20 @@ export function totals(lines: Line[], smallBusiness = false): Totals {
   const netCents = groups.reduce((s, g) => s + g.netCents, 0);
   const vatCents = groups.reduce((s, g) => s + g.vatCents, 0);
   return { netCents, vatCents, grossCents: netCents + vatCents, byRate: groups };
+}
+
+/** Refuses a line whose rate the company does not use (a small business charges none, so any is fine). */
+export function checkRates(
+  lines: { vatRate: number }[],
+  org: { taxRates: number[] | null; country: string; smallBusiness: boolean },
+  pathOf: (index: number) => (string | number)[] = (i) => ["items", i, "vatRate"],
+): void {
+  if (org.smallBusiness) return;
+  const allowed = allowedRates(org.taxRates, org.country);
+  const issues = lines.flatMap((l, i) =>
+    allowed.includes(Number(l.vatRate)) ? [] : [{ code: "custom" as const, path: pathOf(i), message: "vat" }],
+  );
+  if (issues.length) throw new z.ZodError(issues);
 }
 
 /** "1.234,56" / "1234.56" / "12" → cents. Null when it is no amount. */

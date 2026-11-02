@@ -38,7 +38,7 @@ export function DocumentsView({
   clients: { id: string; name: string }[];
   client: string | null;
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
   const [removing, setRemoving] = useState<Doc | null>(null);
@@ -119,7 +119,7 @@ export function DocumentsView({
                     )}
                   </TableCell>
                   <TableCell className="hidden tabular-nums text-muted-foreground sm:table-cell">{fileSize(d.sizeBytes)}</TableCell>
-                  <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(d.createdAt, locale)}</TableCell>
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(d.createdAt, locale, region)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end">
                       <Button variant="ghost" size="icon" asChild aria-label={t("documents.download")}>

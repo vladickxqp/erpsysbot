@@ -13,7 +13,7 @@ import {
 import { useI18n } from "@/i18n/client";
 import { LOCALES } from "@/i18n";
 
-const NAMES = { de: "Deutsch", en: "English", ru: "Русский" } as const;
+const NAMES = { de: "Deutsch", en: "English", ru: "Русский", uk: "Українська", kk: "Қазақша", es: "Español" } as const;
 
 export function LocaleSwitch() {
   const { locale, t } = useI18n();

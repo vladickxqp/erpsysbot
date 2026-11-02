@@ -9,7 +9,7 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { appointments, clients, organizations, telegramLinks, users } from "@/db/schema";
-import { formatMoney, isLocale, MESSAGES, translator } from "@/i18n";
+import { formatMoney, isLocale, MESSAGES, regionOf, translator } from "@/i18n";
 import { dayBounds, listAppointments, localParts } from "../calendar";
 import { displayName } from "../clients";
 import { contextFor } from "../context";
@@ -68,6 +68,7 @@ async function digestFor(
   const ctx = await contextFor({ sessionId: "digest", ...user, activeOrganizationId: user.organizationId });
   if (!ctx || ctx.organization.id !== user.organizationId) return null;
   const locale = isLocale(user.locale) ? user.locale : "de";
+  const region = regionOf(ctx.organization);
   const t = translator(MESSAGES[locale]);
   const base = appUrl();
   const lines: string[] = [];
@@ -107,9 +108,9 @@ async function digestFor(
     if (overdue.length) {
       const sum = overdue.reduce((s, i) => s + i.openCents, 0);
       section(
-        `⚠️ <b>${t("digest.overdue", { count: overdue.length, amount: formatMoney(sum, locale) })}</b>`,
+        `⚠️ <b>${t("digest.overdue", { count: overdue.length, amount: formatMoney(sum, locale, region) })}</b>`,
         overdue.slice(0, 5).map((i) => {
-          const label = h(`${i.number} · ${i.clientName} · ${formatMoney(i.openCents, locale)}`);
+          const label = h(`${i.number} · ${i.clientName} · ${formatMoney(i.openCents, locale, region)}`);
           return base ? `<a href="${base}/app/invoices/${i.id}">${label}</a>` : label;
         }),
       );

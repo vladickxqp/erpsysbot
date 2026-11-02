@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getT } from "@/i18n/server";
+import { countryOptions } from "@/lib/countries";
 import { registrationAllowed } from "@/server/accounts";
 import { findPlatformInvite } from "@/server/platform";
 import { RegisterForm } from "./register-form";
@@ -14,9 +15,10 @@ export async function generateMetadata() {
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ invite?: string }> }) {
   const { invite } = await searchParams;
-  if (invite && (await findPlatformInvite(invite))) return <RegisterForm invite={invite} />;
-  if (await registrationAllowed()) return <RegisterForm />;
-  const { t } = await getT();
+  const { t, locale } = await getT();
+  const countries = countryOptions(locale);
+  if (invite && (await findPlatformInvite(invite))) return <RegisterForm invite={invite} countries={countries} />;
+  if (await registrationAllowed()) return <RegisterForm countries={countries} />;
   return (
     <Card className="shadow-sm">
       <CardHeader>

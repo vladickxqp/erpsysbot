@@ -13,7 +13,7 @@ import { audit, type Via } from "./audit";
 import { deductForOrder } from "./inventory";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
-import { lineNet, linesInput, totals, type Line } from "./money";
+import { checkRates, lineNet, linesInput, totals, type Line } from "./money";
 import { nextNumber } from "./numbers";
 import { requirePermission } from "./permissions";
 
@@ -91,6 +91,7 @@ async function clientInCompany(tx: Tx, clientId: string) {
 export async function createOrder(ctx: Context, raw: OrderInput, via: Via = "web"): Promise<OrderRow> {
   requirePermission(ctx.permissions, "orders.create");
   const input = orderInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   const created = await withTenant(ctx.organization.id, async (tx) => {
     await clientInCompany(tx, input.clientId);
@@ -125,6 +126,7 @@ export async function createOrder(ctx: Context, raw: OrderInput, via: Via = "web
 export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via: Via = "web"): Promise<OrderRow> {
   requirePermission(ctx.permissions, "orders.update");
   const input = orderInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   return withTenant(ctx.organization.id, async (tx) => {
     await clientInCompany(tx, input.clientId);

@@ -2,6 +2,8 @@ import { logoutAction } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getT } from "@/i18n/server";
+import { suspensionOf } from "@/server/platform";
+import { currentContext } from "@/server/request";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +14,12 @@ export async function generateMetadata() {
 
 export default async function NoAccessPage() {
   const { t } = await getT();
+  const ctx = await currentContext();
+  const review = ctx ? (await suspensionOf(ctx.organization.id)) === "REVIEW" : false;
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="text-xl">{t("admin.noAccess")}</CardTitle>
+        <CardTitle className="text-xl">{t(review ? "admin.inReview" : "admin.noAccess")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form action={logoutAction}>

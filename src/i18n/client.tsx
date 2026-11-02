@@ -1,20 +1,22 @@
 "use client";
 
 import { createContext, useContext, useMemo } from "react";
-import { translator, type Locale, type Messages, type T } from ".";
+import { translator, type Locale, type Messages, type Region, type T } from ".";
 
-const I18n = createContext<{ locale: Locale; t: T } | null>(null);
+const I18n = createContext<{ locale: Locale; region: Region; t: T } | null>(null);
 
 export function I18nProvider({
   locale,
+  region,
   messages,
   children,
 }: {
   locale: Locale;
+  region: Region;
   messages: Messages;
   children: React.ReactNode;
 }) {
-  const value = useMemo(() => ({ locale, t: translator(messages) }), [locale, messages]);
+  const value = useMemo(() => ({ locale, region, t: translator(messages) }), [locale, region, messages]);
   return <I18n.Provider value={value}>{children}</I18n.Provider>;
 }
 

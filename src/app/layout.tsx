@@ -24,12 +24,12 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { locale, messages } = await getT();
+  const { locale, messages, region } = await getT();
   return (
     <html lang={locale} suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <I18nProvider locale={locale} messages={messages}>
+          <I18nProvider locale={locale} region={region} messages={messages}>
             <TooltipProvider>{children}</TooltipProvider>
             <Toaster richColors closeButton position="top-right" />
             <ServiceWorker />

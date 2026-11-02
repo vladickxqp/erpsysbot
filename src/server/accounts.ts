@@ -6,18 +6,23 @@
  * without an owner. Signing in answers "wrong email or password" for both
  * cases and takes the same time either way, so it does not reveal which
  * emails have an account.
+ *
+ * The company's country is chosen at sign-up and sets its currency, tax and
+ * numbering (src/lib/countries.ts). Where the request comes from (Cloudflare's
+ * IP country) is checked against it: Russia, Belarus and Tor are refused, and
+ * a company whose country differs from where it signed up waits for the
+ * platform admin's review before anyone can work in it.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { memberships, organizations, users } from "@/db/schema";
+import { memberships, organizations, suspensions, users } from "@/db/schema";
+import { LOCALES } from "@/i18n";
+import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
 import { startTrial } from "./billing";
 import { findPlatformInvite, markPlatformInviteUsed } from "./platform";
 import { registrationOpen } from "./settings";
-
-export const LOCALES = ["de", "en", "ru"] as const;
-export type Locale = (typeof LOCALES)[number];
 
 const email = z.string().trim().toLowerCase().email().max(200);
 
@@ -26,12 +31,19 @@ export const registerInput = z.object({
   email,
   password: z.string().min(MIN_PASSWORD_LENGTH).max(200),
   company: z.string().trim().min(2).max(120),
+  country: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((c) => isCountry(c) && !isBlockedCountry(c), "country"),
+  /** The browser's time zone; the country's when it is none we know. */
+  timezone: z.string().trim().max(60).nullish(),
   locale: z.enum(LOCALES).default("de"),
 });
 export type RegisterInput = z.input<typeof registerInput>;
 
 export class AccountError extends Error {
-  constructor(public readonly code: "EMAIL_TAKEN" | "INVALID_LOGIN" | "TOO_MANY_ATTEMPTS" | "REGISTRATION_CLOSED") {
+  constructor(public readonly code: "EMAIL_TAKEN" | "INVALID_LOGIN" | "TOO_MANY_ATTEMPTS" | "REGISTRATION_CLOSED" | "REGION_BLOCKED") {
     super(code);
   }
 }
@@ -43,11 +55,32 @@ export async function registrationAllowed(): Promise<boolean> {
   return !any;
 }
 
-/** Signs up a person with a new company: open sign-up, the first account, or an invitation from the platform admin. */
-export async function registerAccount(raw: RegisterInput, inviteToken?: string | null) {
+/** Tor exit nodes (Cloudflare reports them as T1) and closed countries may not sign up or sign in. */
+export function regionRefused(ipCountry: string | null | undefined): boolean {
+  return ipCountry === "T1" || isBlockedCountry(ipCountry);
+}
+
+function validTimezone(zone: string | null | undefined): zone is string {
+  if (!zone) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Signs up a person with a new company: open sign-up, the first account, or an
+ * invitation from the platform admin. `ipCountry` is where the request came
+ * from (null when unknown, e.g. without Cloudflare in front).
+ */
+export async function registerAccount(raw: RegisterInput, inviteToken?: string | null, ipCountry?: string | null) {
+  if (regionRefused(ipCountry)) throw new AccountError("REGION_BLOCKED");
   const input = registerInput.parse(raw);
   const invite = inviteToken ? await findPlatformInvite(inviteToken) : null;
   if (!invite && !(await registrationAllowed())) throw new AccountError("REGISTRATION_CLOSED");
+  const profile = countryProfile(input.country);
   const passwordHash = await hashPassword(input.password);
   const created = await getDb().transaction(async (tx) => {
     // The first account on the server administers the platform.
@@ -64,9 +97,25 @@ export async function registerAccount(raw: RegisterInput, inviteToken?: string |
       .returning({ id: users.id });
     const [org] = await tx
       .insert(organizations)
-      .values({ name: input.company, locale: input.locale })
+      .values({
+        name: input.company,
+        locale: input.locale,
+        country: profile.code,
+        currency: profile.currency,
+        timezone: validTimezone(input.timezone) ? input.timezone : profile.timezone,
+        smallBusiness: false,
+        invoiceNumberFormat: profile.numbers.invoice,
+        quoteNumberFormat: profile.numbers.quote,
+        creditNoteNumberFormat: profile.numbers.creditNote,
+        signupIpCountry: ipCountry ?? null,
+      })
       .returning({ id: organizations.id });
     await tx.insert(memberships).values({ organizationId: org.id, userId: user.id, role: "OWNER" });
+    // Signed up from somewhere else than the company's country: the admin looks first.
+    // Not for the platform's own first account, nor for a company the admin invited.
+    if (anyone && !invite && ipCountry && ipCountry !== profile.code) {
+      await tx.insert(suspensions).values({ organizationId: org.id, kind: "REVIEW", reason: `${ipCountry} → ${profile.code}` });
+    }
     return { userId: user.id, organizationId: org.id };
   });
   if (invite) await markPlatformInviteUsed(invite.id);
@@ -92,7 +141,8 @@ function remember(key: string): void {
   attempts.set(key, [...(attempts.get(key) ?? []), Date.now()]);
 }
 
-export async function authenticate(rawEmail: string, password: string, client = "?") {
+export async function authenticate(rawEmail: string, password: string, client = "?", ipCountry: string | null = null) {
+  if (regionRefused(ipCountry)) throw new AccountError("REGION_BLOCKED");
   const address = email.safeParse(rawEmail);
   const key = `${client}|${address.success ? address.data : rawEmail}`;
   if (throttled(key)) throw new AccountError("TOO_MANY_ATTEMPTS");

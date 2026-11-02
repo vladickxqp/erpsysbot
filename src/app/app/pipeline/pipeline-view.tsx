@@ -55,9 +55,9 @@ export function PipelineView({
   stats: { open: { stage: string; count: number; valueCents: number }[]; winRate: number | null };
   deals: Deal[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
-  const money = (c: number) => formatMoney(c, locale);
+  const money = (c: number) => formatMoney(c, locale, region);
   const [deals, setDeals] = useState(initial);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -162,7 +162,7 @@ export function PipelineView({
                       <span className="tabular-nums font-medium">{d.valueCents ? money(d.valueCents) : ""}</span>
                       {d.nextFollowUp && d.stage !== "WON" && d.stage !== "LOST" && (
                         <span className={cn("flex items-center gap-1", d.nextFollowUp <= today ? "font-medium text-warning" : "text-muted-foreground")}>
-                          <BellRing className="size-3" /> {formatDate(d.nextFollowUp, locale)}
+                          <BellRing className="size-3" /> {formatDate(d.nextFollowUp, locale, region)}
                         </span>
                       )}
                     </div>

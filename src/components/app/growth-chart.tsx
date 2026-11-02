@@ -1,12 +1,13 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { intlTag } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 
 export function GrowthChart({ data }: { data: { month: string; count: number }[] }) {
-  const { locale } = useI18n();
+  const { locale, region } = useI18n();
   const label = (month: string) =>
-    new Intl.DateTimeFormat(locale === "en" ? "en-GB" : locale, { month: "short" }).format(new Date(`${month}-01T00:00:00`));
+    new Intl.DateTimeFormat(intlTag(locale, region), { month: "short" }).format(new Date(`${month}-01T00:00:00`));
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer>

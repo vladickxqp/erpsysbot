@@ -19,10 +19,11 @@ import { clients, invoiceItems, invoices, orderItems, orders, payments, transact
 import { audit, type Via } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import type { Context, Organization } from "./context";
-import { addDays, formatNumber, linesInput, today, totals } from "./money";
+import { addDays, checkRates, formatNumber, linesInput, today, totals } from "./money";
 import { nextNumber } from "./numbers";
 import { asLines, lineRows } from "./orders";
 import { requirePermission } from "./permissions";
+import { countryProfile } from "@/lib/countries";
 import { PAYMENT_METHODS } from "@/lib/domain";
 
 export type Invoice = typeof invoices.$inferSelect;
@@ -78,15 +79,17 @@ export type Seller = Party & {
   bic: string | null;
   bankName: string | null;
   footer: string | null;
+  /** Missing in snapshots issued before currencies existed: those were euro. */
+  currency?: string;
 };
 
-/** What a German invoice must name about the seller before it can be issued. */
+/** What an invoice must name about the seller before it can be issued: an address everywhere, a tax number where the country asks for one. */
 export function missingCompanyData(org: Organization): string[] {
   const missing: string[] = [];
   if (!org.street) missing.push("street");
-  if (!org.postalCode) missing.push("postalCode");
+  if (!org.postalCode && org.country !== "AE") missing.push("postalCode");
   if (!org.city) missing.push("city");
-  if (!org.vatId && !org.taxNumber) missing.push("taxNumber");
+  if (countryProfile(org.country).requiresTaxId && !org.vatId && !org.taxNumber) missing.push("taxNumber");
   return missing;
 }
 
@@ -107,6 +110,7 @@ export function sellerOf(org: Organization): Seller {
     bic: org.bic,
     bankName: org.bankName,
     footer: org.invoiceFooter,
+    currency: org.currency,
   };
 }
 
@@ -135,6 +139,7 @@ async function draftOf(tx: Tx, id: string): Promise<Invoice> {
 export async function createInvoiceDraft(ctx: Context, raw: InvoiceInput, via: Via = "web"): Promise<Invoice> {
   requirePermission(ctx.permissions, "invoices.create");
   const input = invoiceInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   return withTenant(ctx.organization.id, async (tx) => {
     await clientParty(tx, input.clientId);
@@ -162,6 +167,7 @@ export async function createInvoiceDraft(ctx: Context, raw: InvoiceInput, via: V
 export async function updateInvoiceDraft(ctx: Context, id: string, raw: InvoiceInput, via: Via = "web"): Promise<Invoice> {
   requirePermission(ctx.permissions, "invoices.create");
   const input = invoiceInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   return withTenant(ctx.organization.id, async (tx) => {
     await draftOf(tx, id);

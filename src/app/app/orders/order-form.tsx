@@ -36,11 +36,11 @@ export function OrderForm({
   products: ProductOption[];
   smallBusiness: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [v, setV] = useState<OrderFormValues>(() => {
     const start = initial ?? { clientId: "", status: "NEW", title: "", notes: "", dueDate: "", lines: [] };
-    return { ...start, lines: start.lines.length ? start.lines : [blankLine()] };
+    return { ...start, lines: start.lines.length ? start.lines : [blankLine(region, locale)] };
   });
   const [pending, start] = useTransition();
   const items = serialize(v.lines);

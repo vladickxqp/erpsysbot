@@ -31,7 +31,7 @@ export function OrderDetail({
   smallBusiness: boolean;
   can: { update: boolean; delete: boolean; create: boolean; invoice: boolean };
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -61,8 +61,8 @@ export function OrderDetail({
               {clientName}
             </Link>
             {" · "}
-            {t("orders.created")} {formatDate(order.createdAt, locale)}
-            {order.dueDate && ` · ${t("orders.dueDate")} ${formatDate(order.dueDate, locale)}`}
+            {t("orders.created")} {formatDate(order.createdAt, locale, region)}
+            {order.dueDate && ` · ${t("orders.dueDate")} ${formatDate(order.dueDate, locale, region)}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

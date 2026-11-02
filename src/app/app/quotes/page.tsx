@@ -17,7 +17,7 @@ export async function generateMetadata() {
 
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
   const ctx = await requirePageContext("orders.read");
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const sp = await searchParams;
   const status = (QUOTE_STATUSES as readonly string[]).includes(sp.status ?? "") ? (sp.status as QuoteStatus) : undefined;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
@@ -74,8 +74,8 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                     <TableCell>
                       <QuoteStatusBadge status={q.status} expired={q.expired} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{q.validUntil ? formatDate(q.validUntil, locale) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(q.grossCents, locale)}</TableCell>
+                    <TableCell className="text-muted-foreground">{q.validUntil ? formatDate(q.validUntil, locale, region) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(q.grossCents, locale, region)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -89,7 +89,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                     <div className="truncate font-medium">
                       {q.number} · {q.clientName}
                     </div>
-                    <div className="truncate text-sm text-muted-foreground">{formatMoney(q.grossCents, locale)}</div>
+                    <div className="truncate text-sm text-muted-foreground">{formatMoney(q.grossCents, locale, region)}</div>
                   </div>
                   <QuoteStatusBadge status={q.status} expired={q.expired} />
                 </Link>

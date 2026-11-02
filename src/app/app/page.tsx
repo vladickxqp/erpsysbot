@@ -21,12 +21,12 @@ export async function generateMetadata() {
 
 export default async function DashboardPage() {
   const ctx = await requireContext();
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const nf = new Intl.NumberFormat(locale);
   const can = (p: Parameters<typeof ctx.permissions.has>[0]) => ctx.permissions.has(p);
   const now = today(ctx.organization.timezone);
   const monthStart = `${now.slice(0, 7)}-01`;
-  const money = (cents: number) => formatMoney(cents, locale);
+  const money = (cents: number) => formatMoney(cents, locale, region);
 
   const [stats, money1, flow, owed, open, recent] = await Promise.all([
     can("clients.read") ? clientStats(ctx) : null,
@@ -144,7 +144,7 @@ export default async function DashboardPage() {
                     <div className="truncate font-medium">{inv.clientName}</div>
                     <div className="text-xs text-muted-foreground">
                       {inv.number ?? t("invoices.draftNumber")}
-                      {inv.issueDate && ` · ${formatDate(inv.issueDate, locale)}`}
+                      {inv.issueDate && ` · ${formatDate(inv.issueDate, locale, region)}`}
                     </div>
                   </div>
                   <InvoiceStatusBadge status={inv.status} overdue={inv.overdue} kind={inv.kind} />

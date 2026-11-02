@@ -8,7 +8,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, asc, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assistantMessages, auditLog, memberships, organizations, plans, platformInvites, sessions, subscriptions, suspensions, users } from "@/db/schema";
+import { assistantMessages, auditLog, invoices, memberships, organizations, plans, platformInvites, sessions, subscriptions, suspensions, users } from "@/db/schema";
+import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import type { SessionUser } from "./auth/sessions";
 
 export class PlatformError extends Error {
@@ -71,12 +72,15 @@ export async function listCompanies(user: SessionUser) {
       id: organizations.id,
       name: organizations.name,
       createdAt: organizations.createdAt,
+      country: organizations.country,
+      signupIpCountry: organizations.signupIpCountry,
       members: sql<number>`(select count(*)::int from ${memberships} m where m.organization_id = ${organizations.id})`,
       lastActivity: sql<string | null>`(select max(a.created_at)::text from ${auditLog} a where a.organization_id = ${organizations.id})`,
       planId: subscriptions.planId,
       status: subscriptions.status,
       trialEndsAt: subscriptions.trialEndsAt,
       suspended: sql<boolean>`${suspensions.organizationId} is not null`,
+      suspensionKind: suspensions.kind,
     })
     .from(organizations)
     .leftJoin(subscriptions, eq(subscriptions.organizationId, organizations.id))
@@ -94,8 +98,35 @@ export async function setSuspended(user: SessionUser, organizationId: string, su
 }
 
 export async function isSuspended(organizationId: string): Promise<boolean> {
-  const [row] = await getDb().select({ id: suspensions.organizationId }).from(suspensions).where(eq(suspensions.organizationId, organizationId));
-  return !!row;
+  return (await suspensionOf(organizationId)) !== null;
+}
+
+/** SUSPENDED, REVIEW (waiting for the admin after sign-up) or null. */
+export async function suspensionOf(organizationId: string): Promise<string | null> {
+  const [row] = await getDb().select({ kind: suspensions.kind }).from(suspensions).where(eq(suspensions.organizationId, organizationId));
+  return row?.kind ?? null;
+}
+
+/**
+ * Corrects a company's country. Its currency follows only while it has issued
+ * no invoice yet — figures already issued keep theirs. Its tax rates go back
+ * to the new country's.
+ */
+export async function setCompanyCountry(user: SessionUser, organizationId: string, country: string) {
+  requirePlatformAdmin(user);
+  const code = country.trim().toUpperCase();
+  if (!isCountry(code) || isBlockedCountry(code)) throw new PlatformError("INVALID");
+  const db = getDb();
+  const [issued] = await db
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.organizationId, organizationId), sql`${invoices.status} <> 'DRAFT'`))
+    .limit(1);
+  const profile = countryProfile(code);
+  await db
+    .update(organizations)
+    .set({ country: code, taxRates: null, ...(issued ? {} : { currency: profile.currency }) })
+    .where(eq(organizations.id, organizationId));
 }
 
 // --- Invitations for new companies -----------------------------------------------------------

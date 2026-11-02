@@ -43,7 +43,8 @@ export const clientInput = z
     street: optional(160),
     postalCode: optional(20),
     city: optional(100),
-    country: z.string().trim().toUpperCase().length(2).default("DE"),
+    /** Left out: the company's own country. */
+    country: z.string().trim().toUpperCase().length(2).optional(),
     vatId: optional(40),
     buyerReference: optional(80),
     notes: optional(5000),
@@ -114,7 +115,7 @@ export async function createClient(
     const number = await nextNumber(tx, ctx.organization.id, "client");
     const [row] = await tx
       .insert(clients)
-      .values({ ...input, organizationId: ctx.organization.id, number, assignedUserId: ctx.user.userId })
+      .values({ ...input, country: input.country ?? ctx.organization.country, organizationId: ctx.organization.id, number, assignedUserId: ctx.user.userId })
       .returning();
     await audit(tx, ctx, "client.create", "client", row.id, { number }, opts.via);
     return row;

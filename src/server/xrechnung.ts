@@ -13,7 +13,7 @@ import { asLines } from "./orders";
 import { getClient } from "./clients";
 
 export class XRechnungError extends Error {
-  constructor(public readonly code: "DRAFT" | "CREDIT_NOTE") {
+  constructor(public readonly code: "DRAFT" | "CREDIT_NOTE" | "NOT_GERMAN") {
     super(code);
   }
 }
@@ -44,6 +44,9 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
   const { invoice, items, seller, buyer } = await pdfData(ctx, invoiceId);
   if (invoice.status === "DRAFT" || !invoice.number) throw new XRechnungError("DRAFT");
   if (invoice.kind !== "INVOICE") throw new XRechnungError("CREDIT_NOTE");
+  // The German e-invoice standard: for sellers in Germany only.
+  if ((seller.country ?? "DE") !== "DE") throw new XRechnungError("NOT_GERMAN");
+  const cur = seller.currency ?? "EUR";
   const client = await getClient(ctx, invoice.clientId).catch(() => null);
   const lines = asLines(items);
   const sum = totals(lines, invoice.smallBusiness);
@@ -73,7 +76,7 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
   <cac:InvoiceLine>
     <cbc:ID>${item.position}</cbc:ID>
     <cbc:InvoicedQuantity unitCode="${unitCode(item.unit)}">${quantity}</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="EUR">${amount(item.netCents)}</cbc:LineExtensionAmount>
+    <cbc:LineExtensionAmount currencyID="${cur}">${amount(item.netCents)}</cbc:LineExtensionAmount>
     <cac:Item>
       <cbc:Name>${esc(item.description.split("\n")[0].slice(0, 200))}</cbc:Name>
       <cac:ClassifiedTaxCategory>
@@ -82,7 +85,7 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
         ${taxScheme}
       </cac:ClassifiedTaxCategory>
     </cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="EUR">${unitPrice.toFixed(4).replace(/0{1,2}$/, "")}</cbc:PriceAmount></cac:Price>
+    <cac:Price><cbc:PriceAmount currencyID="${cur}">${unitPrice.toFixed(4).replace(/0{1,2}$/, "")}</cbc:PriceAmount></cac:Price>
   </cac:InvoiceLine>`;
     })
     .join("");
@@ -99,7 +102,7 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
   ${invoice.dueDate ? `<cbc:DueDate>${invoice.dueDate}</cbc:DueDate>` : ""}
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   ${invoice.notes ? `<cbc:Note>${esc(invoice.notes)}</cbc:Note>` : ""}
-  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cbc:DocumentCurrencyCode>${cur}</cbc:DocumentCurrencyCode>
   <cbc:BuyerReference>${esc(client?.buyerReference || invoice.number)}</cbc:BuyerReference>
   ${invoice.serviceDate ? `<cac:InvoicePeriod><cbc:StartDate>${invoice.serviceDate}</cbc:StartDate><cbc:EndDate>${invoice.serviceDate}</cbc:EndDate></cac:InvoicePeriod>` : ""}
   <cac:AccountingSupplierParty>
@@ -134,12 +137,12 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
   }
   ${invoice.dueDate ? `<cac:PaymentTerms><cbc:Note>Zahlbar bis ${invoice.dueDate}</cbc:Note></cac:PaymentTerms>` : ""}
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="EUR">${amount(invoice.vatCents)}</cbc:TaxAmount>${groups
+    <cbc:TaxAmount currencyID="${cur}">${amount(invoice.vatCents)}</cbc:TaxAmount>${groups
       .map(
         (g) => `
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="EUR">${amount(g.netCents)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="EUR">${amount(g.vatCents)}</cbc:TaxAmount>
+      <cbc:TaxableAmount currencyID="${cur}">${amount(g.netCents)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="${cur}">${amount(g.vatCents)}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>${category(g.rate)}</cbc:ID>
         <cbc:Percent>${g.rate}</cbc:Percent>
@@ -151,11 +154,11 @@ export async function xrechnungXml(ctx: Context, invoiceId: string): Promise<{ x
       .join("")}
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="EUR">${amount(invoice.netCents)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="EUR">${amount(invoice.netCents)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="EUR">${amount(invoice.grossCents)}</cbc:TaxInclusiveAmount>
-    <cbc:PrepaidAmount currencyID="EUR">${amount(invoice.paidCents)}</cbc:PrepaidAmount>
-    <cbc:PayableAmount currencyID="EUR">${amount(invoice.grossCents - invoice.paidCents)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="${cur}">${amount(invoice.netCents)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${cur}">${amount(invoice.netCents)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${cur}">${amount(invoice.grossCents)}</cbc:TaxInclusiveAmount>
+    <cbc:PrepaidAmount currencyID="${cur}">${amount(invoice.paidCents)}</cbc:PrepaidAmount>
+    <cbc:PayableAmount currencyID="${cur}">${amount(invoice.grossCents - invoice.paidCents)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>${lineXml}
 </ubl:Invoice>
 `;

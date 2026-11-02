@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { intlTag } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { deleteAppointmentAction, saveAppointmentAction, type AppointmentPayload } from "./actions";
@@ -80,9 +81,9 @@ export function CalendarView({
   members: { id: string; name: string }[];
   items: Item[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
-  const tag = locale === "en" ? "en-GB" : locale;
+  const tag = intlTag(locale, region);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, start] = useTransition();
 

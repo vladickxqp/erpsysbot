@@ -197,9 +197,9 @@ describe("assistant", () => {
     const owner = await newCompany("Werkzeug GmbH");
     const client = await createClient(owner, { lastName: "Kunde", email: "kunde@example.org" });
     const accountant = await newMember(owner, "ACCOUNTANT");
-    const viaOwner = await runTool(owner, "create_invoice_draft", { client_id: client.id, items: [{ description: "Arbeit", quantity: 2, unit_price_eur: 50 }] }, "ai");
+    const viaOwner = await runTool(owner, "create_invoice_draft", { client_id: client.id, items: [{ description: "Arbeit", quantity: 2, unit_price: 50 }] }, "ai");
     expect(viaOwner.isError).toBe(false);
-    expect(JSON.parse(viaOwner.content)).toMatchObject({ status: "DRAFT", net_eur: 100, gross_eur: 119 });
+    expect(JSON.parse(viaOwner.content)).toMatchObject({ status: "DRAFT", net: 100, gross: 119 });
 
     const denied = await runTool(accountant, "create_client", { last_name: "Neu" }, "ai");
     expect(denied).toEqual({ content: "This user is not allowed to do that.", isError: true });

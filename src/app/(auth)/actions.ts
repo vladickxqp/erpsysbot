@@ -11,7 +11,7 @@ import { currentUser, publicBase } from "@/server/request";
 import { TeamError, acceptInvitation, passwordTokenForEmail, registerWithInvitation, resetPassword } from "@/server/team";
 
 export type AuthState =
-  | { error?: "invalid" | "taken" | "tooMany" | "check" | "closed" | "expired" | "wrongEmail"; fields?: string[]; sent?: boolean }
+  | { error?: "invalid" | "taken" | "tooMany" | "check" | "closed" | "expired" | "wrongEmail" | "region"; fields?: string[]; sent?: boolean }
   | undefined;
 
 async function startSession(userId: string, organizationId: string | null) {
@@ -28,6 +28,12 @@ async function startSession(userId: string, organizationId: string | null) {
 async function clientKey() {
   const h = await headers();
   return h.get("cf-connecting-ip") ?? h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+}
+
+/** The country Cloudflare saw the request come from; null without Cloudflare in front. */
+async function ipCountry(): Promise<string | null> {
+  const code = (await headers()).get("cf-ipcountry")?.trim().toUpperCase();
+  return code && code !== "XX" ? code : null;
 }
 
 /** Only a path inside this app: never another site. */
@@ -47,10 +53,11 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
       String(form.get("email") ?? ""),
       String(form.get("password") ?? ""),
       await clientKey(),
+      await ipCountry(),
     );
     await startSession(userId, organizationId);
   } catch (e) {
-    if (e instanceof AccountError) return { error: e.code === "TOO_MANY_ATTEMPTS" ? "tooMany" : "invalid" };
+    if (e instanceof AccountError) return { error: e.code === "TOO_MANY_ATTEMPTS" ? "tooMany" : e.code === "REGION_BLOCKED" ? "region" : "invalid" };
     throw e;
   }
   redirect(safeNext(form.get("next")));
@@ -63,11 +70,15 @@ export async function registerAction(_: AuthState, form: FormData): Promise<Auth
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
       company: String(form.get("company") ?? ""),
+      country: String(form.get("country") ?? ""),
+      timezone: String(form.get("timezone") ?? "") || null,
       locale: await chosenLocale(),
-    }, String(form.get("invite") ?? "") || null);
+    }, String(form.get("invite") ?? "") || null, await ipCountry());
     await startSession(userId, organizationId);
   } catch (e) {
-    if (e instanceof AccountError) return { error: e.code === "REGISTRATION_CLOSED" ? "closed" : "taken" };
+    if (e instanceof AccountError) {
+      return { error: e.code === "REGISTRATION_CLOSED" ? "closed" : e.code === "REGION_BLOCKED" ? "region" : "taken" };
+    }
     if (e instanceof ZodError) return { error: "check", fields: e.issues.map((i) => String(i.path[0])) };
     throw e;
   }

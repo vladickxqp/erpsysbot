@@ -2,12 +2,12 @@
 
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useI18n } from "@/i18n/client";
-import { formatMoney } from "@/i18n";
+import { formatMoney, intlTag } from "@/i18n";
 
 /** Income against expenses per month (cents in, euros on the axis). */
 export function FlowChart({ data }: { data: { month: string; income: number; expense: number }[] }) {
-  const { t, locale } = useI18n();
-  const tag = locale === "en" ? "en-GB" : locale;
+  const { t, locale, region } = useI18n();
+  const tag = intlTag(locale, region);
   const label = (m: string) => new Intl.DateTimeFormat(tag, { month: "short" }).format(new Date(`${m}-01T00:00:00`));
   const compact = new Intl.NumberFormat(tag, { notation: "compact", maximumFractionDigits: 1 });
   return (
@@ -20,7 +20,7 @@ export function FlowChart({ data }: { data: { month: string; income: number; exp
           <Tooltip
             cursor={{ fill: "var(--muted)" }}
             labelFormatter={(m) => label(String(m))}
-            formatter={(value) => formatMoney(Number(value ?? 0), locale)}
+            formatter={(value) => formatMoney(Number(value ?? 0), locale, region)}
             contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--foreground)" }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />

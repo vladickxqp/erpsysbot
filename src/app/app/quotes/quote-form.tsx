@@ -23,11 +23,11 @@ type Props = {
 };
 
 export function QuoteForm({ initial, clients, products, smallBusiness }: Props & { initial?: QuoteFormValues }) {
-  const { t } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [v, setV] = useState<QuoteFormValues>(() => {
     const start = initial ?? { clientId: "", title: "", notes: "", validUntil: "", lines: [] };
-    return { ...start, lines: start.lines.length ? start.lines : [blankLine()] };
+    return { ...start, lines: start.lines.length ? start.lines : [blankLine(region, locale)] };
   });
   const [pending, start] = useTransition();
   const items = serialize(v.lines);

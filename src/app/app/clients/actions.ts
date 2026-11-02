@@ -40,7 +40,7 @@ function fromForm(form: FormData): ClientInput {
     street: text("street"),
     postalCode: text("postalCode"),
     city: text("city"),
-    country: text("country") || "DE",
+    country: text("country") || undefined,
     vatId: text("vatId"),
     buyerReference: text("buyerReference"),
     notes: text("notes"),

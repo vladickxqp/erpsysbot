@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePageContext("clients.read");
   const { id } = await params;
-  const { locale } = await getT();
+  const { locale, region } = await getT();
   const client = await getClient(ctx, id).catch((e) => {
     if (e instanceof NotFoundError) notFound();
     throw e;
@@ -43,7 +43,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         source: client.source,
       }}
       name={displayName(client)}
-      created={formatDate(client.createdAt, locale)}
+      created={formatDate(client.createdAt, locale, region)}
       canEdit={ctx.permissions.has("clients.update")}
       canDelete={ctx.permissions.has("clients.delete")}
     />

@@ -2,7 +2,8 @@
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useI18n } from "@/i18n/client";
-import { formatMoney } from "@/i18n";
+import { formatMoney, formatRate, intlTag } from "@/i18n";
+import { countryProfile } from "@/lib/countries";
 import type { Totals } from "@/server/money";
 
 export type ItemRow = {
@@ -19,9 +20,10 @@ export type ItemRow = {
 
 /** Lines and totals of an order or an invoice, read-only. */
 export function ItemsTable({ items, totals, smallBusiness }: { items: ItemRow[]; totals: Totals; smallBusiness: boolean }) {
-  const { t, locale } = useI18n();
-  const money = (c: number) => formatMoney(c, locale);
-  const qty = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
+  const { t, locale, region } = useI18n();
+  const money = (c: number) => formatMoney(c, locale, region);
+  const qty = new Intl.NumberFormat(intlTag(locale, region), { maximumFractionDigits: 3 });
+  const taxLabel = countryProfile(region.country).taxKind === "SALES_TAX" ? "lines.salesTax" : "lines.vat";
   return (
     <div className="grid gap-4">
       <div className="overflow-x-auto rounded-xl border bg-card">
@@ -32,7 +34,7 @@ export function ItemsTable({ items, totals, smallBusiness }: { items: ItemRow[];
               <TableHead>{t("lines.description")}</TableHead>
               <TableHead className="text-right">{t("lines.quantity")}</TableHead>
               <TableHead className="text-right">{t("lines.price")}</TableHead>
-              {!smallBusiness && <TableHead className="text-right">{t("lines.vat")}</TableHead>}
+              {!smallBusiness && <TableHead className="text-right">{t(taxLabel)}</TableHead>}
               <TableHead className="text-right">{t("lines.net")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -48,7 +50,7 @@ export function ItemsTable({ items, totals, smallBusiness }: { items: ItemRow[];
                   {qty.format(i.quantity)} {i.unit}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{money(i.unitPriceCents)}</TableCell>
-                {!smallBusiness && <TableCell className="text-right text-muted-foreground">{i.vatRate} %</TableCell>}
+                {!smallBusiness && <TableCell className="text-right text-muted-foreground">{formatRate(Number(i.vatRate), locale, region)}</TableCell>}
                 <TableCell className="text-right tabular-nums">{money(i.netCents)}</TableCell>
               </TableRow>
             ))}
@@ -65,7 +67,7 @@ export function ItemsTable({ items, totals, smallBusiness }: { items: ItemRow[];
         ) : (
           totals.byRate.map((g) => (
             <div key={g.rate} className="flex justify-between gap-8">
-              <dt className="text-muted-foreground">{t("lines.vatOn", { rate: g.rate })}</dt>
+              <dt className="text-muted-foreground">{t(`${taxLabel}On`, { rate: qty.format(g.rate) })}</dt>
               <dd className="tabular-nums">{money(g.vatCents)}</dd>
             </div>
           ))

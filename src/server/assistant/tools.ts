@@ -12,7 +12,9 @@ import type { Context } from "../context";
 import { clientStats, invoiceStats, openOrderStats } from "../dashboard";
 import { financeSummary } from "../finance";
 import { createInvoiceDraft, getInvoice, listInvoices } from "../invoices";
-import { today } from "../money";
+import { defaultUnit } from "@/i18n";
+import { allowedRates } from "@/lib/countries";
+import { taxRate, today } from "../money";
 import { createOrder, listOrders } from "../orders";
 import { ForbiddenError, type Permission } from "../permissions";
 import { listProducts } from "../products";
@@ -21,7 +23,8 @@ import { CalendarError, createAppointment, dayBounds, listAppointments, localPar
 import { DEAL_STAGES, listDeals, saveDeal } from "../deals";
 import { createTask, listTasks } from "../tasks";
 
-const eur = (cents: number) => Math.round(cents) / 100;
+/** Cents as the company currency's main unit (12.5 = 12,50 €/$12.50). */
+const major = (cents: number) => Math.round(cents) / 100;
 const id = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -29,8 +32,8 @@ const lineSchema = z.object({
   description: z.string().trim().min(1).max(500),
   quantity: z.number().positive().max(1_000_000),
   unit: z.string().trim().min(1).max(20).optional(),
-  unit_price_eur: z.number().min(-1_000_000).max(1_000_000),
-  vat_rate: z.union([z.literal(19), z.literal(7), z.literal(0)]).optional(),
+  unit_price: z.number().min(-1_000_000).max(1_000_000),
+  vat_rate: taxRate.optional(),
   discount_percent: z.number().min(0).max(100).optional(),
   product_id: id.optional(),
 });
@@ -40,22 +43,22 @@ const lineJson = {
   properties: {
     description: { type: "string" },
     quantity: { type: "number" },
-    unit: { type: "string", description: "e.g. Std, Stk, pauschal" },
-    unit_price_eur: { type: "number", description: "Net unit price in euros" },
-    vat_rate: { type: "integer", enum: [19, 7, 0], description: "Defaults to 19" },
+    unit: { type: "string", description: "e.g. h, pcs, flat (in the user's language)" },
+    unit_price: { type: "number", description: "Net unit price in the company currency" },
+    vat_rate: { type: "number", description: "Tax rate in percent, one of the company's rates; defaults to its standard rate" },
     discount_percent: { type: "number" },
     product_id: { type: "string", description: "From list_products, if the line is a catalogue item" },
   },
-  required: ["description", "quantity", "unit_price_eur"],
+  required: ["description", "quantity", "unit_price"],
 } as const;
 
-const toLines = (items: z.infer<typeof lineSchema>[]) =>
+const toLines = (ctx: Context, items: z.infer<typeof lineSchema>[]) =>
   items.map((l) => ({
     description: l.description,
     quantity: l.quantity,
-    unit: l.unit ?? "Stk",
-    unitPriceCents: Math.round(l.unit_price_eur * 100),
-    vatRate: l.vat_rate ?? 19,
+    unit: l.unit ?? defaultUnit(ctx.user.locale),
+    unitPriceCents: Math.round(l.unit_price * 100),
+    vatRate: l.vat_rate ?? allowedRates(ctx.organization.taxRates, ctx.organization.country)[0],
     discountPercent: l.discount_percent ?? 0,
     productId: l.product_id ?? null,
   }));
@@ -94,9 +97,9 @@ export const TOOLS: Tool[] = [
       ]);
       return {
         today: now,
-        month: money && { income_eur: eur(money.incomeCents - money.refundCents), expenses_eur: eur(money.expenseCents), result_eur: eur(money.resultCents) },
-        unpaid_invoices: owed && { count: owed.outstanding, open_eur: eur(owed.outstandingCents), overdue_count: owed.overdue, overdue_eur: eur(owed.overdueCents) },
-        open_orders: open && { count: open.count, net_eur: eur(open.netCents) },
+        month: money && { income: major(money.incomeCents - money.refundCents), expenses: major(money.expenseCents), result: major(money.resultCents) },
+        unpaid_invoices: owed && { count: owed.outstanding, open: major(owed.outstandingCents), overdue_count: owed.overdue, overdue: major(owed.overdueCents) },
+        open_orders: open && { count: open.count, net: major(open.netCents) },
         clients: clients && { total: clients.total, active: clients.active, leads: clients.leads, new_this_month: clients.newThisMonth },
       };
     },
@@ -236,8 +239,8 @@ export const TOOLS: Tool[] = [
           client: i.clientName,
           issue_date: i.issueDate,
           due_date: i.dueDate,
-          gross_eur: eur(i.grossCents),
-          open_eur: eur(i.grossCents - i.paidCents),
+          gross: major(i.grossCents),
+          open: major(i.grossCents - i.paidCents),
         })),
       };
     },
@@ -259,12 +262,12 @@ export const TOOLS: Tool[] = [
         client: clientName,
         issue_date: i.issueDate,
         due_date: i.dueDate,
-        net_eur: eur(i.netCents),
-        vat_eur: eur(i.vatCents),
-        gross_eur: eur(i.grossCents),
-        paid_eur: eur(i.paidCents),
-        lines: items.map((l) => ({ description: l.description, quantity: Number(l.quantity), unit: l.unit, unit_price_eur: eur(l.unitPriceCents), vat_rate: l.vatRate, net_eur: eur(l.netCents) })),
-        payments: payments.map((p) => ({ date: p.paidOn, amount_eur: eur(p.amountCents), method: p.method })),
+        net: major(i.netCents),
+        vat: major(i.vatCents),
+        gross: major(i.grossCents),
+        paid: major(i.paidCents),
+        lines: items.map((l) => ({ description: l.description, quantity: Number(l.quantity), unit: l.unit, unit_price: major(l.unitPriceCents), vat_rate: l.vatRate, net: major(l.netCents) })),
+        payments: payments.map((p) => ({ date: p.paidOn, amount: major(p.amountCents), method: p.method })),
         related: related.map((r) => ({ id: r.id, number: r.number, kind: r.kind })),
       };
     },
@@ -289,10 +292,10 @@ export const TOOLS: Tool[] = [
     async (ctx, input, via) => {
       const draft = await createInvoiceDraft(
         ctx,
-        { clientId: input.client_id, serviceDate: input.service_date, notes: input.notes, items: toLines(input.items) },
+        { clientId: input.client_id, serviceDate: input.service_date, notes: input.notes, items: toLines(ctx, input.items) },
         via === "telegram" ? "telegram" : "ai",
       );
-      return { created: true, id: draft.id, status: "DRAFT", net_eur: eur(draft.netCents), gross_eur: eur(draft.grossCents), link: `/app/invoices/${draft.id}` };
+      return { created: true, id: draft.id, status: "DRAFT", net: major(draft.netCents), gross: major(draft.grossCents), link: `/app/invoices/${draft.id}` };
     },
   ),
   tool(
@@ -309,7 +312,7 @@ export const TOOLS: Tool[] = [
       const result = await listOrders(ctx, { status: input.status, q: input.query, pageSize: 20 });
       return {
         total: result.total,
-        orders: result.rows.map((o) => ({ id: o.id, number: o.number, title: o.title, status: o.status, client: o.clientName, due_date: o.dueDate, net_eur: eur(o.netCents) })),
+        orders: result.rows.map((o) => ({ id: o.id, number: o.number, title: o.title, status: o.status, client: o.clientName, due_date: o.dueDate, net: major(o.netCents) })),
       };
     },
   ),
@@ -339,10 +342,10 @@ export const TOOLS: Tool[] = [
     async (ctx, input, via) => {
       const order = await createOrder(
         ctx,
-        { clientId: input.client_id, title: input.title, dueDate: input.due_date, notes: input.notes, items: toLines(input.items) },
+        { clientId: input.client_id, title: input.title, dueDate: input.due_date, notes: input.notes, items: toLines(ctx, input.items) },
         via === "telegram" ? "telegram" : "ai",
       );
-      return { created: true, id: order.id, number: order.number, net_eur: eur(order.netCents), link: `/app/orders/${order.id}` };
+      return { created: true, id: order.id, number: order.number, net: major(order.netCents), link: `/app/orders/${order.id}` };
     },
   ),
   tool(
@@ -361,11 +364,11 @@ export const TOOLS: Tool[] = [
       return {
         from: input.from,
         to: input.to,
-        income_eur: eur(s.incomeCents),
-        refunds_eur: eur(s.refundCents),
-        expenses_eur: eur(s.expenseCents),
-        adjustments_eur: eur(s.adjustmentCents),
-        result_eur: eur(s.resultCents),
+        income: major(s.incomeCents),
+        refunds: major(s.refundCents),
+        expenses: major(s.expenseCents),
+        adjustments: major(s.adjustmentCents),
+        result: major(s.resultCents),
       };
     },
   ),
@@ -378,7 +381,7 @@ export const TOOLS: Tool[] = [
     z.object({ query: z.string().max(200).optional() }),
     async (ctx, input) => {
       const rows = await listProducts(ctx, { q: input.query, activeOnly: true });
-      return rows.slice(0, 40).map((p) => ({ id: p.id, name: p.name, kind: p.kind, unit: p.unit, price_eur: eur(p.priceCents), vat_rate: p.vatRate }));
+      return rows.slice(0, 40).map((p) => ({ id: p.id, name: p.name, kind: p.kind, unit: p.unit, price: major(p.priceCents), vat_rate: p.vatRate }));
     },
   ),
   tool(
@@ -515,7 +518,7 @@ export const TOOLS: Tool[] = [
     z.object({}),
     async (ctx) => {
       const rows = await listDeals(ctx);
-      return rows.slice(0, 60).map((d) => ({ id: d.id, title: d.title, client: d.clientName, stage: d.stage, value_eur: eur(d.valueCents), next_follow_up: d.nextFollowUp }));
+      return rows.slice(0, 60).map((d) => ({ id: d.id, title: d.title, client: d.clientName, stage: d.stage, value: major(d.valueCents), next_follow_up: d.nextFollowUp }));
     },
   ),
   tool(
@@ -527,7 +530,7 @@ export const TOOLS: Tool[] = [
         properties: {
           title: { type: "string" },
           client_id: { type: "string" },
-          value_eur: { type: "number" },
+          value: { type: "number" },
           stage: { type: "string", enum: [...DEAL_STAGES] },
           next_follow_up: { type: "string", description: "YYYY-MM-DD" },
           notes: { type: "string" },
@@ -538,7 +541,7 @@ export const TOOLS: Tool[] = [
     z.object({
       title: z.string().trim().min(1).max(200),
       client_id: id,
-      value_eur: z.number().min(0).max(100_000_000).optional(),
+      value: z.number().min(0).max(100_000_000).optional(),
       stage: z.enum(DEAL_STAGES).optional(),
       next_follow_up: isoDate.optional(),
       notes: z.string().max(5000).optional(),
@@ -550,7 +553,7 @@ export const TOOLS: Tool[] = [
         {
           title: input.title,
           clientId: input.client_id,
-          valueCents: Math.round((input.value_eur ?? 0) * 100),
+          valueCents: Math.round((input.value ?? 0) * 100),
           stage: input.stage,
           nextFollowUp: input.next_follow_up,
           notes: input.notes,

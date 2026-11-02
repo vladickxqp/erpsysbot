@@ -21,6 +21,7 @@ backend, one database, every interface on top of it.
 | Calendar, tasks and projects (board), sales pipeline | ✅ |
 | Stock and purchasing, documents, reports (CSV/PDF) | ✅ |
 | Platform admin, plans and Stripe subscriptions, automations, PWA, XRechnung export | ✅ |
+| Countries: currency, VAT or US sales tax, tax numbers, paper by country; de/en/ru/uk/kk/es | ✅ |
 
 ## How tenants are kept apart
 
@@ -61,8 +62,30 @@ a company, and the plans (price, users, assistant questions per day, modules).
 Billing is optional. Without `STRIPE_SECRET_KEY` everything is free. With it,
 new companies start a 14-day trial of Business; set each plan's Stripe price
 ID in "Platform", add the webhook `https://<domain>/api/stripe/webhook`
-(events `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`)
-and put its signing secret into `STRIPE_WEBHOOK_SECRET`.
+(events `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`,
+`payment_method.attached`) and put its signing secret into `STRIPE_WEBHOOK_SECRET`.
+
+### Countries and regions
+
+A company chooses its country when it signs up (`src/lib/countries.ts`); only
+the platform admin changes it later. The country sets the currency (fixed once
+the first invoice is issued), VAT or US sales tax and the default rates (the
+company can set its own under Settings), the names and shapes of its tax
+numbers, IBAN or account number, Letter paper in North America, the invoice
+numbering and whether XRechnung is offered (Germany only).
+
+Russia and Belarus are closed (EU sanctions on enterprise software). Behind
+Cloudflare the app reads the visitor's country (`CF-IPCountry`):
+
+- requests from RU/BY get 451 on every page;
+- sign-up and sign-in from RU/BY or Tor are refused;
+- a company that signs up from another country than the one it chose waits
+  under review until the platform admin approves it (Platform, ✓);
+- a card from RU/BY attached in Stripe puts the company under review too.
+
+A VPN with an exit in an open country passes the IP check — no check can stop
+that alone. For a second wall at the edge, add a Cloudflare WAF rule
+`ip.geoip.country in {"RU" "BY"}` → Block (free plan).
 
 ### Telegram and the assistant
 

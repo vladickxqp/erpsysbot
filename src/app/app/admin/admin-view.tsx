@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Copy, Pause, Play } from "lucide-react";
+import { Building2, Check, Copy, Pause, Play, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -13,9 +13,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
-import { companyPlanAction, inviteCompanyAction, planAction, suspendAction } from "./actions";
+import { companyCountryAction, companyPlanAction, inviteCompanyAction, planAction, suspendAction } from "./actions";
 
-type Company = { id: string; name: string; createdAt: string; members: number; lastActivity: string | null; planId: string | null; status: string | null; suspended: boolean; mine: boolean };
+type Company = {
+  id: string;
+  name: string;
+  createdAt: string;
+  country: string;
+  signupIpCountry: string | null;
+  members: number;
+  lastActivity: string | null;
+  planId: string | null;
+  status: string | null;
+  suspended: boolean;
+  review: boolean;
+  mine: boolean;
+};
 type Plan = { id: string; name: string; priceCents: number; maxUsers: number; aiPerDay: number; modules: string[]; stripePriceId: string | null; active: boolean };
 
 export function AdminView({
@@ -24,19 +37,23 @@ export function AdminView({
   companies,
   plans,
   invites,
+  countries,
 }: {
+  countries: { code: string; name: string }[];
   billing: boolean;
   modules: string[];
   companies: Company[];
   plans: Plan[];
   invites: { id: string; email: string; expiresAt: string }[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [email, setEmail] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, Plan>>({});
+  const [countryOf, setCountryOf] = useState<string | null>(null);
+  const countryName = (code: string) => countries.find((c) => c.code === code)?.name ?? code;
 
   const run = (work: () => Promise<{ ok?: boolean; error?: string; url?: string }>, done?: (r: { url?: string }) => void) =>
     start(async () => {
@@ -79,7 +96,7 @@ export function AdminView({
           )}
           {invites.length > 0 && (
             <div className="text-sm text-muted-foreground">
-              {t("team.pending")}: {invites.map((i) => `${i.email} (${formatDate(i.expiresAt, locale)})`).join(", ")}
+              {t("team.pending")}: {invites.map((i) => `${i.email} (${formatDate(i.expiresAt, locale, region)})`).join(", ")}
             </div>
           )}
         </CardContent>
@@ -102,12 +119,43 @@ export function AdminView({
                 <TableCell>
                   <div className="flex items-center gap-2 font-medium">
                     <Building2 className="size-4 text-muted-foreground" /> {c.name}
-                    {c.suspended && <Badge variant="destructive">{t("admin.suspended")}</Badge>}
+                    {c.review ? <Badge variant="destructive">{t("admin.review")}</Badge> : c.suspended && <Badge variant="destructive">{t("admin.suspended")}</Badge>}
                   </div>
-                  <div className="text-xs text-muted-foreground">{formatDate(c.createdAt, locale)}</div>
+                  <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                    {formatDate(c.createdAt, locale, region)} ·
+                    {countryOf === c.id ? (
+                      <select
+                        className="rounded border bg-background px-1 py-0.5 text-xs"
+                        defaultValue={c.country}
+                        autoFocus
+                        aria-label={t("company.country")}
+                        onBlur={() => setCountryOf(null)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setCountryOf(null);
+                          run(() => companyCountryAction(c.id, value));
+                        }}
+                      >
+                        {countries.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button type="button" className="hover:underline" title={t("company.country")} onClick={() => setCountryOf(c.id)}>
+                        {countryName(c.country)}
+                      </button>
+                    )}
+                    {c.signupIpCountry && c.signupIpCountry !== c.country && (
+                      <span className="inline-flex items-center gap-1 text-destructive" title={t("admin.ipCountry")}>
+                        <TriangleAlert className="size-3" /> IP: {c.signupIpCountry}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="hidden tabular-nums sm:table-cell">{c.members}</TableCell>
-                <TableCell className="hidden text-muted-foreground md:table-cell">{c.lastActivity ? formatDate(c.lastActivity, locale) : "—"}</TableCell>
+                <TableCell className="hidden text-muted-foreground md:table-cell">{c.lastActivity ? formatDate(c.lastActivity, locale, region) : "—"}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={c.planId ?? "-"} onValueChange={(v) => run(() => companyPlanAction(c.id, v, "ACTIVE"))}>
@@ -134,10 +182,11 @@ export function AdminView({
                       size="icon"
                       variant="ghost"
                       disabled={pending}
-                      aria-label={c.suspended ? t("admin.resume") : t("admin.suspend")}
+                      aria-label={c.review ? t("admin.approve") : c.suspended ? t("admin.resume") : t("admin.suspend")}
+                      title={c.review ? t("admin.approve") : undefined}
                       onClick={() => run(() => suspendAction(c.id, !c.suspended))}
                     >
-                      {c.suspended ? <Play className="size-4" /> : <Pause className="size-4" />}
+                      {c.review ? <Check className="size-4" /> : c.suspended ? <Play className="size-4" /> : <Pause className="size-4" />}
                     </Button>
                   )}
                 </TableCell>

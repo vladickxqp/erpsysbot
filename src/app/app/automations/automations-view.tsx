@@ -57,7 +57,7 @@ export function AutomationsView({
   runs: { id: string; name: string; subject: string; ok: boolean; message: string | null; attempts: number; createdAt: string }[];
   members: { id: string; name: string }[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, start] = useTransition();
@@ -165,7 +165,7 @@ export function AutomationsView({
                 {run.ok ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <XCircle className="size-4 shrink-0 text-destructive" />}
                 <span className="truncate font-medium">{run.name}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {formatDate(run.createdAt, locale)}
+                  {formatDate(run.createdAt, locale, region)}
                   {!run.ok && run.message ? ` · ${run.message}` : ""}
                   {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
                 </span>

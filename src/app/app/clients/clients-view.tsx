@@ -55,7 +55,7 @@ export function ClientsView({
   pages: number;
   canCreate: boolean;
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -179,7 +179,7 @@ export function ClientsView({
                     <TableCell>
                       <StatusBadge status={r.status} />
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">{formatDate(r.createdAt, locale)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{formatDate(r.createdAt, locale, region)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

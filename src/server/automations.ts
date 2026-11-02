@@ -15,7 +15,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { automationRuns, automations, clients, invoices, memberships, orders, products, tasks, telegramLinks, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { formatMoney, isLocale, type Locale } from "@/i18n";
+import { DEFAULT_REGION, formatMoney, isLocale, regionOf, type Locale } from "@/i18n";
 import { audit } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import { contextFor, type Context } from "./context";
@@ -223,6 +223,7 @@ async function runRules(organizationId: string, trigger: Trigger, subject: Subje
 export async function fireAutomations(ctx: Context, trigger: (typeof EVENT_TRIGGERS)[number], id: string): Promise<void> {
   try {
     const locale: Locale = isLocale(ctx.organization.locale) ? ctx.organization.locale : "de";
+    const region = regionOf(ctx.organization);
     const subject = await withTenant(ctx.organization.id, async (tx): Promise<Subject | null> => {
       if (trigger === "client.created") {
         const [c] = await tx.select().from(clients).where(eq(clients.id, id));
@@ -236,7 +237,7 @@ export async function fireAutomations(ctx: Context, trigger: (typeof EVENT_TRIGG
         clientId: o.order.clientId,
         orderId: id,
         assignedUserId: o.order.assignedUserId,
-        vars: { client: displayName(o.client), number: `#${o.order.number}`, amount: formatMoney(o.order.grossCents, locale), title: o.order.title ?? "" },
+        vars: { client: displayName(o.client), number: `#${o.order.number}`, amount: formatMoney(o.order.grossCents, locale, region), title: o.order.title ?? "" },
       };
     });
     if (subject) await runRules(ctx.organization.id, trigger, subject);
@@ -254,11 +255,13 @@ export async function runScheduledAutomations(): Promise<number> {
     .where(and(eq(automations.enabled, true), inArray(automations.trigger, [...SCHEDULED_TRIGGERS])));
   let total = 0;
   for (const { id: orgId } of orgs) {
-    const [org] = await db.execute<{ timezone: string; locale: string }>(sql`select timezone, locale from organizations where id = ${orgId}`).then((r) =>
-      Array.isArray(r) ? r : ((r as { rows?: { timezone: string; locale: string }[] }).rows ?? []),
+    type Row = { timezone: string; locale: string; country: string; currency: string };
+    const [org] = await db.execute<Row>(sql`select timezone, locale, country, currency from organizations where id = ${orgId}`).then((r) =>
+      Array.isArray(r) ? r : ((r as { rows?: Row[] }).rows ?? []),
     );
     const tz = org?.timezone ?? "Europe/Berlin";
     const locale: Locale = isLocale(org?.locale) ? org.locale : "de";
+    const region = org ? regionOf(org) : DEFAULT_REGION;
     const day = today(tz);
     const { overdue, lateTasks, low } = await withTenant(orgId, async (tx) => ({
       overdue: await tx
@@ -279,7 +282,7 @@ export async function runScheduledAutomations(): Promise<number> {
         amountCents: invoice.grossCents - invoice.paidCents,
         daysOverdue: days,
         clientId: invoice.clientId,
-        vars: { client: displayName(client), number: invoice.number ?? "", amount: formatMoney(invoice.grossCents - invoice.paidCents, locale), days: String(days) },
+        vars: { client: displayName(client), number: invoice.number ?? "", amount: formatMoney(invoice.grossCents - invoice.paidCents, locale, region), days: String(days) },
       });
     }
     for (const task of lateTasks) {

@@ -48,7 +48,7 @@ export function Transactions({
   from: string;
   to: string;
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -112,7 +112,7 @@ export function Transactions({
                 const signed = r.amountCents * SIGN[r.type];
                 return (
                   <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(r.bookedOn, locale)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(r.bookedOn, locale, region)}</TableCell>
                     <TableCell>{t(`finance.${r.type}`)}</TableCell>
                     <TableCell className="text-muted-foreground">{category(r.category)}</TableCell>
                     <TableCell>
@@ -125,7 +125,7 @@ export function Transactions({
                       )}
                     </TableCell>
                     <TableCell className={cn("text-right tabular-nums", signed < 0 ? "text-destructive" : "text-success")}>
-                      {formatMoney(signed, locale)}
+                      {formatMoney(signed, locale, region)}
                     </TableCell>
                     <TableCell>
                       {canCreate && !r.fromInvoice && (

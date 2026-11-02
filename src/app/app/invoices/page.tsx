@@ -18,7 +18,7 @@ export async function generateMetadata() {
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; page?: string }> }) {
   const ctx = await requirePageContext("invoices.read");
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const sp = await searchParams;
   const filter = (INVOICE_FILTERS as readonly string[]).includes(sp.filter ?? "") ? (sp.filter as InvoiceFilter) : undefined;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
@@ -81,14 +81,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                       </Link>
                     </TableCell>
                     <TableCell>{i.clientName}</TableCell>
-                    <TableCell className="text-muted-foreground">{i.issueDate ? formatDate(i.issueDate, locale) : "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{i.issueDate ? formatDate(i.issueDate, locale, region) : "—"}</TableCell>
                     <TableCell className={i.overdue ? "text-destructive" : "text-muted-foreground"}>
-                      {i.dueDate ? formatDate(i.dueDate, locale) : "—"}
+                      {i.dueDate ? formatDate(i.dueDate, locale, region) : "—"}
                     </TableCell>
                     <TableCell>
                       <InvoiceStatusBadge status={i.status} overdue={i.overdue} kind={i.kind} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(i.grossCents, locale)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(i.grossCents, locale, region)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -101,7 +101,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{i.number ?? t("invoices.draftNumber")}</div>
                     <div className="truncate text-sm text-muted-foreground">
-                      {i.clientName} · {formatMoney(i.grossCents, locale)}
+                      {i.clientName} · {formatMoney(i.grossCents, locale, region)}
                     </div>
                   </div>
                   <InvoiceStatusBadge status={i.status} overdue={i.overdue} kind={i.kind} />

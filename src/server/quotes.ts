@@ -12,7 +12,7 @@ import { audit, type Via } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { createInvoiceDraft } from "./invoices";
-import { addDays, formatNumber, linesInput, today, totals } from "./money";
+import { addDays, checkRates, formatNumber, linesInput, today, totals } from "./money";
 import { nextNumber } from "./numbers";
 import { asLines, createOrder, lineRows } from "./orders";
 import { requirePermission } from "./permissions";
@@ -62,6 +62,7 @@ async function clientInCompany(tx: Tx, clientId: string) {
 export async function createQuote(ctx: Context, raw: QuoteInput, via: Via = "web"): Promise<Quote> {
   requirePermission(ctx.permissions, "orders.create");
   const input = quoteInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const org = ctx.organization;
   const sum = totals(input.items, org.smallBusiness);
   return withTenant(org.id, async (tx) => {
@@ -102,6 +103,7 @@ async function openQuote(tx: Tx, id: string): Promise<Quote> {
 export async function updateQuote(ctx: Context, id: string, raw: QuoteInput, via: Via = "web"): Promise<Quote> {
   requirePermission(ctx.permissions, "orders.update");
   const input = quoteInput.parse(raw);
+  checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   return withTenant(ctx.organization.id, async (tx) => {
     await openQuote(tx, id);

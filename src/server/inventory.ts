@@ -126,7 +126,8 @@ export const supplierInput = z.object({
   street: optional(160),
   postalCode: optional(20),
   city: optional(100),
-  country: z.string().trim().toUpperCase().length(2).default("DE"),
+  /** Left out: the company's own country. */
+  country: z.string().trim().toUpperCase().length(2).optional(),
   notes: optional(5000),
 });
 export type SupplierInput = z.input<typeof supplierInput>;
@@ -140,7 +141,10 @@ export async function saveSupplier(ctx: Context, id: string | null, raw: Supplie
       if (!row) throw new NotFoundError();
       return row;
     }
-    const [row] = await tx.insert(suppliers).values({ ...input, organizationId: ctx.organization.id }).returning();
+    const [row] = await tx
+      .insert(suppliers)
+      .values({ ...input, country: input.country ?? ctx.organization.country, organizationId: ctx.organization.id })
+      .returning();
     return row;
   });
 }

@@ -37,7 +37,7 @@ function range(period: Period, now: string): [string, string] {
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const ctx = await requirePageContext("finance.read");
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const sp = await searchParams;
   const period = (PERIODS as readonly string[]).includes(sp.period ?? "") ? (sp.period as Period) : "thisMonth";
   const [from, to] = range(period, today(ctx.organization.timezone));
@@ -46,7 +46,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
     monthlyFlow(ctx, 6),
     listTransactions(ctx, { from, to, pageSize: 100 }),
   ]);
-  const money = (c: number) => formatMoney(c, locale);
+  const money = (c: number) => formatMoney(c, locale, region);
   return (
     <>
       <PageHeader title={t("finance.title")} />

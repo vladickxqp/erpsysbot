@@ -43,7 +43,7 @@ function LinkBox({ url }: { url: string }) {
 }
 
 export function TeamView({ me, myRole, canManage, members, pending }: { me: string; myRole: string; canManage: boolean; members: Member[]; pending: Pending[] }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [busy, start] = useTransition();
   const [inviting, setInviting] = useState(false);
@@ -110,7 +110,7 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
                       <Badge variant="secondary">{t(`settings.${m.role}`)}</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(m.since, locale)}</TableCell>
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(m.since, locale, region)}</TableCell>
                   <TableCell className="text-right">
                     {editable && (
                       <DropdownMenu>
@@ -150,7 +150,7 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{p.email}</div>
                   <div className="text-xs text-muted-foreground">
-                    {t(`settings.${p.role}`)} · {t("team.until", { date: formatDate(p.expiresAt, locale) })}
+                    {t(`settings.${p.role}`)} · {t("team.until", { date: formatDate(p.expiresAt, locale, region) })}
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" aria-label={t("team.revoke")} disabled={busy} onClick={() => run(() => revokeAction(p.id))}>

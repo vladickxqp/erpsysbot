@@ -90,7 +90,7 @@ describe("documents", () => {
 describe("reports", () => {
   it("adds up real records: revenue per month, open items by age, revenue per client", async () => {
     let ctx = await newCompany("Bericht GmbH");
-    await updateCompany(ctx, { name: ctx.organization.name, street: "Weg 1", postalCode: "68159", city: "Mannheim", taxNumber: "1/2/3" });
+    await updateCompany(ctx, { name: ctx.organization.name, street: "Weg 1", postalCode: "68159", city: "Mannheim", taxNumber: "12/345/67890" });
     ctx = (await contextFor(ctx.user))!;
     const client = await createClient(ctx, { companyName: "Großkunde AG" });
     const line = (eur: number) => ({ description: "Arbeit", quantity: 1, unit: "Std", unitPriceCents: eur * 100, vatRate: 19 });

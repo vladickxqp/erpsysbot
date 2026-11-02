@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { users } from "@/db/schema";
-import { fromAcceptLanguage, isLocale, MESSAGES, formatDate, formatMoney, translator, type Locale, type T } from "@/i18n";
+import { fromAcceptLanguage, isLocale, MESSAGES, formatDate, formatMoney, regionOf, translator, type Locale, type T } from "@/i18n";
 import { AssistantError, askAssistant, assistantAvailable, clearConversation } from "../assistant/run";
 import { dayBounds, listAppointments, localParts } from "../calendar";
 import { displayName, listClients } from "../clients";
@@ -174,10 +174,11 @@ async function ask(ctx: Context, t: T, chatId: string, text: string, io: BotIO):
 
 async function todayText(ctx: Context, t: T): Promise<string> {
   const locale = localeOf(ctx);
-  const money = (c: number) => formatMoney(c, locale);
+  const region = regionOf(ctx.organization);
+  const money = (c: number) => formatMoney(c, locale, region);
   const can = (p: Parameters<typeof ctx.permissions.has>[0]) => ctx.permissions.has(p);
   const now = today(ctx.organization.timezone);
-  const lines = [`<b>${h(ctx.organization.name)}</b> · ${formatDate(now, locale)}`];
+  const lines = [`<b>${h(ctx.organization.name)}</b> · ${formatDate(now, locale, region)}`];
   if (can("finance.read")) {
     const s = await financeSummary(ctx, `${now.slice(0, 7)}-01`, now);
     lines.push(
@@ -212,13 +213,14 @@ async function calendarText(ctx: Context, t: T): Promise<string> {
 async function tasksText(ctx: Context, t: T): Promise<string> {
   if (!ctx.permissions.has("tasks.read")) return t("common.forbidden");
   const locale = localeOf(ctx);
+  const region = regionOf(ctx.organization);
   const day = today(ctx.organization.timezone);
   const open = await listTasks(ctx, { assignedUserId: ctx.user.userId, open: true });
   if (!open.length) return t("bot.noTasks");
   const base = appUrl();
   const lines = open.slice(0, 15).map((task) => {
     const late = task.dueDate && task.dueDate < day;
-    const due = task.dueDate ? ` · ${formatDate(task.dueDate, locale)}` : "";
+    const due = task.dueDate ? ` · ${formatDate(task.dueDate, locale, region)}` : "";
     return `${late ? "⚠️ " : task.priority === "HIGH" ? "❗ " : "• "}${h(task.title)}${due}`;
   });
   return [`<b>${t("bot.myTasks", { count: open.length })}</b>`, ...lines, ...(base ? ["", `<a href="${base}/app/tasks?mine=1">${t("bot.openApp")}</a>`] : [])].join("\n");
@@ -227,14 +229,15 @@ async function tasksText(ctx: Context, t: T): Promise<string> {
 async function invoicesText(ctx: Context, t: T): Promise<string> {
   if (!ctx.permissions.has("invoices.read")) return t("common.forbidden");
   const locale = localeOf(ctx);
+  const region = regionOf(ctx.organization);
   const { rows, total } = await listInvoices(ctx, { filter: "OPEN", pageSize: 10 });
   if (!rows.length) return t("bot.noOpenInvoices");
   const base = appUrl();
   const lines = rows.map((i) => {
     const label = h(`${i.number} · ${i.clientName}`);
     const linked = base ? `<a href="${base}/app/invoices/${i.id}">${label}</a>` : label;
-    const due = i.dueDate ? ` · ${formatDate(i.dueDate, locale)}` : "";
-    return `${i.overdue ? "⚠️ " : ""}${linked}\n${formatMoney(i.grossCents - i.paidCents, locale)}${due}`;
+    const due = i.dueDate ? ` · ${formatDate(i.dueDate, locale, region)}` : "";
+    return `${i.overdue ? "⚠️ " : ""}${linked}\n${formatMoney(i.grossCents - i.paidCents, locale, region)}${due}`;
   });
   return [`<b>${t("bot.openInvoices", { count: total })}</b>`, ...lines].join("\n\n");
 }

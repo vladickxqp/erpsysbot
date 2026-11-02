@@ -20,7 +20,7 @@ export async function generateMetadata() {
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ report?: string; period?: string; from?: string; to?: string }> }) {
   const ctx = await requireContext();
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const sp = await searchParams;
   const allowed = REPORTS.filter((r) => ctx.permissions.has(REPORT_PERMISSION[r]));
   if (!allowed.length) redirect("/app");
@@ -102,7 +102,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           {(["current", "d30", "d60", "d90", "d90plus"] as const).map((b) => (
             <div key={b} className={cn("rounded-xl border bg-card p-3", b !== "current" && (report.totals?.[b] ?? 0) > 0 && "border-destructive/30")}>
               <div className="text-xs text-muted-foreground">{t(`reports.${b}`)}</div>
-              <div className="text-lg font-semibold tabular-nums">{formatCell({ key: b, label: "", kind: "money" }, report.totals?.[b] ?? 0, locale, t)}</div>
+              <div className="text-lg font-semibold tabular-nums">{formatCell({ key: b, label: "", kind: "money" }, report.totals?.[b] ?? 0, locale, region, t)}</div>
             </div>
           ))}
         </div>
@@ -131,7 +131,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <TableRow key={i}>
                 {report.columns.map((c) => (
                   <TableCell key={c.key} className={cn(right(c.kind) && "text-right tabular-nums")}>
-                    {formatCell(c, row[c.key], locale, t)}
+                    {formatCell(c, row[c.key], locale, region, t)}
                   </TableCell>
                 ))}
               </TableRow>
@@ -142,7 +142,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <TableRow>
                 {report.columns.map((c, i) => (
                   <TableCell key={c.key} className={cn("font-semibold", right(c.kind) && "text-right tabular-nums")}>
-                    {i === 0 ? t("reports.total") : c.key in (report.totals ?? {}) ? formatCell(c, report.totals?.[c.key], locale, t) : ""}
+                    {i === 0 ? t("reports.total") : c.key in (report.totals ?? {}) ? formatCell(c, report.totals?.[c.key], locale, region, t) : ""}
                   </TableCell>
                 ))}
               </TableRow>

@@ -18,7 +18,7 @@ export async function generateMetadata() {
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
   const ctx = await requirePageContext("orders.read");
-  const { t, locale } = await getT();
+  const { t, locale, region } = await getT();
   const sp = await searchParams;
   const status = sp.status === "OPEN" || (ORDER_STATUSES as readonly string[]).includes(sp.status ?? "") ? (sp.status as OrderStatus | "OPEN") : undefined;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
@@ -95,8 +95,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     <TableCell>
                       <OrderStatusBadge status={o.status} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{o.dueDate ? formatDate(o.dueDate, locale) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(o.grossCents, locale)}</TableCell>
+                    <TableCell className="text-muted-foreground">{o.dueDate ? formatDate(o.dueDate, locale, region) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(o.grossCents, locale, region)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -110,7 +110,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     <div className="truncate font-medium">
                       #{o.number} · {o.clientName}
                     </div>
-                    <div className="truncate text-sm text-muted-foreground">{o.title ?? formatMoney(o.grossCents, locale)}</div>
+                    <div className="truncate text-sm text-muted-foreground">{o.title ?? formatMoney(o.grossCents, locale, region)}</div>
                   </div>
                   <OrderStatusBadge status={o.status} />
                 </Link>

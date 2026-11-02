@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { invitePlatform, PlatformError, setCompanyPlan, setSuspended, updatePlan, type planInput } from "@/server/platform";
+import { invitePlatform, PlatformError, setCompanyCountry, setCompanyPlan, setSuspended, updatePlan, type planInput } from "@/server/platform";
 import { publicBase, requireContext } from "@/server/request";
 import type { z } from "zod";
 
@@ -28,6 +28,10 @@ export async function inviteCompanyAction(email: string): Promise<Result> {
 
 export async function suspendAction(organizationId: string, suspended: boolean): Promise<Result> {
   return admin((user) => setSuspended(user, organizationId, suspended));
+}
+
+export async function companyCountryAction(organizationId: string, country: string): Promise<Result> {
+  return admin((user) => setCompanyCountry(user, organizationId, country));
 }
 
 export async function companyPlanAction(organizationId: string, planId: string, status: "ACTIVE" | "TRIALING" | "CANCELED"): Promise<Result> {

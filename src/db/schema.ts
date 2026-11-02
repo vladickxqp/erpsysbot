@@ -102,8 +102,12 @@ export const organizations = pgTable("organizations", {
   creditNoteNumberFormat: text("credit_note_number_format").notNull().default("GS-{YYYY}-{NNNN}"),
   invoiceFooter: text("invoice_footer"),
   currency: text("currency").notNull().default("EUR"),
+  /** The tax rates its lines may carry; null: the country's (src/lib/countries.ts). */
+  taxRates: numeric("tax_rates", { precision: 6, scale: 3, mode: "number" }).array(),
   locale: text("locale").notNull().default("de"),
   timezone: text("timezone").notNull().default("Europe/Berlin"),
+  /** Where the sign-up came from (Cloudflare's IP country), for the platform admin. */
+  signupIpCountry: text("signup_ip_country"),
   createdAt: createdAt(),
 });
 
@@ -212,11 +216,13 @@ export const billingEvents = pgTable("billing_events", {
   createdAt: createdAt(),
 });
 
-/** Organizations the platform admin has suspended (nobody can work in them). */
+/** Organizations the platform admin has suspended, or that wait for review (nobody can work in them). */
 export const suspensions = pgTable("suspensions", {
   organizationId: uuid("organization_id")
     .primaryKey()
     .references(() => organizations.id, { onDelete: "cascade" }),
+  /** SUSPENDED by the admin, or REVIEW: the sign-up's country did not match where it came from. */
+  kind: text("kind").notNull().default("SUSPENDED"),
   reason: text("reason"),
   createdAt: createdAt(),
 });
@@ -322,7 +328,8 @@ export const products = pgTable(
     unit: text("unit").notNull().default("Stk"),
     /** Net price in cents. */
     priceCents: integer("price_cents").notNull().default(0),
-    vatRate: integer("vat_rate").notNull().default(19),
+    /** Percent, up to three decimals (US sales tax: 8.875). */
+    vatRate: numeric("vat_rate", { precision: 6, scale: 3, mode: "number" }).notNull().default(19),
     active: boolean("active").notNull().default(true),
     category: text("category"),
     barcode: text("barcode"),
@@ -497,7 +504,7 @@ const lineColumns = () => ({
   unit: text("unit").notNull().default("Stk"),
   unitPriceCents: integer("unit_price_cents").notNull(),
   discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull().default("0"),
-  vatRate: integer("vat_rate").notNull(),
+  vatRate: numeric("vat_rate", { precision: 6, scale: 3, mode: "number" }).notNull(),
   netCents: integer("net_cents").notNull(),
 });
 

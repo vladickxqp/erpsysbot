@@ -27,7 +27,7 @@ describe("registration", () => {
     process.env.REGISTRATION = "";
     expect(await registrationAllowed()).toBe(false);
     await expect(
-      registerAccount({ name: "Fremd", email: uniqueEmail("fremd"), password: "long enough password", company: "Fremd GmbH" }),
+      registerAccount({ name: "Fremd", email: uniqueEmail("fremd"), password: "long enough password", company: "Fremd GmbH", country: "DE" }),
     ).rejects.toMatchObject({ code: "REGISTRATION_CLOSED" } satisfies Partial<AccountError>);
   });
 });

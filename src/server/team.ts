@@ -17,6 +17,7 @@ import { assertSeat } from "./billing";
 import { MIN_PASSWORD_LENGTH, hashPassword } from "./auth/password";
 import type { Context } from "./context";
 import { requirePermission, type Role } from "./permissions";
+import { LOCALES } from "@/i18n";
 
 const INVITE_DAYS = 7;
 const RESET_MINUTES = 60;
@@ -176,7 +177,7 @@ export async function acceptInvitation(token: string, user: { userId: string; em
 const joinInput = z.object({
   name: z.string().trim().min(2).max(100),
   password: z.string().min(MIN_PASSWORD_LENGTH).max(200),
-  locale: z.enum(["de", "en", "ru"]).default("de"),
+  locale: z.enum(LOCALES).default("de"),
 });
 
 /** A new person signs up through the invitation, with the invited address. */

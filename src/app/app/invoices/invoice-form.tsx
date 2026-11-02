@@ -34,11 +34,11 @@ export function InvoiceForm({
   products: ProductOption[];
   smallBusiness: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [v, setV] = useState<InvoiceFormValues>(() => {
     const start = initial ?? { clientId: "", serviceDate: "", dueDate: "", notes: "", lines: [] };
-    return { ...start, lines: start.lines.length ? start.lines : [blankLine()] };
+    return { ...start, lines: start.lines.length ? start.lines : [blankLine(region, locale)] };
   });
   const [pending, start] = useTransition();
 

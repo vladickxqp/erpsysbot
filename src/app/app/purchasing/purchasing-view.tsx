@@ -75,9 +75,9 @@ export function PurchasingView({
   products: Product[];
   lowStock: { id: string; name: string; unit: string; stock: number; min: number }[];
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
-  const money = (c: number) => formatMoney(c, locale);
+  const money = (c: number) => formatMoney(c, locale, region);
   const [pending, start] = useTransition();
   const [order, setOrder] = useState<{ id: string | null; supplierId: string; expectedOn: string; notes: string; items: { productId: string; quantity: string; cost: string }[] } | null>(null);
   const [supplier, setSupplier] = useState<(Omit<Supplier, "id"> & { id: string | null }) | null>(null);
@@ -139,7 +139,7 @@ export function PurchasingView({
           </Button>
         )}
         {canManage && tab === "suppliers" && (
-          <Button onClick={() => setSupplier({ id: null, name: "", contactName: "", email: "", phone: "", street: "", postalCode: "", city: "", country: "DE", notes: "" })}>
+          <Button onClick={() => setSupplier({ id: null, name: "", contactName: "", email: "", phone: "", street: "", postalCode: "", city: "", country: region.country, notes: "" })}>
             <Plus className="size-4" /> {t("inventory.newSupplier")}
           </Button>
         )}
@@ -214,7 +214,7 @@ export function PurchasingView({
                         {t(`inventory.${o.status}`)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">{o.expectedOn ? formatDate(o.expectedOn, locale) : "—"}</TableCell>
+                    <TableCell className="hidden text-muted-foreground sm:table-cell">{o.expectedOn ? formatDate(o.expectedOn, locale, region) : "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">{money(o.totalCents)}</TableCell>
                     <TableCell>
                       {canManage && (o.status === "DRAFT" || o.status === "ORDERED") && (

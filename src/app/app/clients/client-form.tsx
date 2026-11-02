@@ -39,8 +39,6 @@ export type ClientValues = {
   source?: string | null;
 };
 
-const EMPTY: ClientValues = { type: "PERSON", status: "ACTIVE", country: "DE" };
-
 function Field({
   name,
   label,
@@ -72,9 +70,9 @@ export function ClientDialog({
   onOpenChange: (open: boolean) => void;
   initial?: ClientValues;
 }) {
-  const { t } = useI18n();
+  const { t, region } = useI18n();
   const router = useRouter();
-  const values = initial ?? EMPTY;
+  const values = initial ?? { type: "PERSON", status: "ACTIVE", country: region.country };
   const [type, setType] = useState(values.type);
   const [status, setStatus] = useState(values.status);
   const [state, action, pending] = useActionState<ClientFormState, FormData>(saveClientAction, undefined);
@@ -165,12 +163,13 @@ export function ClientDialog({
             <Field name="street" label={t("clients.street")} defaultValue={values.street} className="sm:col-span-6" />
             <Field name="postalCode" label={t("clients.postalCode")} defaultValue={values.postalCode} className="sm:col-span-2" />
             <Field name="city" label={t("clients.city")} defaultValue={values.city} className="sm:col-span-3" />
-            <Field name="country" label={t("clients.country")} defaultValue={values.country ?? "DE"} maxLength={2} className="sm:col-span-1" />
+            <Field name="country" label={t("clients.country")} defaultValue={values.country ?? region.country} maxLength={2} className="sm:col-span-1" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field name="vatId" label={t("clients.vatId")} defaultValue={values.vatId} />
-            <Field name="buyerReference" label={t("clients.buyerReference")} defaultValue={values.buyerReference} />
+            {/* German companies: USt-IdNr. and the Leitweg-ID for XRechnung; elsewhere the client's tax number. */}
+            <Field name="vatId" label={t(region.country === "DE" ? "clients.vatId" : "company.taxNumberGeneral")} defaultValue={values.vatId} />
+            {region.country === "DE" && <Field name="buyerReference" label={t("clients.buyerReference")} defaultValue={values.buyerReference} />}
             <Field name="source" label={t("clients.source")} defaultValue={values.source} />
             <Field
               name="tags"

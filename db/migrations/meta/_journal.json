@@ -57,6 +57,13 @@
       "when": 1793618786891,
       "tag": "0007_platform_automation",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793636192510,
+      "tag": "0008_countries",
+      "breakpoints": true
     }
   ]
 }

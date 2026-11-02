@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/client";
-import { formatMoney } from "@/i18n";
+import { defaultUnit, formatMoney, formatRate, type Region } from "@/i18n";
+import { allowedRates, countryProfile } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import { adjustStockAction, deleteProductAction, saveProductAction, type ProductPayload } from "./actions";
 
@@ -40,14 +41,14 @@ type Row = {
 
 type FormState = ProductPayload & { id: string | null };
 
-const blank: FormState = {
+const blank = (region: Region, locale: string): FormState => ({
   id: null,
   kind: "SERVICE",
   name: "",
   sku: "",
-  unit: "Std",
+  unit: defaultUnit(locale, "hour"),
   price: "",
-  vatRate: 19,
+  vatRate: allowedRates(region.taxRates, region.country)[0],
   active: true,
   description: "",
   category: "",
@@ -55,17 +56,18 @@ const blank: FormState = {
   purchasePrice: "",
   trackStock: false,
   minStock: "",
-};
+});
 
 const euros = (cents: number | null) => (cents === null ? "" : (cents / 100).toFixed(2).replace(".", ","));
 
 export function ProductsView({ rows, canManage, canStock, smallBusiness }: { rows: Row[]; canManage: boolean; canStock: boolean; smallBusiness: boolean }) {
-  const { t, locale } = useI18n();
+  const { t, locale, region } = useI18n();
   const router = useRouter();
   const [form, setForm] = useState<FormState | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
   const [counting, setCounting] = useState<{ row: Row; counted: string; note: string } | null>(null);
   const [pending, start] = useTransition();
+  const taxLabel = countryProfile(region.country).taxKind === "SALES_TAX" ? "lines.salesTax" : "products.vat";
   const qty = (n: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(n);
   const anyStock = rows.some((r) => r.trackStock);
 
@@ -85,7 +87,7 @@ export function ProductsView({ rows, canManage, canStock, smallBusiness }: { row
     <>
       {canManage && (
         <div className="mb-4 flex justify-end">
-          <Button onClick={() => setForm(blank)}>
+          <Button onClick={() => setForm(blank(region, locale))}>
             <Plus className="size-4" /> {t("products.new")}
           </Button>
         </div>
@@ -100,7 +102,7 @@ export function ProductsView({ rows, canManage, canStock, smallBusiness }: { row
                 <TableHead>{t("products.name")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("products.kind")}</TableHead>
                 <TableHead className="text-right">{t("products.price")}</TableHead>
-                {!smallBusiness && <TableHead className="hidden text-right sm:table-cell">{t("products.vat")}</TableHead>}
+                {!smallBusiness && <TableHead className="hidden text-right sm:table-cell">{t(taxLabel)}</TableHead>}
                 {anyStock && <TableHead className="text-right">{t("inventory.stock")}</TableHead>}
                 <TableHead className="w-28" />
               </TableRow>
@@ -122,10 +124,10 @@ export function ProductsView({ rows, canManage, canStock, smallBusiness }: { row
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground sm:table-cell">{t(`products.${p.kind}`)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(p.priceCents, locale)}
+                      {formatMoney(p.priceCents, locale, region)}
                       <span className="text-muted-foreground"> / {p.unit}</span>
                     </TableCell>
-                    {!smallBusiness && <TableCell className="hidden text-right text-muted-foreground sm:table-cell">{p.vatRate} %</TableCell>}
+                    {!smallBusiness && <TableCell className="hidden text-right text-muted-foreground sm:table-cell">{formatRate(p.vatRate, locale, region)}</TableCell>}
                     {anyStock && (
                       <TableCell className={cn("text-right tabular-nums", low && "font-semibold text-destructive")}>
                         {p.trackStock ? `${qty(p.stock)} ${p.unit}` : "—"}
@@ -225,15 +227,15 @@ export function ProductsView({ rows, canManage, canStock, smallBusiness }: { row
                 </label>
                 {!smallBusiness && (
                   <div className="grid gap-1.5">
-                    <Label>{t("products.vat")}</Label>
+                    <Label>{t(taxLabel)}</Label>
                     <Select value={String(form.vatRate)} onValueChange={(v) => setForm({ ...form, vatRate: Number(v) })}>
-                      <SelectTrigger className="w-full" aria-label={t("products.vat")}>
+                      <SelectTrigger className="w-full" aria-label={t(taxLabel)}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {[19, 7, 0].map((r) => (
+                        {[...new Set([...allowedRates(region.taxRates, region.country), form.vatRate])].map((r) => (
                           <SelectItem key={r} value={String(r)}>
-                            {r} %
+                            {formatRate(r, locale, region)}
                           </SelectItem>
                         ))}
                       </SelectContent>

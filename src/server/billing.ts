@@ -9,7 +9,8 @@
 import Stripe from "stripe";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { billingEvents, memberships, organizations, plans, subscriptions } from "@/db/schema";
+import { billingEvents, memberships, organizations, plans, subscriptions, suspensions } from "@/db/schema";
+import { isBlockedCountry } from "@/lib/countries";
 import type { Context } from "./context";
 import { requirePermission } from "./permissions";
 
@@ -179,6 +180,18 @@ export async function handleStripeWebhook(payload: string, signature: string | n
         },
       });
     await db.update(billingEvents).set({ organizationId }).where(eq(billingEvents.id, event.id));
+    return "ok";
+  }
+  // A card issued in a closed country: the company waits for the platform admin's review.
+  if (event.type === "payment_method.attached") {
+    const method = event.data.object as Stripe.PaymentMethod;
+    const customer = typeof method.customer === "string" ? method.customer : method.customer?.id;
+    const [owner] = customer ? await db.select({ id: subscriptions.organizationId }).from(subscriptions).where(eq(subscriptions.stripeCustomerId, customer)) : [];
+    const country = method.card?.country ?? null;
+    if (owner && isBlockedCountry(country)) {
+      await db.insert(suspensions).values({ organizationId: owner.id, kind: "REVIEW", reason: `card ${country}` }).onConflictDoNothing();
+    }
+    await db.update(billingEvents).set({ organizationId: owner?.id ?? null }).where(eq(billingEvents.id, event.id));
     return "ok";
   }
   if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
