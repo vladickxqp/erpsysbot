@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
 import { listProducts } from "@/server/products";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { ProductsView } from "./products-view";
 
 export async function generateMetadata() {
@@ -10,7 +10,7 @@ export async function generateMetadata() {
 }
 
 export default async function ProductsPage() {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("orders.read");
   const { t } = await getT();
   const rows = await listProducts(ctx);
   return (

@@ -49,3 +49,28 @@ export function assistantDailyLimit(): number {
   const n = Number(env("AI_DAILY_LIMIT"));
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 100;
 }
+
+/** Questions to the assistant per day across the whole server (all companies). */
+export function assistantServerDailyLimit(): number {
+  const n = Number(env("AI_SERVER_DAILY_LIMIT"));
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 500;
+}
+
+/**
+ * Who may sign up: "invite" (default) — only with an invitation, except the
+ * very first account on an empty server; "open" — anyone.
+ */
+export function registrationOpen(): boolean {
+  return env("REGISTRATION").toLowerCase() === "open";
+}
+
+export function smtp(): { host: string; port: number; user: string; password: string } | null {
+  const host = env("SMTP_HOST");
+  if (!host) return null;
+  const port = Number(env("SMTP_PORT")) || 587;
+  return { host, port, user: env("SMTP_USER"), password: env("SMTP_PASSWORD") };
+}
+
+export function mailFrom(): string | null {
+  return env("SMTP_FROM") || null;
+}

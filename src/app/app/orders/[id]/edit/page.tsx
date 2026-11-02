@@ -4,11 +4,11 @@ import { getT } from "@/i18n/server";
 import { clientOptions, NotFoundError } from "@/server/clients";
 import { getOrder } from "@/server/orders";
 import { listProducts } from "@/server/products";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { OrderEditor } from "./order-editor";
 
 export default async function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("orders.update");
   const { t } = await getT();
   const { id } = await params;
   const found = await getOrder(ctx, id).catch((e) => {

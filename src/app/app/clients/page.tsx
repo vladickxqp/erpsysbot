@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
 import { displayName, listClients, SORTS, type ClientSort } from "@/server/clients";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { ClientsView } from "./clients-view";
 
 export async function generateMetadata() {
@@ -12,7 +12,7 @@ export async function generateMetadata() {
 type Search = { q?: string; status?: string; sort?: string; page?: string };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("clients.read");
   const { t } = await getT();
   const sp = await searchParams;
   const status = ["LEAD", "ACTIVE", "INACTIVE"].includes(sp.status ?? "") ? (sp.status as "LEAD") : undefined;

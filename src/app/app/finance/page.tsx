@@ -7,7 +7,7 @@ import { formatMoney } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { financeSummary, listTransactions, monthlyFlow } from "@/server/finance";
 import { today } from "@/server/money";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { Transactions } from "./transactions";
 
 export async function generateMetadata() {
@@ -36,7 +36,7 @@ function range(period: Period, now: string): [string, string] {
 }
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("finance.read");
   const { t, locale } = await getT();
   const sp = await searchParams;
   const period = (PERIODS as readonly string[]).includes(sp.period ?? "") ? (sp.period as Period) : "thisMonth";

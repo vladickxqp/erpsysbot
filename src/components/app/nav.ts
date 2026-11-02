@@ -1,4 +1,4 @@
-import { FileText, LayoutDashboard, Package, Settings, ShoppingCart, Sparkles, Users, Wallet, type LucideIcon } from "lucide-react";
+import { FileText, LayoutDashboard, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { Permission } from "@/server/permissions";
 
 /** The modules that exist. A module joins this list when it works — no
@@ -15,6 +15,7 @@ export const NAV: { href: string; label: string; icon: LucideIcon; needs?: Permi
   { href: "/app/invoices", label: "nav.invoices", icon: FileText, needs: "invoices.read", primary: true },
   { href: "/app/finance", label: "nav.finance", icon: Wallet, needs: "finance.read" },
   { href: "/app/products", label: "nav2.products", icon: Package, needs: "orders.read" },
+  { href: "/app/team", label: "nav.team", icon: UsersRound, needs: "employees.read" },
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
 

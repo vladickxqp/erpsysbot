@@ -9,7 +9,7 @@ import { formatDate, formatMoney } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { INVOICE_FILTERS, type InvoiceFilter } from "@/lib/domain";
 import { listInvoices } from "@/server/invoices";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -17,7 +17,7 @@ export async function generateMetadata() {
 }
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; page?: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("invoices.read");
   const { t, locale } = await getT();
   const sp = await searchParams;
   const filter = (INVOICE_FILTERS as readonly string[]).includes(sp.filter ?? "") ? (sp.filter as InvoiceFilter) : undefined;

@@ -2,18 +2,18 @@ import { notFound } from "next/navigation";
 import { getT } from "@/i18n/server";
 import { formatDate } from "@/i18n";
 import { displayName, getClient, NotFoundError } from "@/server/clients";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { ClientDetail } from "./client-detail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("clients.read");
   const { id } = await params;
   const client = await getClient(ctx, id).catch(() => null);
   return { title: client ? displayName(client) : undefined };
 }
 
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("clients.read");
   const { id } = await params;
   const { locale } = await getT();
   const client = await getClient(ctx, id).catch((e) => {

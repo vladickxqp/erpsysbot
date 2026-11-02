@@ -4,11 +4,11 @@ import { getT } from "@/i18n/server";
 import { clientOptions, NotFoundError } from "@/server/clients";
 import { getInvoice } from "@/server/invoices";
 import { listProducts } from "@/server/products";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { InvoiceEditor } from "./invoice-editor";
 
 export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("invoices.create");
   const { t } = await getT();
   const { id } = await params;
   const found = await getInvoice(ctx, id).catch((e) => {

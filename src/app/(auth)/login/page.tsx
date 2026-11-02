@@ -6,6 +6,7 @@ export async function generateMetadata() {
   return { title: t("auth.login") };
 }
 
-export default function LoginPage() {
-  return <LoginForm />;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  return <LoginForm next={next} />;
 }

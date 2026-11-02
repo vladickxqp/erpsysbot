@@ -9,7 +9,7 @@ import { formatDate, formatMoney } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/domain";
 import { listOrders } from "@/server/orders";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -17,7 +17,7 @@ export async function generateMetadata() {
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("orders.read");
   const { t, locale } = await getT();
   const sp = await searchParams;
   const status = sp.status === "OPEN" || (ORDER_STATUSES as readonly string[]).includes(sp.status ?? "") ? (sp.status as OrderStatus | "OPEN") : undefined;

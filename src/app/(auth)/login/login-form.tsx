@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/client";
 import { loginAction, type AuthState } from "../actions";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const { t } = useI18n();
   const [state, action, pending] = useActionState<AuthState, FormData>(loginAction, undefined);
   const [, startSubmit] = useTransition();
@@ -32,8 +32,14 @@ export function LoginForm() {
             <Label htmlFor="email">{t("auth.email")}</Label>
             <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />
           </div>
+          {next && <input type="hidden" name="next" value={next} />}
           <div className="grid gap-2">
-            <Label htmlFor="password">{t("auth.password")}</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">{t("auth.password")}</Label>
+              <Link href="/forgot" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+                {t("auth.forgot")}
+              </Link>
+            </div>
             <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {state?.error && (

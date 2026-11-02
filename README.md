@@ -16,7 +16,8 @@ backend, one database, every interface on top of it.
 | Products, orders, invoices (draft → issued → PDF), payments, credit notes, finance | ✅ |
 | Telegram: account linking, commands, assistant in the chat | ✅ |
 | AI assistant with tools (web and Telegram) | ✅ |
-| Super admin, employees, calendar, tasks | next |
+| Team: invitations, roles, password links; sign-up by invitation | ✅ |
+| Super admin, calendar, tasks | next |
 
 ## How tenants are kept apart
 
@@ -37,6 +38,17 @@ query without a company sees none. `tests/tenancy.test.ts` proves it.
 The app service is called `frontend` and listens on port 80 — what the tunnel
 already points at.
 
+### Sign-up, team and e-mail
+
+`REGISTRATION=invite` (default): only the first account on an empty server
+signs up freely (and administers the platform); everyone else joins through
+an invitation from Team. `REGISTRATION=open` lets anyone create a company.
+
+With `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` set,
+invitations and "forgot password" links go out by e-mail. Without them the
+app shows the links to copy, and an admin can hand a member a password link
+under Team.
+
 ### Telegram and the assistant
 
 Copy these lines from the old bot's `.env` (same names):
@@ -48,6 +60,7 @@ Copy these lines from the old bot's `.env` (same names):
 | `ANTHROPIC_API_KEY` | the assistant; without it the assistant is hidden |
 | `AI_MODEL` | optional, default `claude-opus-5-5` |
 | `AI_DAILY_LIMIT` | optional, questions per person and day (default 100) |
+| `AI_SERVER_DAILY_LIMIT` | optional, questions per day for the whole server (default 500) |
 
 Each user connects their own Telegram in Settings → Telegram (one-time link,
 15 minutes). The bot then answers with that user's rights in the chosen

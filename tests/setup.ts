@@ -4,6 +4,8 @@ import { migrateDatabase } from "@/db/migrate";
 import { resetThrottle } from "@/server/accounts";
 
 process.env.DATABASE_URL = "pglite:memory";
+// Most tests create many companies; tests/team.test.ts covers the closed case.
+process.env.REGISTRATION = "open";
 
 beforeAll(async () => {
   await resetDb();

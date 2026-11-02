@@ -4,18 +4,18 @@ import { NotFoundError } from "@/server/clients";
 import { getInvoice, missingCompanyData } from "@/server/invoices";
 import { totals, today } from "@/server/money";
 import { asLines } from "@/server/orders";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { InvoiceDetail } from "./invoice-detail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("invoices.read");
   const { t } = await getT();
   const found = await getInvoice(ctx, (await params).id).catch(() => null);
   return { title: found ? (found.invoice.number ?? t("invoices.draftNumber")) : undefined };
 }
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("invoices.read");
   const { id } = await params;
   const found = await getInvoice(ctx, id).catch((e) => {
     if (e instanceof NotFoundError) notFound();

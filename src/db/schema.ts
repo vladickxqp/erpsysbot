@@ -124,6 +124,38 @@ export const memberships = pgTable(
   (t) => [uniqueIndex("memberships_org_user_key").on(t.organizationId, t.userId)],
 );
 
+/** An invitation into a company (one-time link, 7 days). Only the hash is stored. */
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: roleEnum("role").notNull().default("EMPLOYEE"),
+    tokenHash: text("token_hash").notNull(),
+    invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("invitations_token_key").on(t.tokenHash), index("invitations_org_idx").on(t.organizationId)],
+);
+
+/** "Forgot password" links: one hour, one use. Only the hash is stored. */
+export const passwordResets = pgTable(
+  "password_resets",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("password_resets_user_idx").on(t.userId)],
+);
+
 /** A Telegram account linked to a user: one each way. The bot works for the
  *  company stored here (switchable in the chat). */
 export const telegramLinks = pgTable(

@@ -3,18 +3,18 @@ import { getT } from "@/i18n/server";
 import { NotFoundError } from "@/server/clients";
 import { totals } from "@/server/money";
 import { asLines, getOrder } from "@/server/orders";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { OrderDetail } from "./order-detail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("orders.read");
   const { t } = await getT();
   const found = await getOrder(ctx, (await params).id).catch(() => null);
   return { title: found ? `${t("orders.title")} #${found.order.number}` : undefined };
 }
 
 export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("orders.read");
   const { id } = await params;
   const found = await getOrder(ctx, id).catch((e) => {
     if (e instanceof NotFoundError) notFound();

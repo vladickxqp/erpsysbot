@@ -5,12 +5,13 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { getDb } from "@/db/client";
 import { assistantMessages } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import type { Context } from "../context";
 import { today } from "../money";
 import { requirePermission } from "../permissions";
-import { appUrl, assistantDailyLimit, assistantKey, assistantModel } from "../settings";
+import { appUrl, assistantDailyLimit, assistantKey, assistantModel, assistantServerDailyLimit } from "../settings";
 import { runTool, TOOL_DEFINITIONS } from "./tools";
 
 export type Channel = "web" | "telegram";
@@ -77,6 +78,16 @@ export async function usedToday(ctx: Context): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/** Questions in the last 24 hours, every company: a cap on what the server spends. */
+async function usedTodayOnServer(): Promise<number> {
+  const since = new Date(Date.now() - 86_400_000);
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(assistantMessages)
+    .where(and(eq(assistantMessages.role, "user"), gte(assistantMessages.createdAt, since)));
+  return Number(row?.n ?? 0);
+}
+
 const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
   content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -92,6 +103,7 @@ export async function askAssistant(ctx: Context, channel: Channel, question: str
   const text = question.trim().slice(0, 4000);
   if (!text) throw new AssistantError("FAILED");
   if ((await usedToday(ctx)) >= assistantDailyLimit()) throw new AssistantError("LIMIT");
+  if ((await usedTodayOnServer()) >= assistantServerDailyLimit()) throw new AssistantError("LIMIT");
 
   const model = assistantModel();
   const messages: Anthropic.Beta.BetaMessageParam[] = [...(await history(ctx, channel)), { role: "user", content: text }];

@@ -12,6 +12,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { memberships, organizations, users } from "@/db/schema";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
+import { registrationOpen } from "./settings";
 
 export const LOCALES = ["de", "en", "ru"] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -28,15 +29,25 @@ export const registerInput = z.object({
 export type RegisterInput = z.input<typeof registerInput>;
 
 export class AccountError extends Error {
-  constructor(public readonly code: "EMAIL_TAKEN" | "INVALID_LOGIN" | "TOO_MANY_ATTEMPTS") {
+  constructor(public readonly code: "EMAIL_TAKEN" | "INVALID_LOGIN" | "TOO_MANY_ATTEMPTS" | "REGISTRATION_CLOSED") {
     super(code);
   }
 }
 
+/** Signing up with a new company: open to all, or only the first account on an empty server. */
+export async function registrationAllowed(): Promise<boolean> {
+  if (registrationOpen()) return true;
+  const [any] = await getDb().select({ id: users.id }).from(users).limit(1);
+  return !any;
+}
+
 export async function registerAccount(raw: RegisterInput) {
   const input = registerInput.parse(raw);
+  if (!(await registrationAllowed())) throw new AccountError("REGISTRATION_CLOSED");
   const passwordHash = await hashPassword(input.password);
   return getDb().transaction(async (tx) => {
+    // The first account on the server administers the platform.
+    const [anyone] = await tx.select({ id: users.id }).from(users).limit(1);
     const taken = await tx
       .select({ id: users.id })
       .from(users)
@@ -45,7 +56,7 @@ export async function registerAccount(raw: RegisterInput) {
     if (taken.length) throw new AccountError("EMAIL_TAKEN");
     const [user] = await tx
       .insert(users)
-      .values({ email: input.email, passwordHash, name: input.name, locale: input.locale })
+      .values({ email: input.email, passwordHash, name: input.name, locale: input.locale, isPlatformAdmin: !anyone })
       .returning({ id: users.id });
     const [org] = await tx
       .insert(organizations)

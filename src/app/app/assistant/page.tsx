@@ -2,7 +2,7 @@ import { Sparkles } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
 import { assistantAvailable, conversation } from "@/server/assistant/run";
-import { requireContext } from "@/server/request";
+import { requirePageContext } from "@/server/request";
 import { Chat } from "./chat";
 
 export async function generateMetadata() {
@@ -11,7 +11,7 @@ export async function generateMetadata() {
 }
 
 export default async function AssistantPage() {
-  const ctx = await requireContext();
+  const ctx = await requirePageContext("ai.use");
   const { t } = await getT();
   if (!assistantAvailable()) {
     return (
