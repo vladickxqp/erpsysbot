@@ -13,6 +13,7 @@ import { getDb } from "@/db/client";
 import { invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
+import { assertSeat } from "./billing";
 import { MIN_PASSWORD_LENGTH, hashPassword } from "./auth/password";
 import type { Context } from "./context";
 import { requirePermission, type Role } from "./permissions";
@@ -67,6 +68,11 @@ export async function inviteMember(ctx: Context, raw: z.input<typeof inviteInput
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.organizationId, ctx.organization.id), sql`lower(${users.email}) = ${input.email}`));
   if (member) throw new TeamError("ALREADY_MEMBER");
+  const open = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(and(eq(invitations.organizationId, ctx.organization.id), isNull(invitations.acceptedAt), gt(invitations.expiresAt, new Date())));
+  await assertSeat(ctx.organization.id, open.length);
   const token = newToken();
   await db.transaction(async (tx) => {
     await tx

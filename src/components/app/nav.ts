@@ -1,11 +1,11 @@
-import { BarChart3, CalendarDays, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, CreditCard, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { Permission } from "@/server/permissions";
 
 /** The modules that exist. A module joins this list when it works — no
  *  menu entry leads to a page that does nothing. `primary` entries sit in the
  *  mobile bottom bar, the rest behind "More". A `feature` entry shows only
  *  when that feature is set up on this server. */
-export type Feature = "assistant";
+export type Feature = "assistant" | "admin" | "billing";
 
 export const NAV: { href: string; label: string; icon: LucideIcon; needs?: Permission; primary?: boolean; feature?: Feature }[] = [
   { href: "/app", label: "nav.dashboard", icon: LayoutDashboard, primary: true },
@@ -23,7 +23,10 @@ export const NAV: { href: string; label: string; icon: LucideIcon; needs?: Permi
   { href: "/app/documents", label: "documents.title", icon: FolderOpen, needs: "documents.read" },
   { href: "/app/reports", label: "reports.title", icon: BarChart3, needs: "clients.read" },
   { href: "/app/team", label: "nav.team", icon: UsersRound, needs: "employees.read" },
+  { href: "/app/automations", label: "automation.title", icon: Workflow, needs: "automation.manage" },
   { href: "/app/settings", label: "nav.settings", icon: Settings },
+  { href: "/app/billing", label: "billing.title", icon: CreditCard, needs: "billing.manage", feature: "billing" },
+  { href: "/app/admin", label: "admin.title", icon: ShieldCheck, feature: "admin" },
 ];
 
 export function isActive(pathname: string, href: string): boolean {

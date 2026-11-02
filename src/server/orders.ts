@@ -92,7 +92,7 @@ export async function createOrder(ctx: Context, raw: OrderInput, via: Via = "web
   requirePermission(ctx.permissions, "orders.create");
   const input = orderInput.parse(raw);
   const sum = totals(input.items, ctx.organization.smallBusiness);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const created = await withTenant(ctx.organization.id, async (tx) => {
     await clientInCompany(tx, input.clientId);
     const number = await nextNumber(tx, ctx.organization.id, "order");
     const [row] = await tx
@@ -116,6 +116,10 @@ export async function createOrder(ctx: Context, raw: OrderInput, via: Via = "web
     await audit(tx, ctx, "order.create", "order", row.id, { number, gross: sum.grossCents }, via);
     return row;
   });
+  const { fireAutomations } = await import("./automations");
+  await fireAutomations(ctx, "order.created", created.id);
+  if (created.status === "COMPLETED") await fireAutomations(ctx, "order.completed", created.id);
+  return created;
 }
 
 export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via: Via = "web"): Promise<OrderRow> {
@@ -150,7 +154,7 @@ export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via
 
 export async function setOrderStatus(ctx: Context, id: string, status: OrderStatus, via: Via = "web") {
   requirePermission(ctx.permissions, "orders.update");
-  return withTenant(ctx.organization.id, async (tx) => {
+  const updated = await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx
       .update(orders)
       .set({ status, updatedAt: new Date() })
@@ -162,6 +166,8 @@ export async function setOrderStatus(ctx: Context, id: string, status: OrderStat
     await audit(tx, ctx, "order.status", "order", id, { status }, via);
     return row;
   });
+  if (status === "COMPLETED") await (await import("./automations")).fireAutomations(ctx, "order.completed", id);
+  return updated;
 }
 
 export async function deleteOrder(ctx: Context, id: string, via: Via = "web") {

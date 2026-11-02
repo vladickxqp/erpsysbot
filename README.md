@@ -17,7 +17,10 @@ backend, one database, every interface on top of it.
 | Telegram: account linking, commands, assistant in the chat | ✅ |
 | AI assistant with tools (web and Telegram) | ✅ |
 | Team: invitations, roles, password links; sign-up by invitation | ✅ |
-| Super admin, calendar, tasks | next |
+| Quotes, payment reminders, e-mail with PDF, CSV import, Telegram morning summary | ✅ |
+| Calendar, tasks and projects (board), sales pipeline | ✅ |
+| Stock and purchasing, documents, reports (CSV/PDF) | ✅ |
+| Platform admin, plans and Stripe subscriptions, automations, PWA, XRechnung export | ✅ |
 
 ## How tenants are kept apart
 
@@ -48,6 +51,18 @@ With `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` set,
 invitations and "forgot password" links go out by e-mail. Without them the
 app shows the links to copy, and an admin can hand a member a password link
 under Team.
+
+### Platform admin and subscriptions
+
+The first account on the server is the platform admin (menu "Platform"):
+companies, users, assistant usage, invitations for new companies, suspending
+a company, and the plans (price, users, assistant questions per day, modules).
+
+Billing is optional. Without `STRIPE_SECRET_KEY` everything is free. With it,
+new companies start a 14-day trial of Business; set each plan's Stripe price
+ID in "Platform", add the webhook `https://<domain>/api/stripe/webhook`
+(events `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`)
+and put its signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 ### Telegram and the assistant
 

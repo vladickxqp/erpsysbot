@@ -37,6 +37,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         city: client.city,
         country: client.country,
         vatId: client.vatId,
+        buyerReference: client.buyerReference,
         notes: client.notes,
         tags: client.tags,
         source: client.source,

@@ -64,7 +64,7 @@ export async function registerAction(_: AuthState, form: FormData): Promise<Auth
       password: String(form.get("password") ?? ""),
       company: String(form.get("company") ?? ""),
       locale: await chosenLocale(),
-    });
+    }, String(form.get("invite") ?? "") || null);
     await startSession(userId, organizationId);
   } catch (e) {
     if (e instanceof AccountError) return { error: e.code === "REGISTRATION_CLOSED" ? "closed" : "taken" };

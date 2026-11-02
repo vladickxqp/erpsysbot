@@ -158,6 +158,13 @@ export function InvoiceDetail({
               <Download className="size-4" /> {t("invoices.pdf")}
             </a>
           </Button>
+          {!draft && invoice.kind === "INVOICE" && (
+            <Button variant="outline" asChild>
+              <a href={`/app/invoices/${invoice.id}/xrechnung`} download>
+                <Download className="size-4" /> XRechnung
+              </a>
+            </Button>
+          )}
           {!draft && mail && can.edit && <SendButton kind="invoice" id={invoice.id} email={clientEmail} />}
           {invoice.overdue && can.issue && reminders.length < 3 && (
             <Button

@@ -55,6 +55,7 @@ const FIELDS: Record<keyof ClientInput & string, string[]> = {
   city: ["ort", "stadt", "city", "town", "город"],
   country: ["land", "country", "страна"],
   vatId: ["ust-idnr", "ust-idnr.", "ustid", "ust-id", "vat id", "vat", "vat number"],
+  buyerReference: ["leitweg-id", "leitweg id", "käuferreferenz", "buyer reference"],
   notes: ["notiz", "notizen", "notes", "note", "bemerkung", "kommentar", "заметки", "комментарий"],
   tags: ["tags", "tag", "schlagworte", "kategorie", "теги"],
   type: [],

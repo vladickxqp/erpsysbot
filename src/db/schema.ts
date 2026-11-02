@@ -157,6 +157,70 @@ export const passwordResets = pgTable(
   (t) => [index("password_resets_user_idx").on(t.userId)],
 );
 
+/** Invitations to create a new company, from the platform admin (sign-up is invite-only). */
+export const platformInvites = pgTable(
+  "platform_invites",
+  {
+    id: id(),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("platform_invites_token_key").on(t.tokenHash)],
+);
+
+/** Plans and their limits, editable by the platform admin without code changes. */
+export const plans = pgTable("plans", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  priceCents: integer("price_cents").notNull().default(0),
+  maxUsers: integer("max_users").notNull().default(1),
+  aiPerDay: integer("ai_per_day").notNull().default(0),
+  /** Module keys this plan includes (e.g. "invoices", "finance", "automation"). */
+  modules: text("modules").array().notNull().default(sql`'{}'::text[]`),
+  stripePriceId: text("stripe_price_id"),
+  active: boolean("active").notNull().default(true),
+  position: integer("position").notNull().default(0),
+});
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED", "NONE"]);
+
+/** One per company: the plan it is on and the state of its payment. Written by the server only. */
+export const subscriptions = pgTable("subscriptions", {
+  organizationId: uuid("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  planId: text("plan_id").references(() => plans.id),
+  status: subscriptionStatusEnum("status").notNull().default("TRIALING"),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  updatedAt: updatedAt(),
+});
+
+/** Stripe events already handled (webhooks arrive more than once). */
+export const billingEvents = pgTable("billing_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  organizationId: uuid("organization_id"),
+  amountCents: integer("amount_cents"),
+  createdAt: createdAt(),
+});
+
+/** Organizations the platform admin has suspended (nobody can work in them). */
+export const suspensions = pgTable("suspensions", {
+  organizationId: uuid("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  reason: text("reason"),
+  createdAt: createdAt(),
+});
+
 /** A Telegram account linked to a user: one each way. The bot works for the
  *  company stored here (switchable in the chat). */
 export const telegramLinks = pgTable(
@@ -227,6 +291,8 @@ export const clients = pgTable(
     city: text("city"),
     country: text("country").notNull().default("DE"),
     vatId: text("vat_id"),
+    /** Leitweg-ID or other buyer reference for e-invoices (XRechnung BT-10). */
+    buyerReference: text("buyer_reference"),
     notes: text("notes"),
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     source: text("source"),
@@ -718,9 +784,50 @@ export const assistantMessages = pgTable(
     channel: assistantChannelEnum("channel").notNull(),
     role: assistantRoleEnum("role").notNull(),
     content: text("content").notNull(),
+    /** On answers: tokens used and tools run, for usage and cost. */
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    tools: text("tools").array(),
     createdAt: createdAt(),
   },
   (t) => [index("assistant_messages_conv_idx").on(t.organizationId, t.userId, t.channel, t.createdAt)],
+);
+
+// --- Automations -------------------------------------------------------------------------------
+/** Trigger → conditions → action. Actions never fire triggers, so rules cannot loop. */
+export const automations = pgTable(
+  "automations",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    trigger: text("trigger").notNull(),
+    conditions: jsonb("conditions").notNull().default(sql`'{}'::jsonb`),
+    action: text("action").notNull(),
+    params: jsonb("params").notNull().default(sql`'{}'::jsonb`),
+    enabled: boolean("enabled").notNull().default(true),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("automations_org_trigger_idx").on(t.organizationId, t.trigger)],
+);
+
+/** Every run of a rule; `subject` (e.g. the invoice id) makes each rule fire once per subject. */
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: id(),
+    organizationId: orgId(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    subject: text("subject").notNull(),
+    ok: boolean("ok").notNull(),
+    message: text("message"),
+    attempts: integer("attempts").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("automation_runs_once_key").on(t.automationId, t.subject), index("automation_runs_org_idx").on(t.organizationId, t.createdAt)],
 );
 
 /** Who did what, from where (web, telegram, ai). Append-only. */
@@ -765,4 +872,6 @@ export const TENANT_TABLES = [
   "purchase_orders",
   "purchase_order_items",
   "documents",
+  "automations",
+  "automation_runs",
 ] as const;

@@ -22,5 +22,5 @@ export default async function AssistantPage() {
     );
   }
   const messages = await conversation(ctx, "web");
-  return <Chat initial={messages.map((m) => ({ id: m.id, role: m.role, content: m.content }))} />;
+  return <Chat initial={messages.map((m) => ({ id: m.id, role: m.role, content: m.content, tools: m.tools }))} />;
 }

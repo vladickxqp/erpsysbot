@@ -10,6 +10,7 @@ import { assistantMessages } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import type { Context } from "../context";
 import { today } from "../money";
+import { entitlementsOf } from "../billing";
 import { requirePermission } from "../permissions";
 import { appUrl, assistantDailyLimit, assistantKey, assistantModel, assistantServerDailyLimit } from "../settings";
 import { runTool, TOOL_DEFINITIONS } from "./tools";
@@ -82,6 +83,18 @@ export async function usedToday(ctx: Context): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/** Questions in the last 24 hours by everyone in this company (the plan's limit). */
+async function usedTodayByCompany(ctx: Context): Promise<number> {
+  const since = new Date(Date.now() - 86_400_000);
+  const [row] = await withTenant(ctx.organization.id, (tx) =>
+    tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(assistantMessages)
+      .where(and(eq(assistantMessages.role, "user"), gte(assistantMessages.createdAt, since))),
+  );
+  return Number(row?.n ?? 0);
+}
+
 /** Questions in the last 24 hours, every company: a cap on what the server spends. */
 async function usedTodayOnServer(): Promise<number> {
   const since = new Date(Date.now() - 86_400_000);
@@ -101,6 +114,16 @@ const textOf = (content: Anthropic.Beta.BetaContentBlock[]) =>
 
 /** Asks the assistant; stores question and answer; returns the answer. */
 export async function askAssistant(ctx: Context, channel: Channel, question: string, create: CreateMessage = defaultCreate): Promise<string> {
+  return (await askAssistantDetailed(ctx, channel, question, create)).answer;
+}
+
+/** The answer and the tools it used (the web chat shows them). */
+export async function askAssistantDetailed(
+  ctx: Context,
+  channel: Channel,
+  question: string,
+  create: CreateMessage = defaultCreate,
+): Promise<{ answer: string; tools: string[] }> {
   requirePermission(ctx.permissions, "ai.use");
   if (!assistantAvailable() && create === defaultCreate) throw new AssistantError("NOT_CONFIGURED");
   const askedAt = new Date();
@@ -108,10 +131,15 @@ export async function askAssistant(ctx: Context, channel: Channel, question: str
   if (!text) throw new AssistantError("FAILED");
   if ((await usedToday(ctx)) >= assistantDailyLimit()) throw new AssistantError("LIMIT");
   if ((await usedTodayOnServer()) >= assistantServerDailyLimit()) throw new AssistantError("LIMIT");
+  const ent = await entitlementsOf(ctx.organization.id);
+  if (!ent.unlimited && (await usedTodayByCompany(ctx)) >= ent.aiPerDay) throw new AssistantError("LIMIT");
 
   const model = assistantModel();
   const messages: Anthropic.Beta.BetaMessageParam[] = [...(await history(ctx, channel)), { role: "user", content: text }];
   let answer = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  const toolsRun: string[] = [];
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -127,6 +155,8 @@ export async function askAssistant(ctx: Context, channel: Channel, question: str
         ...(FALLBACK_MODELS.has(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
       });
 
+      inputTokens += (response.usage?.input_tokens ?? 0) + (response.usage?.cache_read_input_tokens ?? 0) + (response.usage?.cache_creation_input_tokens ?? 0);
+      outputTokens += response.usage?.output_tokens ?? 0;
       if (response.stop_reason === "refusal") throw new AssistantError("REFUSED");
       // The whole content goes back, thinking blocks included, unchanged.
       messages.push({ role: "assistant", content: response.content });
@@ -141,6 +171,7 @@ export async function askAssistant(ctx: Context, channel: Channel, question: str
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
         const result = await runTool(ctx, block.name, block.input, channel === "telegram" ? "telegram" : "ai");
+        if (!toolsRun.includes(block.name)) toolsRun.push(block.name);
         results.push({ type: "tool_result", tool_use_id: block.id, content: result.content, ...(result.isError ? { is_error: true } : {}) });
       }
       messages.push({ role: "user", content: results });
@@ -165,17 +196,27 @@ export async function askAssistant(ctx: Context, channel: Channel, question: str
   await withTenant(ctx.organization.id, (tx) =>
     tx.insert(assistantMessages).values([
       { organizationId: ctx.organization.id, userId: ctx.user.userId, channel, role: "user", content: text, createdAt: askedAt },
-      { organizationId: ctx.organization.id, userId: ctx.user.userId, channel, role: "assistant", content: answer, createdAt: answeredAt },
+      {
+        organizationId: ctx.organization.id,
+        userId: ctx.user.userId,
+        channel,
+        role: "assistant",
+        content: answer,
+        createdAt: answeredAt,
+        inputTokens,
+        outputTokens,
+        tools: toolsRun,
+      },
     ]),
   );
-  return answer;
+  return { answer, tools: toolsRun };
 }
 
 /** The latest 200 messages, oldest first. */
 export async function conversation(ctx: Context, channel: Channel) {
   const rows = await withTenant(ctx.organization.id, (tx) =>
     tx
-      .select({ id: assistantMessages.id, role: assistantMessages.role, content: assistantMessages.content, createdAt: assistantMessages.createdAt })
+      .select({ id: assistantMessages.id, role: assistantMessages.role, content: assistantMessages.content, tools: assistantMessages.tools, createdAt: assistantMessages.createdAt })
       .from(assistantMessages)
       .where(and(eq(assistantMessages.userId, ctx.user.userId), eq(assistantMessages.channel, channel)))
       .orderBy(desc(assistantMessages.createdAt))

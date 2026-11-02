@@ -1,5 +1,6 @@
 import { Shell } from "@/components/app/shell";
 import { assistantAvailable } from "@/server/assistant/run";
+import { billingEnabled } from "@/server/billing";
 import { requireContext } from "@/server/request";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -10,7 +11,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       company={{ id: ctx.organization.id, name: ctx.organization.name }}
       companies={ctx.companies}
       permissions={[...ctx.permissions]}
-      features={assistantAvailable() ? ["assistant"] : []}
+      features={[
+        ...(assistantAvailable() ? (["assistant"] as const) : []),
+        ...(ctx.user.isPlatformAdmin ? (["admin"] as const) : []),
+        ...(billingEnabled() ? (["billing"] as const) : []),
+      ]}
     >
       {children}
     </Shell>

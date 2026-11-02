@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { MESSAGES, isLocale, translator } from "@/i18n";
+import { BillingError } from "@/server/billing";
 import { mailAvailable, sendMail } from "@/server/mail";
 import { ForbiddenError, type Role } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
@@ -18,6 +19,7 @@ async function guarded(work: () => Promise<TeamResult>): Promise<TeamResult> {
   } catch (e) {
     if (e instanceof ForbiddenError) return { error: "common.forbidden" };
     if (e instanceof TeamError) return { error: `team.${e.code}` };
+    if (e instanceof BillingError) return { error: `billing.${e.code}` };
     if (e instanceof ZodError) return { error: "auth.check" };
     throw e;
   }

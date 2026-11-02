@@ -45,6 +45,7 @@ export const clientInput = z
     city: optional(100),
     country: z.string().trim().toUpperCase().length(2).default("DE"),
     vatId: optional(40),
+    buyerReference: optional(80),
     notes: optional(5000),
     tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
     source: optional(80),
@@ -105,7 +106,7 @@ export async function createClient(
 ): Promise<Client> {
   requirePermission(ctx.permissions, "clients.create");
   const input = clientInput.parse(raw);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const created = await withTenant(ctx.organization.id, async (tx) => {
     if (!opts.allowDuplicate) {
       const dupes = await duplicatesOf(tx, input);
       if (dupes.length) throw new DuplicateClientError(dupes);
@@ -118,6 +119,9 @@ export async function createClient(
     await audit(tx, ctx, "client.create", "client", row.id, { number }, opts.via);
     return row;
   });
+  // After the commit; loaded lazily (automations use this module too).
+  await (await import("./automations")).fireAutomations(ctx, "client.created", created.id);
+  return created;
 }
 
 export async function updateClient(ctx: Context, id: string, raw: ClientInput, via: Via = "web"): Promise<Client> {

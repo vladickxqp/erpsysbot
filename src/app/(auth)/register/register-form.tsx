@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/client";
 import { registerAction, type AuthState } from "../actions";
 
-export function RegisterForm() {
+export function RegisterForm({ invite }: { invite?: string }) {
   const { t } = useI18n();
   const [state, action, pending] = useActionState<AuthState, FormData>(registerAction, undefined);
   const [, startSubmit] = useTransition();
@@ -32,6 +32,7 @@ export function RegisterForm() {
           <div className="grid gap-2">
             <Label htmlFor="company">{t("auth.company")}</Label>
             <Input id="company" name="company" required minLength={2} maxLength={120} aria-invalid={bad("company")} autoFocus />
+            {invite && <input type="hidden" name="invite" value={invite} />}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="name">{t("auth.name")}</Label>

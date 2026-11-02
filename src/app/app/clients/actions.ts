@@ -42,6 +42,7 @@ function fromForm(form: FormData): ClientInput {
     city: text("city"),
     country: text("country") || "DE",
     vatId: text("vatId"),
+    buyerReference: text("buyerReference"),
     notes: text("notes"),
     tags: (text("tags") ?? "")
       .split(",")

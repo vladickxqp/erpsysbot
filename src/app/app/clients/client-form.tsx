@@ -33,6 +33,7 @@ export type ClientValues = {
   city?: string | null;
   country?: string | null;
   vatId?: string | null;
+  buyerReference?: string | null;
   notes?: string | null;
   tags?: string[];
   source?: string | null;
@@ -169,6 +170,7 @@ export function ClientDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field name="vatId" label={t("clients.vatId")} defaultValue={values.vatId} />
+            <Field name="buyerReference" label={t("clients.buyerReference")} defaultValue={values.buyerReference} />
             <Field name="source" label={t("clients.source")} defaultValue={values.source} />
             <Field
               name="tags"

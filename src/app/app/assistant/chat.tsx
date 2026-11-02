@@ -8,7 +8,7 @@ import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { askAction, clearAction } from "./actions";
 
-type Message = { id: string; role: "user" | "assistant"; content: string; failed?: boolean };
+type Message = { id: string; role: "user" | "assistant"; content: string; tools?: string[] | null; failed?: boolean };
 
 const ERRORS = {
   NOT_CONFIGURED: "assistant.notConfigured",
@@ -60,7 +60,7 @@ export function Chat({ initial }: { initial: Message[] }) {
       setMessages((m) => [
         ...m,
         result.answer
-          ? { id: `a-${Date.now()}`, role: "assistant", content: result.answer }
+          ? { id: `a-${Date.now()}`, role: "assistant", content: result.answer, tools: result.tools }
           : { id: `e-${Date.now()}`, role: "assistant", content: t(ERRORS[result.error ?? "FAILED"]), failed: true },
       ]);
     });
@@ -114,6 +114,15 @@ export function Chat({ initial }: { initial: Message[] }) {
                 )}
               >
                 {m.role === "assistant" ? <Linked text={m.content} /> : m.content}
+                {m.tools && m.tools.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1 border-t border-foreground/10 pt-2">
+                    {m.tools.map((tool) => (
+                      <span key={tool} className="rounded-full bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+                        ⚙ {t(`assistant.tool_${tool}`)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {pending && <div className="w-fit animate-pulse rounded-2xl bg-muted px-4 py-2.5 text-sm text-muted-foreground">{t("assistant.thinking")}</div>}

@@ -197,6 +197,21 @@ CREATE POLICY tenant_isolation ON documents
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, UPDATE, DELETE ON documents TO app_tenant;
 
+-- Automations and their runs.
+ALTER TABLE automations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON automations;
+CREATE POLICY tenant_isolation ON automations
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON automations TO app_tenant;
+
+ALTER TABLE automation_runs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON automation_runs;
+CREATE POLICY tenant_isolation ON automation_runs
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE ON automation_runs TO app_tenant;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

@@ -12,6 +12,8 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { memberships, organizations, users } from "@/db/schema";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
+import { startTrial } from "./billing";
+import { findPlatformInvite, markPlatformInviteUsed } from "./platform";
 import { registrationOpen } from "./settings";
 
 export const LOCALES = ["de", "en", "ru"] as const;
@@ -41,11 +43,13 @@ export async function registrationAllowed(): Promise<boolean> {
   return !any;
 }
 
-export async function registerAccount(raw: RegisterInput) {
+/** Signs up a person with a new company: open sign-up, the first account, or an invitation from the platform admin. */
+export async function registerAccount(raw: RegisterInput, inviteToken?: string | null) {
   const input = registerInput.parse(raw);
-  if (!(await registrationAllowed())) throw new AccountError("REGISTRATION_CLOSED");
+  const invite = inviteToken ? await findPlatformInvite(inviteToken) : null;
+  if (!invite && !(await registrationAllowed())) throw new AccountError("REGISTRATION_CLOSED");
   const passwordHash = await hashPassword(input.password);
-  return getDb().transaction(async (tx) => {
+  const created = await getDb().transaction(async (tx) => {
     // The first account on the server administers the platform.
     const [anyone] = await tx.select({ id: users.id }).from(users).limit(1);
     const taken = await tx
@@ -65,6 +69,9 @@ export async function registerAccount(raw: RegisterInput) {
     await tx.insert(memberships).values({ organizationId: org.id, userId: user.id, role: "OWNER" });
     return { userId: user.id, organizationId: org.id };
   });
+  if (invite) await markPlatformInviteUsed(invite.id);
+  await startTrial(created.organizationId);
+  return created;
 }
 
 // --- Signing in -------------------------------------------------------------------------------

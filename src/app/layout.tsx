@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { ServiceWorker } from "@/components/app/service-worker";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nProvider } from "@/i18n/client";
@@ -12,6 +13,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic"] }
 export const metadata: Metadata = {
   title: { default: "AI Business OS", template: "%s · AI Business OS" },
   description: "One platform. Your entire business. Powered by AI.",
+  appleWebApp: { capable: true, title: "Business OS", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
@@ -30,6 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <I18nProvider locale={locale} messages={messages}>
             <TooltipProvider>{children}</TooltipProvider>
             <Toaster richColors closeButton position="top-right" />
+            <ServiceWorker />
           </I18nProvider>
         </ThemeProvider>
       </body>

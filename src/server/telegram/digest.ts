@@ -190,6 +190,9 @@ export function startDigestTimer(): void {
   timer = setInterval(() => {
     sendAppointmentReminders().catch((e) => console.error("telegram: reminders failed", e instanceof Error ? e.message : e));
     sendDigests().catch((e) => console.error("telegram: digest run failed", e instanceof Error ? e.message : e));
+    import("../automations")
+      .then((m) => m.runScheduledAutomations())
+      .catch((e) => console.error("automation: scheduled run failed", e instanceof Error ? e.message : e));
   }, 5 * 60_000);
   timer.unref?.();
 }
