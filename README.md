@@ -11,11 +11,12 @@ backend, one database, every interface on top of it.
 | Module | State |
 |---|---|
 | Accounts, companies (multi-tenant), roles & permissions | ✅ |
-| Dashboard (real figures) | ✅ clients |
+| Dashboard (real figures) | ✅ |
 | CRM: clients, search, duplicates, CSV export | ✅ |
-| Orders, invoices (draft → issued → PDF), finance | next |
-| Telegram account linking and commands | next |
-| AI assistant with tools | next |
+| Products, orders, invoices (draft → issued → PDF), payments, credit notes, finance | ✅ |
+| Telegram: account linking, commands, assistant in the chat | ✅ |
+| AI assistant with tools (web and Telegram) | ✅ |
+| Super admin, employees, calendar, tasks | next |
 
 ## How tenants are kept apart
 
@@ -34,7 +35,26 @@ query without a company sees none. `tests/tenancy.test.ts` proves it.
 3. Open https://bot.kleinbot.online (or http://localhost:8080 on the laptop).
 
 The app service is called `frontend` and listens on port 80 — what the tunnel
-already points at. Backups: `./backups` every night, 14 days kept
+already points at.
+
+### Telegram and the assistant
+
+Copy these lines from the old bot's `.env` (same names):
+
+| Variable | For |
+|---|---|
+| `BOT_TOKEN` | the Telegram bot; at start the app registers its webhook (`/api/telegram/webhook`) and the old bot's polling ends |
+| `APP_URL` (or the old `WEBAPP_URL`) | the public address for the webhook and links |
+| `ANTHROPIC_API_KEY` | the assistant; without it the assistant is hidden |
+| `AI_MODEL` | optional, default `claude-opus-5-5` |
+| `AI_DAILY_LIMIT` | optional, questions per person and day (default 100) |
+
+Each user connects their own Telegram in Settings → Telegram (one-time link,
+15 minutes). The bot then answers with that user's rights in the chosen
+company: `/today`, `/invoices`, `/clients`, `/company`, `/new`, and anything
+else goes to the assistant. The assistant reads everything the user may see
+and creates clients, orders and invoice drafts; issuing, payments, cancelling
+and deleting stay in the app. Backups: `./backups` every night, 14 days kept
 (`BACKUP_DIR` may point to a cloud-synced folder).
 
 ## Develop

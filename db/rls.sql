@@ -98,6 +98,14 @@ CREATE POLICY tenant_isolation ON transactions
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, UPDATE, DELETE ON transactions TO app_tenant;
 
+-- assistant_messages: the conversation with the assistant.
+ALTER TABLE assistant_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON assistant_messages;
+CREATE POLICY tenant_isolation ON assistant_messages
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, DELETE ON assistant_messages TO app_tenant;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

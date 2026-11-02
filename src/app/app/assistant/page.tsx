@@ -1,0 +1,26 @@
+import { Sparkles } from "lucide-react";
+import { EmptyState, PageHeader } from "@/components/app/page";
+import { getT } from "@/i18n/server";
+import { assistantAvailable, conversation } from "@/server/assistant/run";
+import { requireContext } from "@/server/request";
+import { Chat } from "./chat";
+
+export async function generateMetadata() {
+  const { t } = await getT();
+  return { title: t("nav.ai") };
+}
+
+export default async function AssistantPage() {
+  const ctx = await requireContext();
+  const { t } = await getT();
+  if (!assistantAvailable()) {
+    return (
+      <>
+        <PageHeader title={t("nav.ai")} />
+        <EmptyState icon={Sparkles} title={t("assistant.notConfigured")} />
+      </>
+    );
+  }
+  const messages = await conversation(ctx, "web");
+  return <Chat initial={messages.map((m) => ({ id: m.id, role: m.role, content: m.content }))} />;
+}

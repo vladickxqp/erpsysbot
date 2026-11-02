@@ -124,6 +124,40 @@ export const memberships = pgTable(
   (t) => [uniqueIndex("memberships_org_user_key").on(t.organizationId, t.userId)],
 );
 
+/** A Telegram account linked to a user: one each way. The bot works for the
+ *  company stored here (switchable in the chat). */
+export const telegramLinks = pgTable(
+  "telegram_links",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    telegramUserId: text("telegram_user_id").notNull(),
+    chatId: text("chat_id").notNull(),
+    username: text("username"),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("telegram_links_user_key").on(t.userId), uniqueIndex("telegram_links_tg_key").on(t.telegramUserId)],
+);
+
+/** One-time codes behind the "connect Telegram" link (SHA-256, short-lived). */
+export const telegramLinkTokens = pgTable(
+  "telegram_link_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("telegram_link_tokens_user_idx").on(t.userId)],
+);
+
 // --- Tenant -------------------------------------------------------------------------------
 /** Running numbers per company (client numbers, later invoice numbers). */
 export const counters = pgTable(
@@ -357,6 +391,27 @@ export const transactions = pgTable(
   (t) => [index("transactions_org_date_idx").on(t.organizationId, t.bookedOn)],
 );
 
+// --- Assistant ---------------------------------------------------------------------------------
+export const assistantChannelEnum = pgEnum("assistant_channel", ["web", "telegram"]);
+export const assistantRoleEnum = pgEnum("assistant_role", ["user", "assistant"]);
+
+/** The assistant conversation per person and channel (text only, no tool details). */
+export const assistantMessages = pgTable(
+  "assistant_messages",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    channel: assistantChannelEnum("channel").notNull(),
+    role: assistantRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("assistant_messages_conv_idx").on(t.organizationId, t.userId, t.channel, t.createdAt)],
+);
+
 /** Who did what, from where (web, telegram, ai). Append-only. */
 export const auditLog = pgTable(
   "audit_log",
@@ -386,4 +441,5 @@ export const TENANT_TABLES = [
   "invoice_items",
   "payments",
   "transactions",
+  "assistant_messages",
 ] as const;

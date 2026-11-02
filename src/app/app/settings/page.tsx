@@ -3,7 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getT } from "@/i18n/server";
 import { requireContext } from "@/server/request";
+import { botToken } from "@/server/settings";
+import { linkOfUser } from "@/server/telegram/links";
 import { CompanyForm } from "./company-form";
+import { TelegramCard } from "./telegram-card";
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -14,6 +17,7 @@ export default async function SettingsPage() {
   const ctx = await requireContext();
   const { t } = await getT();
   const o = ctx.organization;
+  const telegram = botToken() ? await linkOfUser(ctx.user.userId) : undefined;
   return (
     <>
       <PageHeader title={t("settings.title")} />
@@ -43,18 +47,23 @@ export default async function SettingsPage() {
             }}
           />
         </div>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle className="text-base">{t("settings.profile")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            <div className="font-medium">{ctx.user.name}</div>
-            <div className="text-muted-foreground">{ctx.user.email}</div>
-            <div>
-              <Badge variant="secondary">{t(`settings.${ctx.role}`)}</Badge>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid h-fit gap-4">
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="text-base">{t("settings.profile")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 text-sm">
+              <div className="font-medium">{ctx.user.name}</div>
+              <div className="text-muted-foreground">{ctx.user.email}</div>
+              <div>
+                <Badge variant="secondary">{t(`settings.${ctx.role}`)}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+          {telegram !== undefined && (
+            <TelegramCard linked={telegram ? { name: telegram.username ? `@${telegram.username}` : "Telegram" } : null} />
+          )}
+        </div>
       </div>
     </>
   );

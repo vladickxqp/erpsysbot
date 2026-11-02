@@ -21,7 +21,7 @@ import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
-import { NAV, isActive } from "./nav";
+import { NAV, isActive, type Feature } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 
 export type ShellProps = {
@@ -30,6 +30,8 @@ export type ShellProps = {
   companies: { id: string; name: string; role: string }[];
   /** The permissions of the current membership, for showing menu entries. */
   permissions: string[];
+  /** Optional features set up on this server. */
+  features: Feature[];
   children: React.ReactNode;
 };
 
@@ -125,10 +127,10 @@ function UserMenu({ user }: Pick<ShellProps, "user">) {
   );
 }
 
-export function Shell({ user, company, companies, permissions, children }: ShellProps) {
+export function Shell({ user, company, companies, permissions, features, children }: ShellProps) {
   const { t } = useI18n();
   const pathname = usePathname();
-  const items = NAV.filter((item) => !item.needs || permissions.includes(item.needs));
+  const items = NAV.filter((item) => (!item.needs || permissions.includes(item.needs)) && (!item.feature || features.includes(item.feature)));
   return (
     <div className="min-h-dvh bg-background">
       {/* Desktop: fixed sidebar */}
