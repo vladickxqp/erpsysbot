@@ -1,4 +1,4 @@
-import { CalendarDays, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { Permission } from "@/server/permissions";
 
 /** The modules that exist. A module joins this list when it works — no
@@ -19,6 +19,9 @@ export const NAV: { href: string; label: string; icon: LucideIcon; needs?: Permi
   { href: "/app/invoices", label: "nav.invoices", icon: FileText, needs: "invoices.read", primary: true },
   { href: "/app/finance", label: "nav.finance", icon: Wallet, needs: "finance.read" },
   { href: "/app/products", label: "nav2.products", icon: Package, needs: "orders.read" },
+  { href: "/app/purchasing", label: "inventory.title", icon: Truck, needs: "orders.read" },
+  { href: "/app/documents", label: "documents.title", icon: FolderOpen, needs: "documents.read" },
+  { href: "/app/reports", label: "reports.title", icon: BarChart3, needs: "clients.read" },
   { href: "/app/team", label: "nav.team", icon: UsersRound, needs: "employees.read" },
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { withTenant, type Tx } from "@/db/tenant";
 import { clients, orderItems, orders } from "@/db/schema";
 import { audit, type Via } from "./audit";
+import { deductForOrder } from "./inventory";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { lineNet, linesInput, totals, type Line } from "./money";
@@ -141,6 +142,7 @@ export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via
     if (!row) throw new NotFoundError();
     await tx.delete(orderItems).where(eq(orderItems.orderId, id));
     await tx.insert(orderItems).values(lineRows(ctx.organization.id, input.items).map((l) => ({ ...l, orderId: id })));
+    if (input.status === "COMPLETED") await deductForOrder(tx, ctx, id);
     await audit(tx, ctx, "order.update", "order", id, { gross: sum.grossCents }, via);
     return row;
   });
@@ -155,6 +157,8 @@ export async function setOrderStatus(ctx: Context, id: string, status: OrderStat
       .where(eq(orders.id, id))
       .returning();
     if (!row) throw new NotFoundError();
+    // Done: tracked products leave the stock — once, however often it is set to done.
+    if (status === "COMPLETED") await deductForOrder(tx, ctx, id);
     await audit(tx, ctx, "order.status", "order", id, { status }, via);
     return row;
   });

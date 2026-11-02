@@ -35,6 +35,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      # Uploaded documents survive rebuilds.
+      - uploads:/app/uploads
     ports:
       # For a look on the laptop itself: http://localhost:8080
       - "127.0.0.1:8080:80"
@@ -75,3 +78,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

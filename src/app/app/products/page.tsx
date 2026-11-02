@@ -27,8 +27,15 @@ export default async function ProductsPage() {
           priceCents: p.priceCents,
           vatRate: p.vatRate,
           active: p.active,
+          category: p.category,
+          barcode: p.barcode,
+          purchasePriceCents: p.purchasePriceCents,
+          trackStock: p.trackStock,
+          stock: Number(p.stockQuantity),
+          minStock: p.minStock === null ? null : Number(p.minStock),
         }))}
         canManage={ctx.permissions.has("products.manage")}
+        canStock={ctx.permissions.has("inventory.manage")}
         smallBusiness={ctx.organization.smallBusiness}
       />
     </>

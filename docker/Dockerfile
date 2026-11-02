@@ -21,6 +21,9 @@ COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/db ./db
 COPY --from=build --chown=app:app /app/assets ./assets
+# Uploaded documents (a volume in docker-compose.yml).
+ENV UPLOAD_DIR=/app/uploads
+RUN mkdir -p /app/uploads && chown app:app /app/uploads
 USER app
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

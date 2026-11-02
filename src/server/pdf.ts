@@ -217,6 +217,76 @@ export function reminderPdf({ reminder, invoice, seller, buyer, locale }: Remind
   });
 }
 
+/** A report as a landscape A4 table: title, period, header row, rows, totals; repeated header on each page. */
+export async function tablePdf(input: {
+  company: string;
+  title: string;
+  subtitle: string;
+  columns: { label: string; align: "left" | "right" }[];
+  rows: string[][];
+  totals?: string[];
+}): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const [regularBytes, boldBytes] = await loadFonts();
+  const regular = await doc.embedFont(regularBytes, { subset: true });
+  const bold = await doc.embedFont(boldBytes, { subset: true });
+  doc.setTitle(input.title);
+  doc.setAuthor(input.company);
+  doc.setCreator("AI Business OS");
+  const W = A4.height;
+  const H = A4.width;
+  const left = 15 * MM;
+  const right = W - 15 * MM;
+  const width = (right - left) / input.columns.length;
+  const fit = (text: string, font: PDFFont, size: number) => {
+    let out = text;
+    while (out.length > 1 && font.widthOfTextAtSize(out, size) > width - 6) out = out.slice(0, -2) + "…";
+    return out;
+  };
+  const pages: PDFPage[] = [];
+  let page: PDFPage;
+  let y = 0;
+  const row = (cells: string[], font: PDFFont, shade = false) => {
+    if (shade) page.drawRectangle({ x: left - 3, y: y - 4, width: right - left + 6, height: 15, color: rgb(0.97, 0.98, 0.99) });
+    cells.forEach((cell, i) => {
+      const text = fit(cell, font, 8.5);
+      const x = input.columns[i].align === "right" ? left + (i + 1) * width - 4 - font.widthOfTextAtSize(text, 8.5) : left + i * width + 2;
+      page.drawText(text, { x, y, size: 8.5, font, color: INK });
+    });
+    y -= 15;
+  };
+  const newPage = () => {
+    page = doc.addPage([W, H]);
+    pages.push(page);
+    page.drawRectangle({ x: 0, y: H - 4, width: W, height: 4, color: ACCENT });
+    y = H - 15 * MM;
+    if (pages.length === 1) {
+      page.drawText(input.title, { x: left, y, size: 15, font: bold, color: INK });
+      y -= 14;
+      page.drawText(`${input.company} · ${input.subtitle}`, { x: left, y, size: 9, font: regular, color: MUTED });
+      y -= 22;
+    }
+    row(input.columns.map((c) => c.label), bold, true);
+  };
+  newPage();
+  for (const cells of input.rows) {
+    if (y < 18 * MM) newPage();
+    row(cells, regular);
+    page!.drawLine({ start: { x: left - 3, y: y + 11 }, end: { x: right + 3, y: y + 11 }, thickness: 0.4, color: LINE });
+  }
+  if (input.totals) {
+    if (y < 18 * MM) newPage();
+    y -= 2;
+    row(input.totals, bold, true);
+  }
+  pages.forEach((p, i) => {
+    const label = `${i + 1} / ${pages.length}`;
+    p.drawText(label, { x: right - regular.widthOfTextAtSize(label, 7), y: 8 * MM, size: 7, font: regular, color: MUTED });
+  });
+  return doc.save();
+}
+
 async function renderDocument(spec: Spec): Promise<Uint8Array> {
   const { items, seller, buyer, corrects, locale } = spec;
   const L: Labels = LABELS[locale] ?? LABELS.de;

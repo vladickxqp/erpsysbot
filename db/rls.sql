@@ -160,6 +160,43 @@ CREATE POLICY tenant_isolation ON deals
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, UPDATE, DELETE ON deals TO app_tenant;
 
+-- Inventory: movements are written, never changed.
+ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON stock_movements;
+CREATE POLICY tenant_isolation ON stock_movements
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT ON stock_movements TO app_tenant;
+
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON suppliers;
+CREATE POLICY tenant_isolation ON suppliers
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON suppliers TO app_tenant;
+
+ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON purchase_orders;
+CREATE POLICY tenant_isolation ON purchase_orders
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON purchase_orders TO app_tenant;
+
+ALTER TABLE purchase_order_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON purchase_order_items;
+CREATE POLICY tenant_isolation ON purchase_order_items
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON purchase_order_items TO app_tenant;
+
+-- Documents (metadata; the files live in UPLOAD_DIR).
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON documents;
+CREATE POLICY tenant_isolation ON documents
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON documents TO app_tenant;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

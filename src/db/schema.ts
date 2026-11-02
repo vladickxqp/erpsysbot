@@ -258,10 +258,128 @@ export const products = pgTable(
     priceCents: integer("price_cents").notNull().default(0),
     vatRate: integer("vat_rate").notNull().default(19),
     active: boolean("active").notNull().default(true),
+    category: text("category"),
+    barcode: text("barcode"),
+    /** Net purchase price in cents (for margins and purchase orders). */
+    purchasePriceCents: integer("purchase_price_cents"),
+    /** Stock is kept only for tracked products; it changes only through stock movements. */
+    trackStock: boolean("track_stock").notNull().default(false),
+    stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3 }).notNull().default("0"),
+    minStock: numeric("min_stock", { precision: 12, scale: 3 }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [index("products_org_name_idx").on(t.organizationId, t.name)],
+);
+
+export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["PURCHASE", "SALE", "RETURN", "ADJUSTMENT", "TRANSFER"]);
+
+/**
+ * Every change of a product's stock. `dedupeKey` makes a booking idempotent:
+ * completing the same order twice deducts once.
+ */
+export const stockMovements = pgTable(
+  "stock_movements",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    type: stockMovementTypeEnum("type").notNull(),
+    /** Signed: + in, - out. */
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    dedupeKey: text("dedupe_key"),
+    note: text("note"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("stock_movements_product_idx").on(t.productId, t.createdAt),
+    uniqueIndex("stock_movements_dedupe_key").on(t.organizationId, t.dedupeKey),
+  ],
+);
+
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    contactName: text("contact_name"),
+    email: text("email"),
+    phone: text("phone"),
+    street: text("street"),
+    postalCode: text("postal_code"),
+    city: text("city"),
+    country: text("country").notNull().default("DE"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("suppliers_org_name_idx").on(t.organizationId, t.name)],
+);
+
+export const purchaseStatusEnum = pgEnum("purchase_status", ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED"]);
+
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: id(),
+    organizationId: orgId(),
+    number: integer("number").notNull(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    status: purchaseStatusEnum("status").notNull().default("DRAFT"),
+    notes: text("notes"),
+    expectedOn: date("expected_on"),
+    orderedAt: timestamp("ordered_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    totalCents: integer("total_cents").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("purchase_orders_org_number_key").on(t.organizationId, t.number)],
+);
+
+export const purchaseOrderItems = pgTable(
+  "purchase_order_items",
+  {
+    id: id(),
+    organizationId: orgId(),
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    unitCostCents: integer("unit_cost_cents").notNull(),
+  },
+  (t) => [index("purchase_order_items_po_idx").on(t.purchaseOrderId)],
+);
+
+// --- Documents ---------------------------------------------------------------------------------
+/** Files people upload. The bytes live in UPLOAD_DIR under `storageKey`, never in a public folder. */
+export const documents = pgTable(
+  "documents",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull(),
+    category: text("category"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    orderId: uuid("order_id"),
+    invoiceId: uuid("invoice_id"),
+    archived: boolean("archived").notNull().default(false),
+    uploadedBy: uuid("uploaded_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("documents_org_created_idx").on(t.organizationId, t.createdAt), index("documents_client_idx").on(t.clientId)],
 );
 
 // --- Orders ------------------------------------------------------------------------------------
@@ -642,4 +760,9 @@ export const TENANT_TABLES = [
   "projects",
   "tasks",
   "deals",
+  "stock_movements",
+  "suppliers",
+  "purchase_orders",
+  "purchase_order_items",
+  "documents",
 ] as const;

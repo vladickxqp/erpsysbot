@@ -34,6 +34,27 @@ export const productInput = z.object({
   priceCents: z.coerce.number().int().min(0).max(100_000_000),
   vatRate: z.coerce.number().int().refine((r) => (VAT_RATES as readonly number[]).includes(r), "vat"),
   active: z.boolean().default(true),
+  category: z
+    .string()
+    .trim()
+    .max(80)
+    .nullish()
+    .transform((v) => v || null),
+  barcode: z
+    .string()
+    .trim()
+    .max(60)
+    .nullish()
+    .transform((v) => v || null),
+  purchasePriceCents: z.coerce.number().int().min(0).max(100_000_000).nullish(),
+  trackStock: z.boolean().default(false),
+  /** Stored as numeric; the stock itself changes only through stock movements. */
+  minStock: z.coerce
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullish()
+    .transform((v) => (v == null ? null : String(v))),
 });
 export type ProductInput = z.input<typeof productInput>;
 
