@@ -129,6 +129,37 @@ CREATE POLICY tenant_isolation ON payment_reminders
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, UPDATE ON payment_reminders TO app_tenant;
 
+-- Calendar.
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON appointments;
+CREATE POLICY tenant_isolation ON appointments
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON appointments TO app_tenant;
+
+-- Projects and tasks.
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON projects;
+CREATE POLICY tenant_isolation ON projects
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON projects TO app_tenant;
+
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON tasks;
+CREATE POLICY tenant_isolation ON tasks
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON tasks TO app_tenant;
+
+-- Sales pipeline.
+ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON deals;
+CREATE POLICY tenant_isolation ON deals
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON deals TO app_tenant;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

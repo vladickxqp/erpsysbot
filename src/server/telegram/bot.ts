@@ -10,6 +10,7 @@ import { getDb } from "@/db/client";
 import { users } from "@/db/schema";
 import { fromAcceptLanguage, isLocale, MESSAGES, formatDate, formatMoney, translator, type Locale, type T } from "@/i18n";
 import { AssistantError, askAssistant, assistantAvailable, clearConversation } from "../assistant/run";
+import { dayBounds, listAppointments, localParts } from "../calendar";
 import { displayName, listClients } from "../clients";
 import { contextFor, type Context } from "../context";
 import { ForbiddenError } from "../permissions";
@@ -18,6 +19,7 @@ import { financeSummary } from "../finance";
 import { listInvoices } from "../invoices";
 import { today } from "../money";
 import { appUrl } from "../settings";
+import { listTasks } from "../tasks";
 import { callTelegram, escapeHtml as h, sendMessage, type Keyboard } from "./api";
 import { linkOfTelegram, redeemLinkToken, setLinkCompany, setNotify, unlink, type TelegramLink } from "./links";
 
@@ -50,7 +52,7 @@ function tooFast(tgId: string): boolean {
   return hits.length > 20;
 }
 
-export const BOT_COMMANDS = ["today", "invoices", "clients", "company", "notify", "new", "help"] as const;
+export const BOT_COMMANDS = ["today", "calendar", "tasks", "invoices", "clients", "company", "notify", "new", "help"] as const;
 
 export function commandList(locale: Locale) {
   const t = translator(MESSAGES[locale]);
@@ -109,6 +111,10 @@ export async function handleUpdate(update: Update, io: BotIO = liveIO): Promise<
       return io.send(chatId, help(t));
     case "today":
       return io.send(chatId, await todayText(ctx, t));
+    case "calendar":
+      return io.send(chatId, await calendarText(ctx, t));
+    case "tasks":
+      return io.send(chatId, await tasksText(ctx, t));
     case "invoices":
       return io.send(chatId, await invoicesText(ctx, t));
     case "clients":
@@ -189,6 +195,33 @@ async function todayText(ctx: Context, t: T): Promise<string> {
     lines.push(`${t("dash2.openOrders")}: ${open.count} · ${money(open.netCents)}`);
   }
   return lines.join("\n");
+}
+
+async function calendarText(ctx: Context, t: T): Promise<string> {
+  if (!ctx.permissions.has("calendar.read")) return t("common.forbidden");
+  const tz = ctx.organization.timezone;
+  const day = today(tz);
+  const items = await listAppointments(ctx, { ...dayBounds(day, tz), userId: ctx.user.userId, activeOnly: true });
+  if (!items.length) return t("bot.noAppointments");
+  return [
+    `<b>${t("bot.appointmentsToday")}</b>`,
+    ...items.map((a) => `${localParts(a.startsAt, tz).time}–${localParts(a.endsAt, tz).time} ${h(a.title)}${a.clientName ? ` · ${h(a.clientName)}` : ""}${a.location ? `\n📍 ${h(a.location)}` : ""}`),
+  ].join("\n");
+}
+
+async function tasksText(ctx: Context, t: T): Promise<string> {
+  if (!ctx.permissions.has("tasks.read")) return t("common.forbidden");
+  const locale = localeOf(ctx);
+  const day = today(ctx.organization.timezone);
+  const open = await listTasks(ctx, { assignedUserId: ctx.user.userId, open: true });
+  if (!open.length) return t("bot.noTasks");
+  const base = appUrl();
+  const lines = open.slice(0, 15).map((task) => {
+    const late = task.dueDate && task.dueDate < day;
+    const due = task.dueDate ? ` · ${formatDate(task.dueDate, locale)}` : "";
+    return `${late ? "⚠️ " : task.priority === "HIGH" ? "❗ " : "• "}${h(task.title)}${due}`;
+  });
+  return [`<b>${t("bot.myTasks", { count: open.length })}</b>`, ...lines, ...(base ? ["", `<a href="${base}/app/tasks?mine=1">${t("bot.openApp")}</a>`] : [])].join("\n");
 }
 
 async function invoicesText(ctx: Context, t: T): Promise<string> {

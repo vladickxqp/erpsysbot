@@ -36,6 +36,13 @@
       "when": 1793614966921,
       "tag": "0004_quotes_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793615864368,
+      "tag": "0005_calendar_tasks_deals",
+      "breakpoints": true
     }
   ]
 }

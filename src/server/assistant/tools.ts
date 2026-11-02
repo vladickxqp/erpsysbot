@@ -17,6 +17,9 @@ import { createOrder, listOrders } from "../orders";
 import { ForbiddenError, type Permission } from "../permissions";
 import { listProducts } from "../products";
 import type { Via } from "../audit";
+import { CalendarError, createAppointment, dayBounds, listAppointments, localParts, zonedTime } from "../calendar";
+import { DEAL_STAGES, listDeals, saveDeal } from "../deals";
+import { createTask, listTasks } from "../tasks";
 
 const eur = (cents: number) => Math.round(cents) / 100;
 const id = z.string().uuid();
@@ -376,6 +379,185 @@ export const TOOLS: Tool[] = [
     async (ctx, input) => {
       const rows = await listProducts(ctx, { q: input.query, activeOnly: true });
       return rows.slice(0, 40).map((p) => ({ id: p.id, name: p.name, kind: p.kind, unit: p.unit, price_eur: eur(p.priceCents), vat_rate: p.vatRate }));
+    },
+  ),
+  tool(
+    {
+      name: "list_appointments",
+      description: "Appointments between two dates (inclusive, company time zone). mine=true for only the user's own.",
+      input_schema: {
+        type: "object",
+        properties: { from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" }, mine: { type: "boolean" } },
+        required: ["from", "to"],
+      },
+    },
+    z.object({ from: isoDate, to: isoDate, mine: z.boolean().optional() }),
+    async (ctx, input) => {
+      const tz = ctx.organization.timezone;
+      const rows = await listAppointments(ctx, {
+        from: dayBounds(input.from, tz).from,
+        to: dayBounds(input.to, tz).to,
+        userId: input.mine ? ctx.user.userId : undefined,
+      });
+      return rows.slice(0, 60).map((a) => ({
+        id: a.id,
+        title: a.title,
+        date: localParts(a.startsAt, tz).date,
+        start: localParts(a.startsAt, tz).time,
+        end: localParts(a.endsAt, tz).time,
+        client: a.clientName,
+        location: a.location,
+        status: a.status,
+      }));
+    },
+  ),
+  tool(
+    {
+      name: "create_appointment",
+      description: "Book an appointment in the company calendar (local time). Refused if it overlaps another appointment of the same person.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          date: { type: "string", description: "YYYY-MM-DD" },
+          start: { type: "string", description: "HH:MM, 24h" },
+          duration_minutes: { type: "integer", description: "Defaults to 60" },
+          client_id: { type: "string" },
+          location: { type: "string" },
+          notes: { type: "string" },
+        },
+        required: ["title", "date", "start"],
+      },
+    },
+    z.object({
+      title: z.string().trim().min(1).max(200),
+      date: isoDate,
+      start: z.string().regex(/^\d{2}:\d{2}$/),
+      duration_minutes: z.number().int().min(5).max(24 * 60).optional(),
+      client_id: id.optional(),
+      location: z.string().max(200).optional(),
+      notes: z.string().max(2000).optional(),
+    }),
+    async (ctx, input, via) => {
+      const startsAt = zonedTime(input.date, input.start, ctx.organization.timezone);
+      try {
+        const [row] = await createAppointment(
+          ctx,
+          {
+            title: input.title,
+            clientId: input.client_id,
+            startsAt,
+            endsAt: new Date(startsAt.getTime() + (input.duration_minutes ?? 60) * 60_000),
+            location: input.location,
+            notes: input.notes,
+          },
+          via === "telegram" ? "telegram" : "ai",
+        );
+        return { created: true, id: row.id, link: `/app/calendar?view=day&date=${input.date}` };
+      } catch (e) {
+        if (e instanceof CalendarError && e.code === "OVERLAP") return { created: false, overlaps_with: e.clash?.title };
+        throw e;
+      }
+    },
+  ),
+  tool(
+    {
+      name: "list_tasks",
+      description: "Open tasks (not done). mine=true for the user's own; overdue=true for those past their due date.",
+      input_schema: { type: "object", properties: { mine: { type: "boolean" }, overdue: { type: "boolean" }, query: { type: "string" } } },
+    },
+    z.object({ mine: z.boolean().optional(), overdue: z.boolean().optional(), query: z.string().max(200).optional() }),
+    async (ctx, input) => {
+      const rows = await listTasks(ctx, { open: true, overdue: input.overdue, q: input.query, assignedUserId: input.mine ? ctx.user.userId : undefined });
+      return rows.slice(0, 40).map((task) => ({ id: task.id, title: task.title, status: task.status, priority: task.priority, due: task.dueDate, project: task.projectName, client: task.clientName }));
+    },
+  ),
+  tool(
+    {
+      name: "create_task",
+      description: "Create a task, by default for the user themselves. Can be linked to a client or an order.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          description: { type: "string" },
+          due_date: { type: "string", description: "YYYY-MM-DD" },
+          priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
+          client_id: { type: "string" },
+          order_id: { type: "string" },
+        },
+        required: ["title"],
+      },
+    },
+    z.object({
+      title: z.string().trim().min(1).max(300),
+      description: z.string().max(5000).optional(),
+      due_date: isoDate.optional(),
+      priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+      client_id: id.optional(),
+      order_id: id.optional(),
+    }),
+    async (ctx, input, via) => {
+      const task = await createTask(
+        ctx,
+        { title: input.title, description: input.description, dueDate: input.due_date, priority: input.priority, clientId: input.client_id, orderId: input.order_id },
+        via === "telegram" ? "telegram" : "ai",
+      );
+      return { created: true, id: task.id, link: "/app/tasks?mine=1" };
+    },
+  ),
+  tool(
+    {
+      name: "list_deals",
+      description: "The sales pipeline: open opportunities (and those closed in the last 30 days) with stage, value and next follow-up.",
+      input_schema: { type: "object", properties: {} },
+    },
+    z.object({}),
+    async (ctx) => {
+      const rows = await listDeals(ctx);
+      return rows.slice(0, 60).map((d) => ({ id: d.id, title: d.title, client: d.clientName, stage: d.stage, value_eur: eur(d.valueCents), next_follow_up: d.nextFollowUp }));
+    },
+  ),
+  tool(
+    {
+      name: "create_deal",
+      description: "Add a sales opportunity for a client or lead to the pipeline.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          client_id: { type: "string" },
+          value_eur: { type: "number" },
+          stage: { type: "string", enum: [...DEAL_STAGES] },
+          next_follow_up: { type: "string", description: "YYYY-MM-DD" },
+          notes: { type: "string" },
+        },
+        required: ["title", "client_id"],
+      },
+    },
+    z.object({
+      title: z.string().trim().min(1).max(200),
+      client_id: id,
+      value_eur: z.number().min(0).max(100_000_000).optional(),
+      stage: z.enum(DEAL_STAGES).optional(),
+      next_follow_up: isoDate.optional(),
+      notes: z.string().max(5000).optional(),
+    }),
+    async (ctx, input, via) => {
+      const deal = await saveDeal(
+        ctx,
+        null,
+        {
+          title: input.title,
+          clientId: input.client_id,
+          valueCents: Math.round((input.value_eur ?? 0) * 100),
+          stage: input.stage,
+          nextFollowUp: input.next_follow_up,
+          notes: input.notes,
+        },
+        via === "telegram" ? "telegram" : "ai",
+      );
+      return { created: true, id: deal.id, link: "/app/pipeline" };
     },
   ),
 ];

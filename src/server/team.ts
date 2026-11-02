@@ -252,3 +252,13 @@ export async function accountExists(email: string): Promise<boolean> {
   const [row] = await getDb().select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email.toLowerCase()}`);
   return !!row;
 }
+
+/** Names of everyone in the company, for "assigned to" fields (no extra permission). */
+export async function memberOptions(ctx: Context): Promise<{ id: string; name: string }[]> {
+  return getDb()
+    .select({ id: users.id, name: users.name })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(eq(memberships.organizationId, ctx.organization.id))
+    .orderBy(asc(users.name));
+}

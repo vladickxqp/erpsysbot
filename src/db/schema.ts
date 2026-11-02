@@ -465,6 +465,102 @@ export const paymentReminders = pgTable(
   (t) => [uniqueIndex("payment_reminders_invoice_level_key").on(t.invoiceId, t.level)],
 );
 
+// --- Calendar ----------------------------------------------------------------------------------
+export const appointmentStatusEnum = pgEnum("appointment_status", ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"]);
+
+/** An appointment: with a client or internal, assigned to one person. */
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    title: text("title").notNull(),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    assignedUserId: uuid("assigned_user_id"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    location: text("location"),
+    status: appointmentStatusEnum("status").notNull().default("CONFIRMED"),
+    notes: text("notes"),
+    createdBy: uuid("created_by"),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("appointments_org_start_idx").on(t.organizationId, t.startsAt), index("appointments_client_idx").on(t.clientId)],
+);
+
+// --- Projects and tasks --------------------------------------------------------------------------
+export const projectStatusEnum = pgEnum("project_status", ["ACTIVE", "DONE", "ARCHIVED"]);
+export const taskStatusEnum = pgEnum("task_status", ["TODO", "IN_PROGRESS", "REVIEW", "DONE"]);
+export const taskPriorityEnum = pgEnum("task_priority", ["LOW", "MEDIUM", "HIGH"]);
+
+export const projects = pgTable(
+  "projects",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    status: projectStatusEnum("status").notNull().default("ACTIVE"),
+    dueDate: date("due_date"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("projects_org_idx").on(t.organizationId)],
+);
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: id(),
+    organizationId: orgId(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: taskStatusEnum("status").notNull().default("TODO"),
+    priority: taskPriorityEnum("priority").notNull().default("MEDIUM"),
+    dueDate: date("due_date"),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    parentId: uuid("parent_id"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    assignedUserId: uuid("assigned_user_id"),
+    createdBy: uuid("created_by"),
+    position: integer("position").notNull().default(0),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("tasks_org_status_idx").on(t.organizationId, t.status), index("tasks_assigned_idx").on(t.assignedUserId)],
+);
+
+// --- Sales pipeline ------------------------------------------------------------------------------
+export const dealStageEnum = pgEnum("deal_stage", ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]);
+
+/** A sales opportunity with a client or lead, moving through the pipeline. */
+export const deals = pgTable(
+  "deals",
+  {
+    id: id(),
+    organizationId: orgId(),
+    title: text("title").notNull(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    stage: dealStageEnum("stage").notNull().default("NEW"),
+    valueCents: integer("value_cents").notNull().default(0),
+    source: text("source"),
+    assignedUserId: uuid("assigned_user_id"),
+    nextFollowUp: date("next_follow_up"),
+    notes: text("notes"),
+    quoteId: uuid("quote_id"),
+    position: integer("position").notNull().default(0),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("deals_org_stage_idx").on(t.organizationId, t.stage), index("deals_client_idx").on(t.clientId)],
+);
+
 // --- Finance -----------------------------------------------------------------------------------
 export const transactionTypeEnum = pgEnum("transaction_type", ["INCOME", "EXPENSE", "REFUND", "ADJUSTMENT"]);
 
@@ -542,4 +638,8 @@ export const TENANT_TABLES = [
   "quotes",
   "quote_items",
   "payment_reminders",
+  "appointments",
+  "projects",
+  "tasks",
+  "deals",
 ] as const;
