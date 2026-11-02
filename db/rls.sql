@@ -106,6 +106,29 @@ CREATE POLICY tenant_isolation ON assistant_messages
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, DELETE ON assistant_messages TO app_tenant;
 
+-- Quotes and their lines.
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON quotes;
+CREATE POLICY tenant_isolation ON quotes
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON quotes TO app_tenant;
+
+ALTER TABLE quote_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON quote_items;
+CREATE POLICY tenant_isolation ON quote_items
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE, DELETE ON quote_items TO app_tenant;
+
+-- payment_reminders: written once, marked as sent.
+ALTER TABLE payment_reminders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON payment_reminders;
+CREATE POLICY tenant_isolation ON payment_reminders
+  USING (organization_id = app_org_id())
+  WITH CHECK (organization_id = app_org_id());
+GRANT SELECT, INSERT, UPDATE ON payment_reminders TO app_tenant;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

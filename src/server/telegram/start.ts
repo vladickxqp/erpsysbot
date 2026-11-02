@@ -6,6 +6,7 @@ import { LOCALES } from "@/i18n";
 import { appUrl, botToken } from "../settings";
 import { registerWebhook } from "./api";
 import { commandList } from "./bot";
+import { startDigestTimer } from "./digest";
 
 export async function startTelegram(): Promise<void> {
   if (!botToken()) return;
@@ -19,6 +20,7 @@ export async function startTelegram(): Promise<void> {
       ...Object.fromEntries(LOCALES.map((l) => [l, commandList(l)])),
     });
     console.log("telegram: webhook registered");
+    startDigestTimer();
   } catch (e) {
     console.error("telegram: webhook registration failed", e instanceof Error ? e.message : e);
   }

@@ -6,7 +6,7 @@ import { updateCompany, type CompanyInput } from "@/server/company";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 import { botUsername } from "@/server/telegram/api";
-import { createLinkToken, unlink } from "@/server/telegram/links";
+import { createLinkToken, setNotify, unlink } from "@/server/telegram/links";
 
 export type CompanyResult = { ok?: boolean; error?: "forbidden" | "check"; fields?: string[] };
 
@@ -34,5 +34,11 @@ export async function connectTelegramAction(): Promise<{ url?: string; error?: "
 export async function disconnectTelegramAction(): Promise<void> {
   const ctx = await requireContext();
   await unlink(ctx.user.userId);
+  revalidatePath("/app/settings");
+}
+
+export async function telegramNotifyAction(notify: boolean): Promise<void> {
+  const ctx = await requireContext();
+  await setNotify(ctx.user.userId, notify);
   revalidatePath("/app/settings");
 }

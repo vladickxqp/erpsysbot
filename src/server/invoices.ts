@@ -90,7 +90,7 @@ export function missingCompanyData(org: Organization): string[] {
   return missing;
 }
 
-function sellerOf(org: Organization): Seller {
+export function sellerOf(org: Organization): Seller {
   return {
     name: org.legalName || org.name,
     legalName: org.legalName,
@@ -110,7 +110,7 @@ function sellerOf(org: Organization): Seller {
   };
 }
 
-async function clientParty(tx: Tx, clientId: string): Promise<Party> {
+export async function clientParty(tx: Tx, clientId: string): Promise<Party> {
   const [c] = await tx.select().from(clients).where(eq(clients.id, clientId)).limit(1);
   if (!c) throw new NotFoundError();
   const person = [c.firstName, c.lastName].filter(Boolean).join(" ");

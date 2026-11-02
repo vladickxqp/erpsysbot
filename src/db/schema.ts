@@ -98,6 +98,7 @@ export const organizations = pgTable("organizations", {
   paymentTermsDays: integer("payment_terms_days").notNull().default(14),
   /** {YYYY} year, {NNNN} running number (zero-padded to the N count). */
   invoiceNumberFormat: text("invoice_number_format").notNull().default("RE-{YYYY}-{NNNN}"),
+  quoteNumberFormat: text("quote_number_format").notNull().default("AN-{YYYY}-{NNNN}"),
   creditNoteNumberFormat: text("credit_note_number_format").notNull().default("GS-{YYYY}-{NNNN}"),
   invoiceFooter: text("invoice_footer"),
   currency: text("currency").notNull().default("EUR"),
@@ -169,6 +170,9 @@ export const telegramLinks = pgTable(
     chatId: text("chat_id").notNull(),
     username: text("username"),
     organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "set null" }),
+    /** Morning summary in the chat. */
+    notify: boolean("notify").notNull().default(true),
+    lastDigestOn: date("last_digest_on"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("telegram_links_user_key").on(t.userId), uniqueIndex("telegram_links_tg_key").on(t.telegramUserId)],
@@ -324,6 +328,47 @@ export const orderItems = pgTable(
   (t) => [index("order_items_order_idx").on(t.orderId)],
 );
 
+// --- Quotes ------------------------------------------------------------------------------------
+export const quoteStatusEnum = pgEnum("quote_status", ["DRAFT", "SENT", "ACCEPTED", "DECLINED"]);
+
+/** An offer to a client (Angebot). Numbered when created; becomes an order or invoice draft. */
+export const quotes = pgTable(
+  "quotes",
+  {
+    id: id(),
+    organizationId: orgId(),
+    number: text("number").notNull(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    status: quoteStatusEnum("status").notNull().default("DRAFT"),
+    title: text("title"),
+    notes: text("notes"),
+    issueDate: date("issue_date").notNull(),
+    validUntil: date("valid_until"),
+    netCents: integer("net_cents").notNull().default(0),
+    vatCents: integer("vat_cents").notNull().default(0),
+    grossCents: integer("gross_cents").notNull().default(0),
+    smallBusiness: boolean("small_business").notNull().default(false),
+    orderId: uuid("order_id"),
+    invoiceId: uuid("invoice_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("quotes_org_number_key").on(t.organizationId, t.number), index("quotes_client_idx").on(t.clientId)],
+);
+
+export const quoteItems = pgTable(
+  "quote_items",
+  {
+    ...lineColumns(),
+    quoteId: uuid("quote_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("quote_items_quote_idx").on(t.quoteId)],
+);
+
 // --- Invoices ----------------------------------------------------------------------------------
 export const invoiceKindEnum = pgEnum("invoice_kind", ["INVOICE", "CREDIT_NOTE"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
@@ -400,6 +445,26 @@ export const payments = pgTable(
   (t) => [index("payments_invoice_idx").on(t.invoiceId)],
 );
 
+/** Payment reminders (Zahlungserinnerung / Mahnung) for an overdue invoice, level 1, 2, 3 … */
+export const paymentReminders = pgTable(
+  "payment_reminders",
+  {
+    id: id(),
+    organizationId: orgId(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    level: integer("level").notNull(),
+    issueDate: date("issue_date").notNull(),
+    dueDate: date("due_date").notNull(),
+    openCents: integer("open_cents").notNull(),
+    feeCents: integer("fee_cents").notNull().default(0),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("payment_reminders_invoice_level_key").on(t.invoiceId, t.level)],
+);
+
 // --- Finance -----------------------------------------------------------------------------------
 export const transactionTypeEnum = pgEnum("transaction_type", ["INCOME", "EXPENSE", "REFUND", "ADJUSTMENT"]);
 
@@ -474,4 +539,7 @@ export const TENANT_TABLES = [
   "payments",
   "transactions",
   "assistant_messages",
+  "quotes",
+  "quote_items",
+  "payment_reminders",
 ] as const;

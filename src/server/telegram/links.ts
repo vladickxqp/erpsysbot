@@ -85,3 +85,7 @@ export async function setLinkCompany(userId: string, organizationId: string): Pr
   await db.update(telegramLinks).set({ organizationId }).where(eq(telegramLinks.userId, userId));
   return true;
 }
+
+export async function setNotify(userId: string, notify: boolean): Promise<void> {
+  await getDb().update(telegramLinks).set({ notify }).where(eq(telegramLinks.userId, userId));
+}

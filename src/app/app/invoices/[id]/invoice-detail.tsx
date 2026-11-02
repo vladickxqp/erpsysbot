@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Ban, Download, Lock, Pencil, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, BellRing, Download, Lock, Pencil, Trash2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { InvoiceStatusBadge } from "@/components/app/badges";
 import { ConfirmDialog } from "@/components/app/confirm-dialog";
 import { ItemsTable, type ItemRow } from "@/components/app/items-table";
+import { SendButton } from "@/components/app/send-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,7 +19,7 @@ import { useI18n } from "@/i18n/client";
 import { formatDate, formatMoney } from "@/i18n";
 import { PAYMENT_METHODS } from "@/lib/domain";
 import type { Totals } from "@/server/money";
-import { cancelAction, deleteDraftAction, issueAction, paymentAction, type InvoiceResult } from "../actions";
+import { cancelAction, deleteDraftAction, issueAction, paymentAction, reminderAction, type InvoiceResult } from "../actions";
 
 type Detail = {
   id: string;
@@ -46,6 +47,9 @@ export function InvoiceDetail({
   related,
   missingCompany,
   today,
+  clientEmail,
+  mail,
+  reminders,
   can,
 }: {
   invoice: Detail;
@@ -56,6 +60,9 @@ export function InvoiceDetail({
   related: { id: string; number: string | null; kind: string }[];
   missingCompany: string[];
   today: string;
+  clientEmail: string | null;
+  mail: boolean;
+  reminders: { id: string; level: number; issueDate: string; dueDate: string; openCents: number; sentAt: string | null }[];
   can: { edit: boolean; issue: boolean; cancel: boolean; pay: boolean; settings: boolean };
 }) {
   const { t, locale } = useI18n();
@@ -151,6 +158,16 @@ export function InvoiceDetail({
               <Download className="size-4" /> {t("invoices.pdf")}
             </a>
           </Button>
+          {!draft && mail && can.edit && <SendButton kind="invoice" id={invoice.id} email={clientEmail} />}
+          {invoice.overdue && can.issue && reminders.length < 3 && (
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => run(() => reminderAction(invoice.id), () => router.refresh())}
+            >
+              <BellRing className="size-4" /> {t(reminders.length === 0 ? "reminders.create1" : "reminders.createN")}
+            </Button>
+          )}
           {draft && can.edit && (
             <Button variant="outline" asChild>
               <Link href={`/app/invoices/${invoice.id}/edit`}>
@@ -176,6 +193,7 @@ export function InvoiceDetail({
           <ItemsTable items={items} totals={totals} smallBusiness={invoice.smallBusiness} />
           {invoice.notes && <p className="mt-4 whitespace-pre-wrap rounded-xl border bg-card p-4 text-sm">{invoice.notes}</p>}
         </div>
+        <div className="grid h-fit gap-4">
         {invoice.kind === "INVOICE" && !draft && (
           <Card className="h-fit">
             <CardHeader>
@@ -203,6 +221,36 @@ export function InvoiceDetail({
             </CardContent>
           </Card>
         )}
+        {reminders.length > 0 && (
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="text-base">{t("reminders.title")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 text-sm">
+              {reminders.map((r) => (
+                <div key={r.id} className="grid gap-2">
+                  <div className="flex justify-between gap-4">
+                    <span className="font-medium">{t(r.level === 1 ? "reminders.level1" : "reminders.levelN", { n: r.level })}</span>
+                    <span className="tabular-nums">{money(r.openCents)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(r.issueDate, locale)} · {t("invoices.dueDate")} {formatDate(r.dueDate, locale)}
+                    {r.sentAt && ` · ${t("send.sentOn", { date: formatDate(r.sentAt, locale) })}`}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={`/app/reminders/${r.id}/pdf`} target="_blank" rel="noopener">
+                        <Download className="size-4" /> PDF
+                      </a>
+                    </Button>
+                    {mail && can.edit && <SendButton kind="reminder" id={r.id} email={clientEmail} />}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+        </div>
       </div>
 
       <ConfirmDialog

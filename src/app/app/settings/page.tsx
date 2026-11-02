@@ -43,6 +43,7 @@ export default async function SettingsPage() {
               smallBusiness: o.smallBusiness,
               paymentTermsDays: o.paymentTermsDays,
               invoiceNumberFormat: o.invoiceNumberFormat,
+              quoteNumberFormat: o.quoteNumberFormat,
               invoiceFooter: o.invoiceFooter ?? "",
             }}
           />
@@ -61,7 +62,7 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
           {telegram !== undefined && (
-            <TelegramCard linked={telegram ? { name: telegram.username ? `@${telegram.username}` : "Telegram" } : null} />
+            <TelegramCard linked={telegram ? { name: telegram.username ? `@${telegram.username}` : "Telegram", notify: telegram.notify } : null} />
           )}
         </div>
       </div>

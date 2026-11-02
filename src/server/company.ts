@@ -53,6 +53,13 @@ export const companyInput = z.object({
     .max(40)
     .refine((v) => /\{N+\}/.test(v), "number")
     .default("RE-{YYYY}-{NNNN}"),
+  quoteNumberFormat: z
+    .string()
+    .trim()
+    .min(3)
+    .max(40)
+    .refine((v) => /\{N+\}/.test(v), "number")
+    .default("AN-{YYYY}-{NNNN}"),
   invoiceFooter: text(500),
 });
 export type CompanyInput = z.input<typeof companyInput>;

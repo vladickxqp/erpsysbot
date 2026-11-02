@@ -6,10 +6,11 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useI18n } from "@/i18n/client";
-import { connectTelegramAction, disconnectTelegramAction } from "./actions";
+import { connectTelegramAction, disconnectTelegramAction, telegramNotifyAction } from "./actions";
 
-export function TelegramCard({ linked }: { linked: { name: string } | null }) {
+export function TelegramCard({ linked }: { linked: { name: string; notify: boolean } | null }) {
   const { t } = useI18n();
   const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
@@ -38,6 +39,10 @@ export function TelegramCard({ linked }: { linked: { name: string } | null }) {
         {linked ? (
           <>
             <div>{t("telegram.connected", { name: linked.name })}</div>
+            <label className="flex items-center gap-2">
+              <Checkbox checked={linked.notify} disabled={pending} onCheckedChange={(c) => start(() => telegramNotifyAction(c === true))} />
+              {t("telegram.notify")}
+            </label>
             <Button variant="outline" size="sm" className="w-fit" disabled={pending} onClick={() => start(() => disconnectTelegramAction())}>
               {t("telegram.disconnect")}
             </Button>

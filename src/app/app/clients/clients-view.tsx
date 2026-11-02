@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useI18n } from "@/i18n/client";
 import { formatDate } from "@/i18n";
 import { ClientDialog } from "./client-form";
+import { ImportButton } from "./import-button";
 
 export type ClientRow = {
   id: string;
@@ -125,6 +126,7 @@ export function ClientsView({
               <Download className="size-4" /> <span className="hidden sm:inline">{t("common.export")}</span>
             </a>
           </Button>
+          {canCreate && <ImportButton />}
           {canCreate && (
             <Button onClick={() => setCreating(true)}>
               <Plus className="size-4" /> {t("clients.new")}

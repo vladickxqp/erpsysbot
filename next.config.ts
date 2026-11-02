@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   // PGlite loads its WebAssembly from its own folder: not bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   poweredByHeader: false,
+  // CSV imports of a few thousand clients go through a server action.
+  experimental: { serverActions: { bodySizeLimit: "2mb" } },
   async headers() {
     return [
       {

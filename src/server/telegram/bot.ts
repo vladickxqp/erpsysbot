@@ -19,7 +19,7 @@ import { listInvoices } from "../invoices";
 import { today } from "../money";
 import { appUrl } from "../settings";
 import { callTelegram, escapeHtml as h, sendMessage, type Keyboard } from "./api";
-import { linkOfTelegram, redeemLinkToken, setLinkCompany, unlink, type TelegramLink } from "./links";
+import { linkOfTelegram, redeemLinkToken, setLinkCompany, setNotify, unlink, type TelegramLink } from "./links";
 
 type TgUser = { id: number; username?: string; language_code?: string };
 export type Update = {
@@ -50,7 +50,7 @@ function tooFast(tgId: string): boolean {
   return hits.length > 20;
 }
 
-export const BOT_COMMANDS = ["today", "invoices", "clients", "company", "new", "help"] as const;
+export const BOT_COMMANDS = ["today", "invoices", "clients", "company", "notify", "new", "help"] as const;
 
 export function commandList(locale: Locale) {
   const t = translator(MESSAGES[locale]);
@@ -120,6 +120,9 @@ export async function handleUpdate(update: Update, io: BotIO = liveIO): Promise<
         t("bot.pickCompany"),
         ctx.companies.map((c) => [{ text: `${c.id === ctx.organization.id ? "✓ " : ""}${c.name}`, callback_data: `co:${c.id}` }]),
       );
+    case "notify":
+      await setNotify(ctx.user.userId, !link.notify);
+      return io.send(chatId, t(link.notify ? "bot.notifyOff" : "bot.notifyOn"));
     case "new":
       await clearConversation(ctx, "telegram");
       return io.send(chatId, t("bot.cleared"));

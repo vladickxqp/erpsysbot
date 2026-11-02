@@ -15,12 +15,13 @@ import {
 import { parseMoney } from "@/server/money";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
+import { createReminder, ReminderError } from "@/server/reminders";
 
 export type InvoiceResult = {
   ok?: boolean;
   id?: string;
   error?: "forbidden" | "notFound" | "check" | "state";
-  code?: InvoiceStateError["code"];
+  code?: InvoiceStateError["code"] | ReminderError["code"];
   missing?: string[];
 };
 
@@ -29,6 +30,7 @@ function failure(e: unknown): InvoiceResult {
   if (e instanceof NotFoundError) return { error: "notFound" };
   if (e instanceof ZodError) return { error: "check" };
   if (e instanceof InvoiceStateError) return { error: "state", code: e.code, missing: e.missing };
+  if (e instanceof ReminderError) return { error: "state", code: e.code };
   throw e;
 }
 
@@ -90,6 +92,17 @@ export async function cancelAction(id: string): Promise<InvoiceResult> {
     const note = await cancelInvoice(ctx, id);
     refresh();
     return { ok: true, id: note.id };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function reminderAction(invoiceId: string): Promise<InvoiceResult> {
+  const ctx = await requireContext();
+  try {
+    const reminder = await createReminder(ctx, invoiceId);
+    revalidatePath(`/app/invoices/${invoiceId}`);
+    return { ok: true, id: reminder.id };
   } catch (e) {
     return failure(e);
   }

@@ -29,6 +29,7 @@ export type CompanyValues = {
   smallBusiness: boolean;
   paymentTermsDays: number;
   invoiceNumberFormat: string;
+  quoteNumberFormat: string;
   invoiceFooter: string;
 };
 
@@ -117,6 +118,7 @@ export function CompanyForm({ initial, canEdit }: { initial: CompanyValues; canE
             <span className="text-xs text-muted-foreground">{t("company.invoiceNumberHint")}</span>
           </label>
           {field("paymentTermsDays", "sm:col-span-2", { type: "number", min: 0, max: 120 })}
+          {field("quoteNumberFormat", "sm:col-span-3")}
           <label className="flex items-center gap-2 text-sm sm:col-span-6">
             <Checkbox checked={v.smallBusiness} onCheckedChange={(c) => setV({ ...v, smallBusiness: c === true })} disabled={!canEdit} />
             {t("company.smallBusiness")}

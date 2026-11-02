@@ -10,6 +10,7 @@ import {
   updateClient,
   type ClientInput,
 } from "@/server/clients";
+import { importClients, type ImportResult } from "@/server/import";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 
@@ -93,5 +94,19 @@ export async function deleteClientAction(id: string): Promise<ClientFormState> {
     return { ok: true };
   } catch (e) {
     return failure(e);
+  }
+}
+
+export async function importClientsAction(text: string): Promise<ImportResult | { error: string }> {
+  const ctx = await requireContext();
+  if (text.length > 2_000_000) return { error: "import.tooBig" };
+  try {
+    const result = await importClients(ctx, text);
+    revalidatePath("/app/clients");
+    revalidatePath("/app");
+    return result;
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "common.forbidden" };
+    throw e;
   }
 }

@@ -48,3 +48,21 @@ export function InvoiceStatusBadge({ status, overdue, kind }: { status: string; 
     </Badge>
   );
 }
+
+const QUOTE: Record<string, string> = {
+  DRAFT: "bg-muted text-muted-foreground",
+  SENT: "bg-primary/10 text-primary border-primary/20",
+  ACCEPTED: "bg-success/10 text-success border-success/20",
+  DECLINED: "bg-muted text-muted-foreground line-through",
+  EXPIRED: "bg-warning/10 text-warning border-warning/30",
+};
+
+export function QuoteStatusBadge({ status, expired }: { status: string; expired?: boolean }) {
+  const { t } = useI18n();
+  const key = expired ? "EXPIRED" : status;
+  return (
+    <Badge variant="outline" className={cn("whitespace-nowrap", QUOTE[key])}>
+      {t(`quotes.${key}`)}
+    </Badge>
+  );
+}
