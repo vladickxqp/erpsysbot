@@ -108,6 +108,8 @@ export const organizations = pgTable("organizations", {
   timezone: text("timezone").notNull().default("Europe/Berlin"),
   /** Where the sign-up came from (Cloudflare's IP country), for the platform admin. */
   signupIpCountry: text("signup_ip_country"),
+  /** Modules switched off for the whole company (src/lib/modules.ts). */
+  disabledModules: text("disabled_modules").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
 });
 
@@ -124,6 +126,8 @@ export const memberships = pgTable(
     role: roleEnum("role").notNull().default("EMPLOYEE"),
     /** For CUSTOM: exactly these permissions. For the others: added on top. */
     permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
+    /** Modules this person keeps out of their own menu. */
+    hiddenModules: text("hidden_modules").array().notNull().default(sql`'{}'::text[]`),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_org_user_key").on(t.organizationId, t.userId)],
@@ -445,6 +449,8 @@ export const documents = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     storageKey: text("storage_key").notNull(),
     category: text("category"),
+    /** Media library: THUMBNAIL or BRAND; null for everything else. */
+    collection: text("collection"),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     orderId: uuid("order_id"),
     invoiceId: uuid("invoice_id"),
@@ -854,6 +860,141 @@ export const auditLog = pgTable(
   (t) => [index("audit_org_created_idx").on(t.organizationId, t.createdAt)],
 );
 
+// --- Dashboards --------------------------------------------------------------------------------
+/** A person's own overview pages: which widgets, in which order and size. */
+export const dashboards = pgTable(
+  "dashboards",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    /** [{ id, type, size 1–4, collapsed }] — checked by src/server/dashboards.ts. */
+    widgets: jsonb("widgets").notNull().default(sql`'[]'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("dashboards_user_idx").on(t.organizationId, t.userId, t.position)],
+);
+
+// --- Creator Studio ----------------------------------------------------------------------------
+export const contentStatusEnum = pgEnum("content_status", ["IDEA", "DRAFT", "REVIEW", "SCHEDULED", "PUBLISHED"]);
+
+/** A piece of content: a post, video, story or article, planned on the content calendar. */
+export const contentItems = pgTable(
+  "content_items",
+  {
+    id: id(),
+    organizationId: orgId(),
+    title: text("title").notNull(),
+    body: text("body"),
+    description: text("description"),
+    platform: text("platform").notNull().default("OTHER"),
+    contentType: text("content_type").notNull().default("POST"),
+    status: contentStatusEnum("status").notNull().default("DRAFT"),
+    category: text("category"),
+    hashtags: text("hashtags").array().notNull().default(sql`'{}'::text[]`),
+    /** Files from the media library (documents). */
+    mediaIds: uuid("media_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    /** Where it went out through this app (a connected channel), and the link to it. */
+    socialAccountId: uuid("social_account_id"),
+    externalUrl: text("external_url"),
+    assignedUserId: uuid("assigned_user_id"),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("content_items_org_scheduled_idx").on(t.organizationId, t.scheduledAt), index("content_items_org_status_idx").on(t.organizationId, t.status)],
+);
+
+export const contentComments = pgTable(
+  "content_comments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contentItems.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("content_comments_item_idx").on(t.contentId, t.createdAt)],
+);
+
+export const contentTemplates = pgTable(
+  "content_templates",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    platform: text("platform").notNull().default("OTHER"),
+    contentType: text("content_type").notNull().default("POST"),
+    body: text("body").notNull(),
+    hashtags: text("hashtags").array().notNull().default(sql`'{}'::text[]`),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("content_templates_org_idx").on(t.organizationId)],
+);
+
+/** One run of the content generator: for the daily limits and the cost. */
+export const contentGenerations = pgTable(
+  "content_generations",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id").notNull(),
+    kind: text("kind").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("content_generations_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+// --- Social media ------------------------------------------------------------------------------
+/** A channel of the company: a YouTube channel, a Telegram channel, an Instagram profile … */
+export const socialAccounts = pgTable(
+  "social_accounts",
+  {
+    id: id(),
+    organizationId: orgId(),
+    provider: text("provider").notNull(),
+    name: text("name").notNull(),
+    /** The provider's id for it: YouTube channel id, Telegram @channel or chat id. */
+    externalId: text("external_id").notNull(),
+    url: text("url"),
+    lastFetchedAt: timestamp("last_fetched_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("social_accounts_key").on(t.organizationId, t.provider, t.externalId)],
+);
+
+/** The figures a provider reported for a channel on one day (the last fetch of the day wins). */
+export const socialStats = pgTable(
+  "social_stats",
+  {
+    id: id(),
+    organizationId: orgId(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => socialAccounts.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    followers: integer("followers"),
+    views: numeric("views", { precision: 20, scale: 0, mode: "number" }),
+    posts: integer("posts"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("social_stats_day_key").on(t.accountId, t.day), index("social_stats_org_day_idx").on(t.organizationId, t.day)],
+);
+
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
 export const TENANT_TABLES = [
   "counters",
@@ -881,4 +1022,11 @@ export const TENANT_TABLES = [
   "documents",
   "automations",
   "automation_runs",
+  "dashboards",
+  "content_items",
+  "content_comments",
+  "content_templates",
+  "content_generations",
+  "social_accounts",
+  "social_stats",
 ] as const;

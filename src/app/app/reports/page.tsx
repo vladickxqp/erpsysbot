@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { getT } from "@/i18n/server";
 import { cn } from "@/lib/utils";
 import { buildReport, PERIODS, REPORT_PERMISSION, REPORTS, resolvePeriod, type ReportKind } from "@/server/reports";
-import { requireContext } from "@/server/request";
+import { requireContext, requireModule } from "@/server/request";
 import { formatCell } from "./format";
 
 export async function generateMetadata() {
@@ -20,6 +20,7 @@ export async function generateMetadata() {
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ report?: string; period?: string; from?: string; to?: string }> }) {
   const ctx = await requireContext();
+  requireModule(ctx, "reports");
   const { t, locale, region } = await getT();
   const sp = await searchParams;
   const allowed = REPORTS.filter((r) => ctx.permissions.has(REPORT_PERMISSION[r]));

@@ -74,3 +74,8 @@ export function smtp(): { host: string; port: number; user: string; password: st
 export function mailFrom(): string | null {
   return env("SMTP_FROM") || null;
 }
+
+/** YouTube Data API key: public channel figures (subscribers, views, videos). */
+export function youtubeKey(): string | null {
+  return env("YOUTUBE_API_KEY") || null;
+}

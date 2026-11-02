@@ -7,6 +7,7 @@ import { requireContext } from "@/server/request";
 import { botToken } from "@/server/settings";
 import { linkOfUser } from "@/server/telegram/links";
 import { CompanyForm } from "./company-form";
+import { ModulesCard } from "./modules-card";
 import { TelegramCard } from "./telegram-card";
 
 export async function generateMetadata() {
@@ -23,7 +24,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader title={t("settings.title")} />
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="grid h-fit gap-4 lg:col-span-2">
           <CompanyForm
             country={o.country}
             countryName={new Intl.DisplayNames([locale], { type: "region" }).of(o.country) ?? o.country}
@@ -52,6 +53,7 @@ export default async function SettingsPage() {
               invoiceFooter: o.invoiceFooter ?? "",
             }}
           />
+          <ModulesCard companyOff={[...ctx.disabledModules]} myOff={[...ctx.hiddenModules]} canManage={ctx.permissions.has("settings.manage")} />
         </div>
         <div className="grid h-fit gap-4">
           <Card className="h-fit">

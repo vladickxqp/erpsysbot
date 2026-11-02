@@ -7,9 +7,9 @@
  * file's first bytes, not from what the browser claims.
  */
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { and, desc, eq, ilike, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, like, notLike, type SQL } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { clients, documents } from "@/db/schema";
 import { audit } from "./audit";
@@ -18,6 +18,26 @@ import type { Context } from "./context";
 import { requirePermission } from "./permissions";
 
 export const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
+
+/** Videos and audio may be larger: MEDIA_MAX_MB (default 100). */
+export function maxMediaBytes(): number {
+  const mb = Number(process.env.MEDIA_MAX_MB);
+  return (Number.isFinite(mb) && mb > 0 ? Math.floor(mb) : 100) * 1024 * 1024;
+}
+
+export const MEDIA_KINDS = ["image", "video", "audio", "document"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+export const COLLECTIONS = ["THUMBNAIL", "BRAND"] as const;
+export type Collection = (typeof COLLECTIONS)[number];
+
+export function mediaKind(mimeType: string): MediaKind {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
+  return "document";
+}
+
+const isCollection = (v: unknown): v is Collection => typeof v === "string" && (COLLECTIONS as readonly string[]).includes(v);
 
 export class DocumentError extends Error {
   constructor(public readonly code: "TOO_LARGE" | "TYPE" | "EMPTY") {
@@ -42,7 +62,17 @@ export function sniffType(bytes: Uint8Array, name: string): string | null {
   if (starts(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
   if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 12) === "WEBP") return "image/webp";
   if (ascii(bytes, 0, 4) === "GIF8") return "image/gif";
-  if (ascii(bytes, 4, 8) === "ftyp" && ["heic", "heix", "mif1", "msf1"].includes(ascii(bytes, 8, 12))) return "image/heic";
+  if (ascii(bytes, 4, 8) === "ftyp") {
+    const brand = ascii(bytes, 8, 12);
+    if (["heic", "heix", "mif1", "msf1"].includes(brand)) return "image/heic";
+    if (brand === "M4A ") return "audio/mp4";
+    if (brand === "qt  ") return "video/quicktime";
+    return "video/mp4";
+  }
+  if (starts(bytes, [0x1a, 0x45, 0xdf, 0xa3])) return "video/webm";
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 12) === "WAVE") return "audio/wav";
+  if (ascii(bytes, 0, 4) === "OggS") return "audio/ogg";
+  if (ascii(bytes, 0, 3) === "ID3" || (bytes[0] === 0xff && [0xfb, 0xf3, 0xf2].includes(bytes[1]))) return "audio/mpeg";
   if (starts(bytes, [0x50, 0x4b, 0x03, 0x04])) {
     const office: Record<string, string> = {
       docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -64,14 +94,16 @@ export function sniffType(bytes: Uint8Array, name: string): string | null {
   return null;
 }
 
-export type UploadMeta = { category?: string | null; clientId?: string | null; orderId?: string | null; invoiceId?: string | null };
+export type UploadMeta = { category?: string | null; collection?: string | null; clientId?: string | null; orderId?: string | null; invoiceId?: string | null };
 
 export async function storeDocument(ctx: Context, file: { name: string; bytes: Uint8Array }, meta: UploadMeta = {}): Promise<Document> {
   requirePermission(ctx.permissions, "documents.manage");
   if (!file.bytes.length) throw new DocumentError("EMPTY");
-  if (file.bytes.length > MAX_DOCUMENT_BYTES) throw new DocumentError("TOO_LARGE");
   const mimeType = sniffType(file.bytes, file.name);
-  if (!mimeType) throw new DocumentError("TYPE");
+  // Only videos and audio may pass the document limit; anything bigger and unknown is "too large" first.
+  if (!mimeType) throw new DocumentError(file.bytes.length > MAX_DOCUMENT_BYTES ? "TOO_LARGE" : "TYPE");
+  const kind = mediaKind(mimeType);
+  if (file.bytes.length > (kind === "video" || kind === "audio" ? maxMediaBytes() : MAX_DOCUMENT_BYTES)) throw new DocumentError("TOO_LARGE");
   const name = file.name.replace(/[\\/\u0000-\u001f]+/g, "_").trim().slice(0, 200) || "Datei";
   const storageKey = `${ctx.organization.id}/${randomUUID()}`;
   return withTenant(ctx.organization.id, async (tx) => {
@@ -91,6 +123,7 @@ export async function storeDocument(ctx: Context, file: { name: string; bytes: U
         sizeBytes: file.bytes.length,
         storageKey,
         category: meta.category?.trim().slice(0, 80) || null,
+        collection: isCollection(meta.collection) ? meta.collection : null,
         clientId: meta.clientId ?? null,
         orderId: meta.orderId ?? null,
         invoiceId: meta.invoiceId ?? null,
@@ -102,7 +135,8 @@ export async function storeDocument(ctx: Context, file: { name: string; bytes: U
   });
 }
 
-export async function readDocument(ctx: Context, id: string): Promise<{ doc: Document; bytes: Buffer }> {
+/** A document and where its bytes are, with their size — for streaming (videos are read in parts). */
+export async function locateDocument(ctx: Context, id: string): Promise<{ doc: Document; file: string; size: number }> {
   requirePermission(ctx.permissions, "documents.read");
   const doc = await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx.select().from(documents).where(eq(documents.id, id)).limit(1);
@@ -110,12 +144,52 @@ export async function readDocument(ctx: Context, id: string): Promise<{ doc: Doc
     return row;
   });
   // The key is ours ("<company>/<uuid>"), never user input; still, stay inside the folder.
-  const target = path.resolve(uploadDir(), doc.storageKey);
-  if (!target.startsWith(path.resolve(uploadDir()) + path.sep)) throw new NotFoundError();
-  const bytes = await readFile(target).catch(() => {
+  const file = path.resolve(uploadDir(), doc.storageKey);
+  if (!file.startsWith(path.resolve(uploadDir()) + path.sep)) throw new NotFoundError();
+  const info = await stat(file).catch(() => {
+    throw new NotFoundError();
+  });
+  return { doc, file, size: info.size };
+}
+
+export async function readDocument(ctx: Context, id: string): Promise<{ doc: Document; bytes: Buffer }> {
+  const { doc, file } = await locateDocument(ctx, id);
+  const bytes = await readFile(file).catch(() => {
     throw new NotFoundError();
   });
   return { doc, bytes };
+}
+
+export type MediaQuery = { kind?: MediaKind; collection?: Collection; q?: string };
+
+/** The media library: every file of the company, newest first, by kind or collection. */
+export async function listMedia(ctx: Context, query: MediaQuery = {}) {
+  requirePermission(ctx.permissions, "documents.read");
+  const filters: SQL[] = [eq(documents.archived, false)];
+  if (query.collection) filters.push(eq(documents.collection, query.collection));
+  if (query.kind === "image" || query.kind === "video" || query.kind === "audio") filters.push(like(documents.mimeType, `${query.kind}/%`));
+  if (query.kind === "document") filters.push(and(notLike(documents.mimeType, "image/%"), notLike(documents.mimeType, "video/%"), notLike(documents.mimeType, "audio/%"))!);
+  if (query.q?.trim()) filters.push(ilike(documents.name, `%${query.q.trim().replace(/[%_\\]/g, (m) => `\\${m}`)}%`));
+  return withTenant(ctx.organization.id, (tx) =>
+    tx
+      .select({ id: documents.id, name: documents.name, mimeType: documents.mimeType, sizeBytes: documents.sizeBytes, collection: documents.collection, createdAt: documents.createdAt })
+      .from(documents)
+      .where(and(...filters))
+      .orderBy(desc(documents.createdAt))
+      .limit(500),
+  );
+}
+
+export async function setCollection(ctx: Context, id: string, collection: string | null): Promise<void> {
+  requirePermission(ctx.permissions, "documents.manage");
+  await withTenant(ctx.organization.id, async (tx) => {
+    const [row] = await tx
+      .update(documents)
+      .set({ collection: isCollection(collection) ? collection : null })
+      .where(eq(documents.id, id))
+      .returning({ id: documents.id });
+    if (!row) throw new NotFoundError();
+  });
 }
 
 export async function listDocuments(ctx: Context, query: { q?: string; clientId?: string; category?: string; archived?: boolean } = {}) {

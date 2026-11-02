@@ -66,3 +66,20 @@ export function QuoteStatusBadge({ status, expired }: { status: string; expired?
     </Badge>
   );
 }
+
+export const CONTENT_STATUS_CLASS: Record<string, string> = {
+  IDEA: "bg-muted text-muted-foreground",
+  DRAFT: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/20",
+  REVIEW: "bg-warning/10 text-warning border-warning/30",
+  SCHEDULED: "bg-primary/10 text-primary border-primary/20",
+  PUBLISHED: "bg-success/10 text-success border-success/20",
+};
+
+export function ContentStatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
+  return (
+    <Badge variant="outline" className={cn("whitespace-nowrap", CONTENT_STATUS_CLASS[status])}>
+      {t(`studio.status.${status}`)}
+    </Badge>
+  );
+}

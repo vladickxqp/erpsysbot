@@ -1,4 +1,4 @@
-/** Runs once when the server starts: the database first, then the Telegram webhook. */
+/** Runs once when the server starts: the database first, then the Telegram webhook and the social figures. */
 export async function register() {
   // Written exactly like this so the edge build drops the import entirely.
   if (process.env.NEXT_RUNTIME === "nodejs") {
@@ -6,5 +6,7 @@ export async function register() {
     await migrateDatabase();
     const { startTelegram } = await import("./server/telegram/start");
     await startTelegram();
+    const { startSocialTimer } = await import("./server/social");
+    startSocialTimer();
   }
 }

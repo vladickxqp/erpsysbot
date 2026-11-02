@@ -212,6 +212,20 @@ CREATE POLICY tenant_isolation ON automation_runs
   WITH CHECK (organization_id = app_org_id());
 GRANT SELECT, INSERT, UPDATE ON automation_runs TO app_tenant;
 
+-- Dashboards, Creator Studio and social channels.
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (organization_id = app_org_id()) WITH CHECK (organization_id = app_org_id())', t);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_tenant', t);
+  END LOOP;
+END
+$$;
+
 -- An issued invoice is a document: its figures and lines never change again.
 -- Only the payment state moves (paid_cents, status) and a credit note may
 -- mark it CANCELLED. Enforced here, below any application code.

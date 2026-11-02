@@ -21,7 +21,7 @@ import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
-import { NAV, isActive, type Feature } from "./nav";
+import { NAV, isActive, type Feature, type NavItem } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 
 export type ShellProps = {
@@ -32,6 +32,8 @@ export type ShellProps = {
   permissions: string[];
   /** Optional features set up on this server. */
   features: Feature[];
+  /** Modules switched off for the company or hidden by this person. */
+  offModules: string[];
   children: React.ReactNode;
 };
 
@@ -127,10 +129,15 @@ function UserMenu({ user }: Pick<ShellProps, "user">) {
   );
 }
 
-export function Shell({ user, company, companies, permissions, features, children }: ShellProps) {
+export function Shell({ user, company, companies, permissions, features, offModules, children }: ShellProps) {
   const { t } = useI18n();
   const pathname = usePathname();
-  const items = NAV.filter((item) => (!item.needs || permissions.includes(item.needs)) && (!item.feature || features.includes(item.feature)));
+  const items = NAV.filter(
+    (item) =>
+      (!item.needs || permissions.includes(item.needs)) &&
+      (!item.feature || features.includes(item.feature)) &&
+      (!item.module || !offModules.includes(item.module)),
+  );
   return (
     <div className="min-h-dvh bg-background">
       {/* Desktop: fixed sidebar */}
@@ -143,7 +150,7 @@ export function Shell({ user, company, companies, permissions, features, childre
         <div className="px-3">
           <CompanySwitcher company={company} companies={companies} />
         </div>
-        <nav className="mt-4 flex-1 space-y-1 px-3" aria-label="Main">
+        <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4" aria-label="Main">
           {items.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -182,7 +189,7 @@ export function Shell({ user, company, companies, permissions, features, childre
   );
 }
 
-function MobileNav({ items, pathname }: { items: typeof NAV; pathname: string }) {
+function MobileNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
   const { t } = useI18n();
   const primary = items.filter((item) => item.primary);
   const rest = items.filter((item) => !item.primary);

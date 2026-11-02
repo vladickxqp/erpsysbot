@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { updateCompany, type CompanyInput } from "@/server/company";
+import { setCompanyModules, setMyModules } from "@/server/modules";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 import { botUsername } from "@/server/telegram/api";
@@ -41,4 +42,17 @@ export async function telegramNotifyAction(notify: boolean): Promise<void> {
   const ctx = await requireContext();
   await setNotify(ctx.user.userId, notify);
   revalidatePath("/app/settings");
+}
+
+export async function saveModulesAction(scope: "company" | "me", off: string[]): Promise<{ ok?: boolean; error?: "forbidden" }> {
+  const ctx = await requireContext();
+  try {
+    if (scope === "company") await setCompanyModules(ctx, off);
+    else await setMyModules(ctx, off);
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "forbidden" };
+    throw e;
+  }
 }

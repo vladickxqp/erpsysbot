@@ -16,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ...(ctx.user.isPlatformAdmin ? (["admin"] as const) : []),
         ...(billingEnabled() ? (["billing"] as const) : []),
       ]}
+      offModules={[...ctx.disabledModules, ...ctx.hiddenModules]}
     >
       {children}
     </Shell>

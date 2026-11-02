@@ -5,6 +5,7 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { moduleOfPath, type AppModule } from "@/lib/modules";
 import { SESSION_COOKIE, readSession } from "./auth/sessions";
 import { contextFor, type Context } from "./context";
 import type { Permission } from "./permissions";
@@ -46,13 +47,25 @@ const MODULE_OF: Record<string, string> = {
   automation: "automation",
 };
 
+/** A page of a module the company switched off leads back to the overview. */
+export function requireModule(ctx: Context, module: AppModule | null): void {
+  if (module && ctx.disabledModules.has(module)) redirect("/app");
+}
+
+/** The module of the page being rendered (the middleware passes the path along). */
+export async function currentModule(): Promise<AppModule | null> {
+  return moduleOfPath((await headers()).get("x-pathname") ?? "");
+}
+
 /**
- * For pages of a module: without its permission, back to the overview; when
- * the plan does not include the module (or the subscription ended), to billing.
+ * For pages of a module: without its permission, or with the module switched
+ * off, back to the overview; when the plan does not include the module (or
+ * the subscription ended), to billing.
  */
 export async function requirePageContext(permission: Permission): Promise<Context> {
   const ctx = await requireContext();
   if (!ctx.permissions.has(permission)) redirect("/app");
+  requireModule(ctx, await currentModule());
   const ent = await entitlementsOf(ctx.organization.id);
   const planModule = MODULE_OF[permission.split(".")[0]];
   if (!ent.unlimited && (!ent.active || (planModule && !ent.modules.has(planModule)))) redirect("/app/billing");

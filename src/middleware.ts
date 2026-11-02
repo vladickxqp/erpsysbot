@@ -23,7 +23,10 @@ export function middleware(request: NextRequest) {
     const login = new URL("/login", request.url);
     return NextResponse.redirect(login);
   }
-  return NextResponse.next();
+  // The pages learn their own path from this (src/server/request.ts); a value sent by the browser is replaced.
+  const forwarded = new Headers(request.headers);
+  forwarded.set("x-pathname", request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers: forwarded } });
 }
 
 export const config = { matcher: ["/((?!api/telegram|api/stripe|api/health|_next/static|_next/image|favicon.ico).*)"] };

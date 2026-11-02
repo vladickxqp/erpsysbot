@@ -22,6 +22,9 @@ backend, one database, every interface on top of it.
 | Stock and purchasing, documents, reports (CSV/PDF) | ✅ |
 | Platform admin, plans and Stripe subscriptions, automations, PWA, XRechnung export | ✅ |
 | Countries: currency, VAT or US sales tax, tax numbers, paper by country; de/en/ru/uk/kk/es | ✅ |
+| Modules on/off per company and per person; personal dashboards with widgets (drag & drop, sizes, several dashboards) | ✅ |
+| Creator Studio: content calendar (day/week/month), editor, team comments, templates, AI generator | ✅ |
+| Media library (images, videos, audio, documents, thumbnails, brand assets), social channels (YouTube, Telegram), integrations | ✅ |
 
 ## How tenants are kept apart
 
@@ -107,6 +110,41 @@ else goes to the assistant. The assistant reads everything the user may see
 and creates clients, orders and invoice drafts; issuing, payments, cancelling
 and deleting stay in the app. Backups: `./backups` every night, 14 days kept
 (`BACKUP_DIR` may point to a cloud-synced folder).
+
+### Modules, dashboards and Creator Studio
+
+- **Modules:** Settings → Modules. Owners and admins switch modules off for the
+  whole company (menu entry, pages and widgets disappear); everyone hides
+  modules from their own menu.
+- **Dashboards:** each person arranges their own (Customize: add, remove,
+  move by dragging or with the arrows, width 1–4, collapse). Several dashboards
+  per person. Every figure comes from the module behind it; a widget the person
+  may not see is never shown.
+- **Creator Studio:** ideas → drafts → review → scheduled → published, on a
+  day/week/month calendar (drag a post to another day). Only roles with
+  `content.publish` (owner, admin, manager) mark content published or send it
+  out; nothing is published on its own, generated texts included.
+- **AI generator:** ideas, headlines, scripts, descriptions, hashtags, content
+  plans, captions, LinkedIn posts, ad copy, reworking a text for other
+  platforms — with tone, audience, language, format, platform, length and
+  creativity. Results are editable and saved only when chosen. Uses the
+  assistant's key and counts towards the same daily limits.
+- **Media library:** the documents store with images, videos and audio
+  (seekable playback), thumbnails and brand assets. Videos and audio up to
+  `MEDIA_MAX_MB` (default 100 — Cloudflare's free plan accepts at most 100 MB
+  per upload).
+
+| Variable | For |
+|---|---|
+| `YOUTUBE_API_KEY` | YouTube Data API v3 key (Google Cloud): subscribers, views and videos of connected channels |
+| `MEDIA_MAX_MB` | optional, largest video/audio upload in MB (default 100) |
+
+Social channels are connected under Integrations (owner/admin). Figures come
+only from the platforms' APIs and are fetched once a day and on "Update
+figures". Working today: **YouTube** (`YOUTUBE_API_KEY`) and **Telegram
+channels** (`BOT_TOKEN`; add the bot as channel admin to publish there).
+Instagram, TikTok, Facebook, LinkedIn and X need an approved developer app
+with OAuth per company and are listed as not available.
 
 ## Develop
 

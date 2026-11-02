@@ -8,17 +8,29 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/client";
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.heic,.docx,.xlsx,.pptx,.odt,.ods,.txt,.csv,application/pdf,image/*";
+const MEDIA_ACCEPT = `${ACCEPT},.mp4,.mov,.webm,.m4a,.mp3,.wav,.ogg,video/*,audio/*`;
 const MAX_BYTES = 15 * 1024 * 1024;
 
 /** Uploads files to the documents store, linked to whatever `meta` names (client, order, invoice). */
-export function UploadButton({ meta = {}, label, variant = "default" }: { meta?: Record<string, string | null | undefined>; label?: string; variant?: "default" | "outline" }) {
+export function UploadButton({
+  meta = {},
+  label,
+  variant = "default",
+  media,
+}: {
+  meta?: Record<string, string | null | undefined>;
+  label?: string;
+  variant?: "default" | "outline";
+  /** Videos and audio too, up to this many bytes each. */
+  media?: { maxBytes: number };
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
   const upload = async (files: File[]) => {
-    const tooBig = files.find((f) => f.size > MAX_BYTES);
+    const tooBig = files.find((f) => f.size > (media && /^(video|audio)\//.test(f.type) ? media.maxBytes : MAX_BYTES));
     if (tooBig) {
       toast.error(t("documents.TOO_LARGE"));
       return;
@@ -45,7 +57,7 @@ export function UploadButton({ meta = {}, label, variant = "default" }: { meta?:
         ref={input}
         type="file"
         multiple
-        accept={ACCEPT}
+        accept={media ? MEDIA_ACCEPT : ACCEPT}
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);

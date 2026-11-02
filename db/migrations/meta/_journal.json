@@ -64,6 +64,13 @@
       "when": 1793636192510,
       "tag": "0008_countries",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793644093381,
+      "tag": "0009_studio_dashboards",
+      "breakpoints": true
     }
   ]
 }

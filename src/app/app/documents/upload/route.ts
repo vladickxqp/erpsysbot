@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { NotFoundError } from "@/server/clients";
-import { DocumentError, MAX_DOCUMENT_BYTES, storeDocument } from "@/server/documents";
+import { DocumentError, MAX_DOCUMENT_BYTES, maxMediaBytes, storeDocument } from "@/server/documents";
 import { ForbiddenError } from "@/server/permissions";
 import { currentContext } from "@/server/request";
 
 export const runtime = "nodejs";
 
-/** Multipart upload of one or more files (field "file"), with optional client/order/invoice/category. */
+/** Multipart upload of one or more files (field "file"), with optional client/order/invoice/category/collection. */
 export async function POST(request: Request) {
   const ctx = await currentContext();
   if (!ctx) return NextResponse.json({ error: "auth" }, { status: 401 });
   const length = Number(request.headers.get("content-length") ?? 0);
-  if (length > MAX_DOCUMENT_BYTES * 5 + 1_000_000) return NextResponse.json({ error: "TOO_LARGE" }, { status: 413 });
+  if (length > Math.max(MAX_DOCUMENT_BYTES * 5, maxMediaBytes()) + 1_000_000) return NextResponse.json({ error: "TOO_LARGE" }, { status: 413 });
   const form = await request.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: "TYPE" }, { status: 400 });
   const field = (name: string) => {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       const doc = await storeDocument(
         ctx,
         { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) },
-        { category: field("category"), clientId: field("clientId"), orderId: field("orderId"), invoiceId: field("invoiceId") },
+        { category: field("category"), collection: field("collection"), clientId: field("clientId"), orderId: field("orderId"), invoiceId: field("invoiceId") },
       );
       saved.push(doc.id);
     }
