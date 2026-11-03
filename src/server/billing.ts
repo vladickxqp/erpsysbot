@@ -63,6 +63,22 @@ export function isActive(sub: Subscription | null, at = new Date()): boolean {
   return sub.status === "TRIALING" && !!sub.trialEndsAt && sub.trialEndsAt > at;
 }
 
+/** Which plan module a permission belongs to. */
+export const PLAN_MODULE_OF: Record<string, string> = {
+  clients: "crm",
+  orders: "orders",
+  products: "orders",
+  invoices: "invoices",
+  finance: "finance",
+  employees: "team",
+  ai: "assistant",
+  calendar: "calendar",
+  tasks: "tasks",
+  documents: "documents",
+  inventory: "inventory",
+  automation: "automation",
+};
+
 export type Entitlements = { active: boolean; unlimited: boolean; modules: Set<string>; maxUsers: number; aiPerDay: number; plan: Plan | null; sub: Subscription | null };
 
 export async function entitlementsOf(organizationId: string): Promise<Entitlements> {

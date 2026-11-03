@@ -7,7 +7,7 @@
  * loses its last OWNER.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
@@ -24,7 +24,7 @@ const RESET_MINUTES = 60;
 export const ASSIGNABLE_ROLES = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT"] as const satisfies readonly Role[];
 
 export class TeamError extends Error {
-  constructor(public readonly code: "ALREADY_MEMBER" | "OWNER_ONLY" | "LAST_OWNER" | "NOT_MEMBER" | "INVALID" | "WRONG_EMAIL" | "EMAIL_TAKEN") {
+  constructor(public readonly code: "ALREADY_MEMBER" | "OWNER_ONLY" | "LAST_OWNER" | "NOT_MEMBER" | "INVALID" | "WRONG_EMAIL" | "EMAIL_TAKEN" | "OTHER_COMPANIES") {
     super(code);
   }
 }
@@ -218,12 +218,24 @@ export async function passwordTokenForEmail(email: string): Promise<{ token: str
   return { token: await createPasswordToken(user.id), name: user.name, locale: user.locale };
 }
 
-/** An admin hands a member a password link (when no e-mail is set up). Not for OWNERs unless by an OWNER. */
+/**
+ * An admin hands a member a password link (when no e-mail is set up). Not for
+ * OWNERs unless by an OWNER — and only for people who belong to this company
+ * alone: a password opens every company of a person, which no single
+ * company's admin may hand out (nor the platform admin's).
+ */
 export async function passwordLinkForMember(ctx: Context, userId: string): Promise<string> {
   requirePermission(ctx.permissions, "employees.manage");
   const role = await memberRole(ctx.organization.id, userId);
   if (!role) throw new TeamError("NOT_MEMBER");
   if (role === "OWNER" && ctx.role !== "OWNER") throw new TeamError("OWNER_ONLY");
+  const [target] = await getDb().select({ admin: users.isPlatformAdmin }).from(users).where(eq(users.id, userId));
+  const elsewhere = await getDb()
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(and(eq(memberships.userId, userId), ne(memberships.organizationId, ctx.organization.id)))
+    .limit(1);
+  if (target?.admin || elsewhere.length) throw new TeamError("OTHER_COMPANIES");
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.password_link", "user", userId));
   return createPasswordToken(userId);
 }

@@ -13,15 +13,15 @@
  * a company whose country differs from where it signed up waits for the
  * platform admin's review before anyone can work in it.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { memberships, organizations, suspensions, users } from "@/db/schema";
+import { memberships, organizations, platformInvites, suspensions, users } from "@/db/schema";
 import { LOCALES } from "@/i18n";
 import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
 import { startTrial } from "./billing";
-import { findPlatformInvite, markPlatformInviteUsed } from "./platform";
+import { findPlatformInvite } from "./platform";
 import { registrationOpen } from "./settings";
 
 const email = z.string().trim().toLowerCase().email().max(200);
@@ -78,7 +78,9 @@ function validTimezone(zone: string | null | undefined): zone is string {
 export async function registerAccount(raw: RegisterInput, inviteToken?: string | null, ipCountry?: string | null) {
   if (regionRefused(ipCountry)) throw new AccountError("REGION_BLOCKED");
   const input = registerInput.parse(raw);
-  const invite = inviteToken ? await findPlatformInvite(inviteToken) : null;
+  const found = inviteToken ? await findPlatformInvite(inviteToken) : null;
+  // An invitation is for its address only; with another one it counts as none.
+  const invite = found && found.email.trim().toLowerCase() === input.email ? found : null;
   if (!invite && !(await registrationAllowed())) throw new AccountError("REGISTRATION_CLOSED");
   const profile = countryProfile(input.country);
   const passwordHash = await hashPassword(input.password);
@@ -91,6 +93,15 @@ export async function registerAccount(raw: RegisterInput, inviteToken?: string |
       .where(sql`lower(${users.email}) = ${input.email}`)
       .limit(1);
     if (taken.length) throw new AccountError("EMAIL_TAKEN");
+    // Claimed in the same transaction: one invitation, one company — even for two requests at once.
+    if (invite) {
+      const claimed = await tx
+        .update(platformInvites)
+        .set({ usedAt: new Date() })
+        .where(and(eq(platformInvites.id, invite.id), isNull(platformInvites.usedAt)))
+        .returning({ id: platformInvites.id });
+      if (!claimed.length) throw new AccountError("REGISTRATION_CLOSED");
+    }
     const [user] = await tx
       .insert(users)
       .values({ email: input.email, passwordHash, name: input.name, locale: input.locale, isPlatformAdmin: !anyone })
@@ -118,7 +129,6 @@ export async function registerAccount(raw: RegisterInput, inviteToken?: string |
     }
     return { userId: user.id, organizationId: org.id };
   });
-  if (invite) await markPlatformInviteUsed(invite.id);
   await startTrial(created.organizationId);
   return created;
 }
@@ -168,6 +178,12 @@ export async function authenticate(rawEmail: string, password: string, client = 
     .orderBy(memberships.createdAt)
     .limit(1);
   return { userId: user.id, organizationId: first?.organizationId ?? null };
+}
+
+/** The person's own password, asked again before sensitive changes. */
+export async function passwordMatches(userId: string, password: string): Promise<boolean> {
+  const [user] = await getDb().select({ hash: users.passwordHash }).from(users).where(eq(users.id, userId));
+  return !!user && (await verifyPassword(password, user.hash));
 }
 
 export async function membershipOf(userId: string, organizationId: string) {

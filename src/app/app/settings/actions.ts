@@ -14,6 +14,7 @@ import {
   startSetup,
   TwoFactorError,
 } from "@/server/auth/two-factor";
+import { passwordMatches } from "@/server/accounts";
 import { SESSION_COOKIE } from "@/server/auth/sessions";
 import { updateCompany, type CompanyInput } from "@/server/company";
 import { deleteAccount, deleteCompany, PrivacyError } from "@/server/privacy";
@@ -78,9 +79,11 @@ function securityFailure(e: unknown): SecurityResult {
   throw e;
 }
 
-export async function startTwoFactorAction(): Promise<SecurityResult> {
+/** Switching on needs the password: a session left open is not enough to lock its owner out. */
+export async function startTwoFactorAction(password: string): Promise<SecurityResult> {
   const ctx = await requireContext();
   try {
+    if (!(await passwordMatches(ctx.user.userId, password))) return { error: "privacy.WRONG_PASSWORD" };
     const { secret, uri } = await startSetup(ctx.user.userId, ctx.user.email);
     const qr = await QRCode.toString(uri, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
     return { secret, qr };

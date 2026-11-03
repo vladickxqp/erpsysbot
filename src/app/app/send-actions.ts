@@ -7,7 +7,7 @@ import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 import { SendError, sendDocument, type DocumentKind } from "@/server/send";
 
-export type SendResult = { ok?: boolean; error?: "forbidden" | "notFound" | "check" | "NO_MAIL" | "DRAFT" | "failed" };
+export type SendResult = { ok?: boolean; error?: "forbidden" | "notFound" | "check" | "NO_MAIL" | "DRAFT" | "LIMIT" | "failed" };
 
 /** E-mails an invoice, quote or reminder with its PDF. */
 export async function sendDocumentAction(kind: DocumentKind, id: string, to: string, message: string): Promise<SendResult> {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/app/legal-links";
 import { Logo } from "@/components/app/logo";
 import { LocaleSwitch } from "@/components/app/locale-switch";
 import { ThemeToggle } from "@/components/app/theme-toggle";
@@ -18,6 +19,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <main className="flex-1 grid place-items-center px-4 pb-16">
         <div className="w-full max-w-sm">{children}</div>
       </main>
+      <LegalLinks />
     </div>
   );
 }

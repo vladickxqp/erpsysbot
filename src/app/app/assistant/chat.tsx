@@ -21,13 +21,14 @@ const ERRORS = {
 
 /** Links the assistant writes (/app/... or the full address) become clickable. */
 function Linked({ text }: { text: string }) {
-  const parts = text.split(/((?:https?:\/\/[^\s)]+)?\/app\/[A-Za-z0-9/_-]+)/g);
+  // Only the /app/... part becomes the link: whatever host stands before it is dropped.
+  const parts = text.split(/((?:https?:\/\/[^\s)]+?)?\/app\/[A-Za-z0-9/_-]+)/g);
   return (
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <a key={i} href={part.replace(/^https?:\/\/[^/]+/, "")} className="font-medium text-primary underline-offset-2 hover:underline">
-            {part.replace(/^https?:\/\/[^/]+/, "")}
+          <a key={i} href={part.slice(part.indexOf("/app/"))} className="font-medium text-primary underline-offset-2 hover:underline">
+            {part.slice(part.indexOf("/app/"))}
           </a>
         ) : (
           <Fragment key={i}>{part}</Fragment>
@@ -37,8 +38,9 @@ function Linked({ text }: { text: string }) {
   );
 }
 
-export function Chat({ initial }: { initial: Message[] }) {
+export function Chat({ initial, ask }: { initial: Message[]; ask?: string }) {
   const { t } = useI18n();
+  const asked = useRef(false);
   const [messages, setMessages] = useState(initial);
   const [draft, setDraft] = useState("");
   const [pending, start] = useTransition();
@@ -65,6 +67,14 @@ export function Chat({ initial }: { initial: Message[] }) {
       ]);
     });
   };
+
+  // A question passed in the link (the dashboard's analysis) is asked once, then dropped from the address.
+  useEffect(() => {
+    if (!ask || asked.current) return;
+    asked.current = true;
+    window.history.replaceState(null, "", "/app/assistant");
+    send(ask);
+  }, [ask]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-10rem)] max-w-3xl flex-col lg:h-[calc(100dvh-7rem)]">

@@ -79,3 +79,18 @@ export function mailFrom(): string | null {
 export function youtubeKey(): string | null {
   return env("YOUTUBE_API_KEY") || null;
 }
+
+/** The operator of this server, for Impressum and privacy policy (LEGAL_* in .env). */
+export function legalInfo() {
+  const get = (name: string) => env(name) || null;
+  return {
+    name: get("LEGAL_NAME"),
+    address: get("LEGAL_ADDRESS")?.replace(/\n/g, "\n") ?? null,
+    email: get("LEGAL_EMAIL"),
+    phone: get("LEGAL_PHONE"),
+    representative: get("LEGAL_REPRESENTATIVE"),
+    register: get("LEGAL_REGISTER"),
+    vatId: get("LEGAL_VAT_ID"),
+    hosting: get("LEGAL_HOSTING"),
+  };
+}

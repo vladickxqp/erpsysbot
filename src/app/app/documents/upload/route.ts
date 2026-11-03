@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { NotFoundError } from "@/server/clients";
 import { DocumentError, MAX_DOCUMENT_BYTES, maxMediaBytes, storeDocument } from "@/server/documents";
 import { ForbiddenError } from "@/server/permissions";
-import { currentContext } from "@/server/request";
+import { activeContext } from "@/server/request";
 
 export const runtime = "nodejs";
 
 /** Multipart upload of one or more files (field "file"), with optional client/order/invoice/category/collection. */
 export async function POST(request: Request) {
-  const ctx = await currentContext();
+  const ctx = await activeContext();
   if (!ctx) return NextResponse.json({ error: "auth" }, { status: 401 });
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > Math.max(MAX_DOCUMENT_BYTES * 5, maxMediaBytes()) + 1_000_000) return NextResponse.json({ error: "TOO_LARGE" }, { status: 413 });

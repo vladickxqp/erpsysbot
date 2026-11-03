@@ -30,7 +30,7 @@ export function datevOf(raw: unknown): DatevSettings | null {
   return parsed.success ? parsed.data : null;
 }
 
-export async function saveDatevSettings(ctx: Context, raw: z.input<typeof datevSettings>): Promise<DatevSettings> {
+export async function saveDatevSettings(ctx: Context, raw: Record<string, unknown>): Promise<DatevSettings> {
   requirePermission(ctx.permissions, "settings.manage");
   const value = datevSettings.parse(raw);
   await getDb().update(organizations).set({ datev: value }).where(eq(organizations.id, ctx.organization.id));

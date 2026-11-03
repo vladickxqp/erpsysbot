@@ -49,7 +49,11 @@ async function ipCountry(): Promise<string | null> {
 /** Only a path inside this app: never another site. */
 function safeNext(value: FormDataEntryValue | null): string {
   const next = String(value ?? "");
-  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/app";
+  if (!next.startsWith("/")) return "/app";
+  // Parsed the way a browser does (tabs and backslashes included): it must stay on this site.
+  const base = "http://app.invalid";
+  const url = new URL(next, base);
+  return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : "/app";
 }
 
 async function chosenLocale() {

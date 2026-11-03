@@ -9,7 +9,7 @@ import { moduleOfPath, type AppModule } from "@/lib/modules";
 import { SESSION_COOKIE, readSession } from "./auth/sessions";
 import { contextFor, type Context } from "./context";
 import type { Permission } from "./permissions";
-import { entitlementsOf } from "./billing";
+import { entitlementsOf, PLAN_MODULE_OF } from "./billing";
 import { isSuspended } from "./platform";
 import { appUrl } from "./settings";
 
@@ -31,21 +31,13 @@ export async function requireContext(): Promise<Context> {
   return ctx;
 }
 
-/** Which plan module a permission belongs to. */
-const MODULE_OF: Record<string, string> = {
-  clients: "crm",
-  orders: "orders",
-  products: "orders",
-  invoices: "invoices",
-  finance: "finance",
-  employees: "team",
-  ai: "assistant",
-  calendar: "calendar",
-  tasks: "tasks",
-  documents: "documents",
-  inventory: "inventory",
-  automation: "automation",
-};
+/** The context for route handlers: null when signed out or the company is suspended. */
+export async function activeContext(): Promise<Context | null> {
+  const ctx = await currentContext();
+  if (!ctx) return null;
+  if (!ctx.user.isPlatformAdmin && (await isSuspended(ctx.organization.id))) return null;
+  return ctx;
+}
 
 /** A page of a module the company switched off leads back to the overview. */
 export function requireModule(ctx: Context, module: AppModule | null): void {
@@ -67,7 +59,7 @@ export async function requirePageContext(permission: Permission): Promise<Contex
   if (!ctx.permissions.has(permission)) redirect("/app");
   requireModule(ctx, await currentModule());
   const ent = await entitlementsOf(ctx.organization.id);
-  const planModule = MODULE_OF[permission.split(".")[0]];
+  const planModule = PLAN_MODULE_OF[permission.split(".")[0]];
   if (!ent.unlimited && (!ent.active || (planModule && !ent.modules.has(planModule)))) redirect("/app/billing");
   return ctx;
 }
@@ -77,7 +69,9 @@ export async function publicBase(): Promise<string> {
   const configured = appUrl();
   if (configured) return configured;
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  // Links in e-mails must not follow a header someone sent: in production only APP_URL or Host count.
+  if (process.env.NODE_ENV === "production") console.warn("APP_URL is not set: links in e-mails use the Host header");
+  const host = (process.env.NODE_ENV === "production" ? null : h.get("x-forwarded-host")) ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }

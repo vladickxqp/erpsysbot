@@ -1,12 +1,12 @@
 import { PrivacyError, companyExport } from "@/server/privacy";
-import { currentContext } from "@/server/request";
+import { activeContext } from "@/server/request";
 import { zipStream } from "@/server/zip";
 
 export const runtime = "nodejs";
 
 /** All of the company's data and files as one ZIP (owners only). */
 export async function GET() {
-  const ctx = await currentContext();
+  const ctx = await activeContext();
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   try {
     const { filename, entries } = await companyExport(ctx);

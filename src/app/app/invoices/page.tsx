@@ -1,4 +1,4 @@
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Repeat } from "lucide-react";
 import Link from "next/link";
 import { InvoiceStatusBadge } from "@/components/app/badges";
 import { FilterChips, Pager, SearchBox } from "@/components/app/list-controls";
@@ -31,13 +31,20 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title={t("invoices.title")}
         actions={
-          canCreate && (
-            <Button asChild>
-              <Link href="/app/invoices/new">
-                <Plus className="size-4" /> {t("invoices.new")}
+          <>
+            <Button asChild variant="outline">
+              <Link href="/app/invoices/recurring">
+                <Repeat className="size-4" /> {t("recurring.title")}
               </Link>
             </Button>
-          )
+            {canCreate && (
+              <Button asChild>
+                <Link href="/app/invoices/new">
+                  <Plus className="size-4" /> {t("invoices.new")}
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
       <div className="mb-4 grid gap-3">

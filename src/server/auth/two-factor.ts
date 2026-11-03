@@ -8,7 +8,7 @@
  * five tries in five minutes.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { loginChallenges, sessions, users } from "@/db/schema";
 
@@ -82,6 +82,20 @@ export function matchStep(secret: string, code: string, at = Date.now()): number
 }
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/** Wrong codes per person: more than ten in fifteen minutes and every code is refused for a while. */
+const FAILURES = 10;
+const FAILURE_WINDOW_MS = 15 * 60_000;
+const failures = new Map<string, number[]>();
+const recentFailures = (userId: string) => (failures.get(userId) ?? []).filter((t) => Date.now() - t < FAILURE_WINDOW_MS);
+function failed(userId: string): void {
+  failures.set(userId, [...recentFailures(userId), Date.now()]);
+}
+
+/** For tests: forget wrong codes. */
+export function resetTwoFactorThrottle(): void {
+  failures.clear();
+}
 const recoveryHash = (code: string) => sha(code.toLowerCase().replace(/[^a-z0-9]/g, ""));
 
 function newRecoveryCodes(): string[] {
@@ -125,8 +139,15 @@ export async function confirmSetup(userId: string, code: string, at = Date.now()
  * with two factors on. A code of a step already used is refused.
  */
 export async function checkSecondFactor(userId: string, code: string, at = Date.now()): Promise<boolean> {
+  if (recentFailures(userId).length >= FAILURES) return false;
+  const ok = await verifySecondFactor(userId, code, at);
+  if (!ok) failed(userId);
+  return ok;
+}
+
+async function verifySecondFactor(userId: string, code: string, at: number): Promise<boolean> {
   const db = getDb();
-  const [row] = await db.select({ secret: users.totpSecret, last: users.totpLastStep, recovery: users.recoveryCodes }).from(users).where(eq(users.id, userId));
+  const [row] = await db.select({ secret: users.totpSecret, last: users.totpLastStep }).from(users).where(eq(users.id, userId));
   if (!row?.secret) return false;
   const step = matchStep(row.secret, code, at);
   if (step !== null) {
@@ -138,13 +159,15 @@ export async function checkSecondFactor(userId: string, code: string, at = Date.
       .returning({ id: users.id });
     return updated.length > 0;
   }
+  if (!/^[a-z0-9-]{8,9}$/i.test(code.trim())) return false;
+  // Taken out in one statement: a recovery code works once, even for two requests at the same time.
   const hashed = recoveryHash(code);
-  if (!/^[a-z0-9-]{8,9}$/i.test(code.trim()) || !row.recovery.includes(hashed)) return false;
-  await db
+  const used = await db
     .update(users)
-    .set({ recoveryCodes: row.recovery.filter((c) => c !== hashed) })
-    .where(eq(users.id, userId));
-  return true;
+    .set({ recoveryCodes: sql`array_remove(${users.recoveryCodes}, ${hashed})` })
+    .where(and(eq(users.id, userId), sql`${hashed} = any(${users.recoveryCodes})`))
+    .returning({ id: users.id });
+  return used.length > 0;
 }
 
 /** Switching off needs a valid code: a stolen session alone cannot do it. */
@@ -182,11 +205,15 @@ export async function completeChallenge(token: string, code: string): Promise<{ 
     .from(loginChallenges)
     .where(and(eq(loginChallenges.tokenHash, sha(token)), gt(loginChallenges.expiresAt, new Date())))
     .limit(1);
-  if (!challenge || challenge.attempts >= MAX_TRIES) throw new TwoFactorError("EXPIRED");
-  if (!(await checkSecondFactor(challenge.userId, code))) {
-    await db.update(loginChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(loginChallenges.id, challenge.id));
-    throw new TwoFactorError(challenge.attempts + 1 >= MAX_TRIES ? "EXPIRED" : "INVALID_CODE");
-  }
+  if (!challenge) throw new TwoFactorError("EXPIRED");
+  // Count the try before checking it: parallel requests cannot share one try.
+  const [counted] = await db
+    .update(loginChallenges)
+    .set({ attempts: sql`${loginChallenges.attempts} + 1` })
+    .where(and(eq(loginChallenges.id, challenge.id), lt(loginChallenges.attempts, MAX_TRIES)))
+    .returning({ attempts: loginChallenges.attempts });
+  if (!counted) throw new TwoFactorError("EXPIRED");
+  if (!(await checkSecondFactor(challenge.userId, code))) throw new TwoFactorError(counted.attempts >= MAX_TRIES ? "EXPIRED" : "INVALID_CODE");
   await db.delete(loginChallenges).where(eq(loginChallenges.id, challenge.id));
   return { userId: challenge.userId, organizationId: challenge.organizationId };
 }

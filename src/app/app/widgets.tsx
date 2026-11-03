@@ -317,8 +317,8 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
             <Notices items={data.recommendations} empty={t("widgets.noRecommendations")} icon={Lightbulb} />
             {data.assistant && (
               <Button asChild size="sm" variant="outline" className="justify-self-start">
-                <Link href="/app/assistant">
-                  <Sparkles className="size-4" /> {t("widgets.askAssistant")}
+                <Link href={`/app/assistant?ask=${encodeURIComponent(t("widgets.analysisPrompt"))}`}>
+                  <Sparkles className="size-4" /> {t("widgets.aiAnalysis")}
                 </Link>
               </Button>
             )}

@@ -10,7 +10,7 @@ export async function generateMetadata() {
   return { title: t("nav.ai") };
 }
 
-export default async function AssistantPage() {
+export default async function AssistantPage({ searchParams }: { searchParams: Promise<{ ask?: string }> }) {
   const ctx = await requirePageContext("ai.use");
   const { t } = await getT();
   if (!assistantAvailable()) {
@@ -22,5 +22,6 @@ export default async function AssistantPage() {
     );
   }
   const messages = await conversation(ctx, "web");
-  return <Chat initial={messages.map((m) => ({ id: m.id, role: m.role, content: m.content, tools: m.tools }))} />;
+  const { ask } = await searchParams;
+  return <Chat initial={messages.map((m) => ({ id: m.id, role: m.role, content: m.content, tools: m.tools }))} ask={ask?.slice(0, 500)} />;
 }

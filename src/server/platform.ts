@@ -148,10 +148,6 @@ export async function findPlatformInvite(token: string): Promise<{ id: string; e
   return row ?? null;
 }
 
-export async function markPlatformInviteUsed(id: string): Promise<void> {
-  await getDb().update(platformInvites).set({ usedAt: new Date() }).where(eq(platformInvites.id, id));
-}
-
 export async function openPlatformInvites(user: SessionUser) {
   requirePlatformAdmin(user);
   return getDb()

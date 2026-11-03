@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { NotFoundError } from "@/server/clients";
+import { saveDatevSettings } from "@/server/datev";
 import { createTransaction, deleteTransaction } from "@/server/finance";
 import { parseMoney } from "@/server/money";
 import { ForbiddenError } from "@/server/permissions";
@@ -43,6 +44,19 @@ export async function deleteTransactionAction(id: string): Promise<FinanceResult
   } catch (e) {
     if (e instanceof ForbiddenError) return { error: "forbidden" };
     if (e instanceof NotFoundError) return { error: "notFound" };
+    throw e;
+  }
+}
+
+export async function saveDatevAction(input: { consultant: string; client: string; chart: "SKR03" | "SKR04"; fiscalStartMonth: string }): Promise<{ ok?: boolean; error?: string }> {
+  const ctx = await requireContext();
+  try {
+    await saveDatevSettings(ctx, input);
+    revalidatePath("/app/finance");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "common.forbidden" };
+    if (e instanceof ZodError) return { error: "datev.invalid" };
     throw e;
   }
 }

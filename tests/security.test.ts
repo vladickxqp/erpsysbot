@@ -203,3 +203,70 @@ describe("audit trail", () => {
     expect(auditSummary({ from: "DRAFT", to: "PUBLISHED" })).toBe("DRAFT → PUBLISHED");
   });
 });
+
+describe("review fixes", () => {
+  it("hands out password links only for people of this company alone", async () => {
+    const { passwordLinkForMember } = await import("@/server/team");
+    const { memberships } = await import("@/db/schema");
+    const a = await newCompany("Link A GmbH");
+    const b = await newCompany("Link B GmbH");
+    const shared = await newMember(a, "EMPLOYEE");
+    expect(await passwordLinkForMember(a, shared.user.userId)).toMatch(/^[A-Za-z0-9_-]{16,64}$/);
+    await getDb().insert(memberships).values({ organizationId: b.organization.id, userId: shared.user.userId, role: "OWNER" });
+    await expect(passwordLinkForMember(a, shared.user.userId)).rejects.toMatchObject({ code: "OTHER_COMPANIES" });
+  });
+
+  it("connects a Telegram channel only for its admin, and only to one company", async () => {
+    const saved = process.env.BOT_TOKEN;
+    process.env.BOT_TOKEN = "123:test";
+    try {
+      const { addSocialAccount } = await import("@/server/social");
+      const { telegramLinks } = await import("@/db/schema");
+      const owner = await newCompany("Kanal Eins GmbH");
+      const call = (status: string) =>
+        (async (method: string) => {
+          if (method === "getChat") return { id: -1001, title: "News", username: "news_x", type: "channel" };
+          if (method === "getChatMemberCount") return 120;
+          if (method === "getChatMember") return { status };
+          throw new Error(method);
+        }) as never;
+      await expect(addSocialAccount(owner, "TELEGRAM", "@news_x", fetch, call("administrator"))).rejects.toMatchObject({ code: "LINK_TELEGRAM" });
+      await getDb().insert(telegramLinks).values({ userId: owner.user.userId, organizationId: owner.organization.id, telegramUserId: "777", chatId: "777" });
+      await expect(addSocialAccount(owner, "TELEGRAM", "@news_x", fetch, call("member"))).rejects.toMatchObject({ code: "NOT_CHANNEL_ADMIN" });
+      await addSocialAccount(owner, "TELEGRAM", "@news_x", fetch, call("creator"));
+      const other = await newCompany("Kanal Zwei GmbH");
+      await expect(addSocialAccount(other, "TELEGRAM", "https://t.me/news_x", fetch, call("administrator"))).rejects.toMatchObject({ code: "TAKEN" });
+    } finally {
+      process.env.BOT_TOKEN = saved;
+    }
+  });
+
+  it("counts every code try, even at the same time, and stops after too many wrong codes", async () => {
+    const { resetTwoFactorThrottle } = await import("@/server/auth/two-factor");
+    const ctx = await newCompany("Parallel GmbH");
+    const { secret } = await startSetup(ctx.user.userId, ctx.user.email);
+    await confirmSetup(ctx.user.userId, totpAt(secret, stepOf()));
+    const challenge = await createChallenge(ctx.user.userId, null);
+    const results = await Promise.allSettled(Array.from({ length: 8 }, () => completeChallenge(challenge, "000000")));
+    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    await expect(completeChallenge(challenge, totpAt(secret, stepOf() + 1))).rejects.toMatchObject({ code: "EXPIRED" });
+
+    for (let i = 0; i < 10; i++) await checkSecondFactor(ctx.user.userId, "111111");
+    // Locked for a while: even a right code is refused.
+    expect(await checkSecondFactor(ctx.user.userId, totpAt(secret, stepOf() + 1))).toBe(false);
+    resetTwoFactorThrottle();
+  });
+
+  it("limits the mails of one company per day", async () => {
+    const { takeMailBudget } = await import("@/server/mail");
+    const saved = process.env.MAIL_DAILY_LIMIT;
+    process.env.MAIL_DAILY_LIMIT = "2";
+    try {
+      const org = crypto.randomUUID();
+      expect([takeMailBudget(org), takeMailBudget(org), takeMailBudget(org)]).toEqual([true, true, false]);
+      expect(takeMailBudget(crypto.randomUUID())).toBe(true);
+    } finally {
+      process.env.MAIL_DAILY_LIMIT = saved;
+    }
+  });
+});

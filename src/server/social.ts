@@ -11,9 +11,9 @@
  * Instagram, TikTok, Facebook, LinkedIn and X need an approved developer app
  * with OAuth per company; they are listed as not available until that exists.
  */
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { contentItems, documents, socialAccounts, socialStats } from "@/db/schema";
+import { contentItems, documents, socialAccounts, socialStats, telegramLinks } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
 import { NotFoundError } from "./clients";
@@ -31,7 +31,9 @@ export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 export const READABLE: readonly SocialProvider[] = ["YOUTUBE", "TELEGRAM"];
 
 export class SocialError extends Error {
-  constructor(public readonly code: "NOT_CONFIGURED" | "NOT_SUPPORTED" | "NOT_FOUND" | "FAILED" | "DUPLICATE" | "NOT_TELEGRAM" | "EMPTY") {
+  constructor(
+    public readonly code: "NOT_CONFIGURED" | "NOT_SUPPORTED" | "NOT_FOUND" | "FAILED" | "DUPLICATE" | "NOT_TELEGRAM" | "EMPTY" | "LINK_TELEGRAM" | "NOT_CHANNEL_ADMIN" | "TAKEN",
+  ) {
     super(code);
   }
 }
@@ -70,12 +72,14 @@ async function youtube(id: string, fetcher: Fetch): Promise<Figures> {
   };
 }
 
-async function telegram(id: string): Promise<Figures> {
+type TelegramCall = <T>(method: string, payload: Record<string, unknown>) => Promise<T>;
+
+async function telegram(id: string, call: TelegramCall = callTelegram): Promise<Figures> {
   if (!botToken()) throw new SocialError("NOT_CONFIGURED");
   try {
-    const chat = await callTelegram<{ id: number; title?: string; username?: string; type: string }>("getChat", { chat_id: id });
+    const chat = await call<{ id: number; title?: string; username?: string; type: string }>("getChat", { chat_id: id });
     if (chat.type !== "channel" && chat.type !== "supergroup") throw new SocialError("NOT_FOUND");
-    const members = await callTelegram<number>("getChatMemberCount", { chat_id: id });
+    const members = await call<number>("getChatMemberCount", { chat_id: id });
     return {
       name: chat.title ?? id,
       url: chat.username ? `https://t.me/${chat.username}` : null,
@@ -91,9 +95,9 @@ async function telegram(id: string): Promise<Figures> {
 }
 
 /** The provider's current figures for a channel. */
-export async function fetchFigures(provider: string, externalId: string, fetcher: Fetch = fetch): Promise<Figures> {
+export async function fetchFigures(provider: string, externalId: string, fetcher: Fetch = fetch, call: TelegramCall = callTelegram): Promise<Figures> {
   if (provider === "YOUTUBE") return youtube(externalId, fetcher);
-  if (provider === "TELEGRAM") return telegram(externalId);
+  if (provider === "TELEGRAM") return telegram(externalId, call);
   throw new SocialError("NOT_SUPPORTED");
 }
 
@@ -128,11 +132,32 @@ async function storeFigures(organizationId: string, accountId: string, timezone:
   });
 }
 
-export async function addSocialAccount(ctx: Context, provider: string, value: string, fetcher: Fetch = fetch) {
+/**
+ * A Telegram channel is the company's only when the person connecting it
+ * administers it in Telegram (through their linked Telegram account), and no
+ * other company has it: the bot is shared, so otherwise anyone could post
+ * into anyone's channel.
+ */
+async function checkTelegramOwner(ctx: Context, channel: string, call: TelegramCall): Promise<void> {
+  const [link] = await getDb().select({ telegramUserId: telegramLinks.telegramUserId }).from(telegramLinks).where(eq(telegramLinks.userId, ctx.user.userId));
+  if (!link) throw new SocialError("LINK_TELEGRAM");
+  const member = await call<{ status: string }>("getChatMember", { chat_id: channel, user_id: Number(link.telegramUserId) }).catch(() => null);
+  if (!member || !["creator", "administrator"].includes(member.status)) throw new SocialError("NOT_CHANNEL_ADMIN");
+}
+
+export async function addSocialAccount(ctx: Context, provider: string, value: string, fetcher: Fetch = fetch, call: TelegramCall = callTelegram) {
   requirePermission(ctx.permissions, "settings.manage");
   if (!(READABLE as readonly string[]).includes(provider)) throw new SocialError("NOT_SUPPORTED");
   if (!value.trim()) throw new SocialError("NOT_FOUND");
-  const figures = await fetchFigures(provider, normalizeExternalId(provider, value), fetcher);
+  const figures = await fetchFigures(provider, normalizeExternalId(provider, value), fetcher, call);
+  if (provider === "TELEGRAM") {
+    const [elsewhere] = await getDb()
+      .select({ id: socialAccounts.id })
+      .from(socialAccounts)
+      .where(and(eq(socialAccounts.provider, "TELEGRAM"), eq(socialAccounts.externalId, figures.externalId), ne(socialAccounts.organizationId, ctx.organization.id)));
+    if (elsewhere) throw new SocialError("TAKEN");
+    await checkTelegramOwner(ctx, figures.externalId, call);
+  }
   const account = await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx
       .insert(socialAccounts)

@@ -32,7 +32,7 @@ function device(ua: string | null): string {
   return [browser, os].filter(Boolean).join(" · ");
 }
 
-type Step = { kind: "setup"; secret: string; qr: string } | { kind: "codes"; codes: string[] } | { kind: "disable" } | { kind: "renew" } | null;
+type Step = { kind: "password" } | { kind: "setup"; secret: string; qr: string } | { kind: "codes"; codes: string[] } | { kind: "disable" } | { kind: "renew" } | null;
 
 export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boolean; recoveryLeft: number; sessions: Session[] }) {
   const { t, locale, region } = useI18n();
@@ -52,6 +52,7 @@ export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boo
 
   const submitCode = () => {
     if (!step) return;
+    if (step.kind === "password") run(() => startTwoFactorAction(code), (r) => setStep({ kind: "setup", secret: r.secret!, qr: r.qr! }));
     if (step.kind === "setup") run(() => confirmTwoFactorAction(code), (r) => setStep({ kind: "codes", codes: r.codes ?? [] }));
     if (step.kind === "disable") run(() => disableTwoFactorAction(code), () => setStep(null));
     if (step.kind === "renew") run(() => recoveryCodesAction(code), (r) => setStep({ kind: "codes", codes: r.codes ?? [] }));
@@ -85,7 +86,7 @@ export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boo
             </div>
           ) : (
             <div>
-              <Button size="sm" disabled={pending} onClick={() => run(startTwoFactorAction, (r) => setStep({ kind: "setup", secret: r.secret!, qr: r.qr! }))}>
+              <Button size="sm" disabled={pending} onClick={() => setStep({ kind: "password" })}>
                 {t("security.enable")}
               </Button>
             </div>
@@ -160,10 +161,17 @@ export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boo
                     <code className="break-all rounded bg-muted px-2 py-1 text-center text-xs">{step.secret}</code>
                   </>
                 )}
-                <div className="grid gap-1.5">
-                  <Label htmlFor="sec-code">{t("auth.code")}</Label>
-                  <Input id="sec-code" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus required maxLength={12} />
-                </div>
+                {step.kind === "password" ? (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="sec-password">{t("auth.password")}</Label>
+                    <Input id="sec-password" type="password" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="current-password" autoFocus required />
+                  </div>
+                ) : (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="sec-code">{t("auth.code")}</Label>
+                    <Input id="sec-code" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus required maxLength={12} />
+                  </div>
+                )}
                 <DialogFooter>
                   <Button type="submit" disabled={pending || !code.trim()}>
                     {t("security.confirm")}

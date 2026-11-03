@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { MESSAGES, isLocale, translator } from "@/i18n";
 import { BillingError } from "@/server/billing";
-import { mailAvailable, sendMail } from "@/server/mail";
+import { mailAvailable, sendMail, takeMailBudget } from "@/server/mail";
 import { ForbiddenError, type Role } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
 import { TeamError, changeRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation } from "@/server/team";
@@ -31,7 +31,7 @@ export async function inviteAction(email: string, role: Role): Promise<TeamResul
     const invite = await inviteMember(ctx, { email, role: role as never });
     const url = `${await publicBase()}/invite/${invite.token}`;
     let mailed = false;
-    if (mailAvailable()) {
+    if (mailAvailable() && takeMailBudget(ctx.organization.id)) {
       const t = translator(MESSAGES[isLocale(ctx.user.locale) ? ctx.user.locale : "de"]);
       mailed = await sendMail({
         to: invite.email,

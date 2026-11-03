@@ -25,6 +25,8 @@ backend, one database, every interface on top of it.
 | Modules on/off per company and per person; personal dashboards with widgets (drag & drop, sizes, several dashboards) | ✅ |
 | Creator Studio: content calendar (day/week/month), editor, team comments, templates, AI generator | ✅ |
 | Media library (images, videos, audio, documents, thumbnails, brand assets), social channels (YouTube, Telegram), integrations | ✅ |
+| Two-factor sign-in, device list, data export and deletion (DSGVO), change log, legal pages | ✅ |
+| Recurring invoices, bank statement import (CAMT.053/CSV) with matching, DATEV export | ✅ |
 
 ## How tenants are kept apart
 
@@ -145,6 +147,40 @@ figures". Working today: **YouTube** (`YOUTUBE_API_KEY`) and **Telegram
 channels** (`BOT_TOKEN`; add the bot as channel admin to publish there).
 Instagram, TikTok, Facebook, LinkedIn and X need an approved developer app
 with OAuth per company and are listed as not available.
+
+### Security, data protection, legal pages
+
+- **Two-factor sign-in:** Settings → Security (authenticator app + 10 recovery
+  codes). A password-reset link never skips the second factor.
+- **Data protection:** Settings → Data and privacy — download one's own data
+  (JSON), the owner downloads everything of the company (ZIP with files),
+  deletes the company (name + password) or their own account.
+- **Change log:** `/app/audit` for owners and admins.
+- **Legal pages:** `/impressum`, `/datenschutz`, `/agb`, `/avv` (German). They
+  are templates: fill in the operator and **have them checked by a lawyer**.
+
+| Variable | For |
+|---|---|
+| `LEGAL_NAME`, `LEGAL_ADDRESS` (lines with `
+`), `LEGAL_EMAIL`, `LEGAL_PHONE` | operator in Impressum, privacy policy, terms, DPA |
+| `LEGAL_REPRESENTATIVE`, `LEGAL_REGISTER`, `LEGAL_VAT_ID` | optional Impressum lines (managing director, "Amtsgericht … HRB …", USt-IdNr.) |
+| `LEGAL_HOSTING` | hosting provider and location for privacy policy and DPA |
+
+**Monitoring:** point an external uptime check (e.g. UptimeRobot, free) at
+`https://<your domain>/api/health` — it answers 200 only while the app and the
+database work. GitHub Actions run lint, types, tests and the build on every push.
+
+### Accounting
+
+- **Recurring invoices:** Invoices → Recurring. Weekly to yearly; draft, or
+  issued and e-mailed automatically. Missed dates are caught up, each date is
+  billed once.
+- **Bank:** Finance → Bank. Import CAMT.053 (XML) or the bank's CSV export;
+  lines are kept once. Money in that names an open invoice with its exact
+  amount marks it paid; the rest is suggested, booked or ignored by hand.
+- **DATEV:** Finance → DATEV (German/Austrian companies). Adviser and client
+  number, SKR03/SKR04; exports issued invoices (split by tax rate) and payments
+  as an EXTF booking batch per fiscal year. Expenses stay with the adviser.
 
 ## Develop
 

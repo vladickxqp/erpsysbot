@@ -5,6 +5,7 @@
  * on the link — with that user's role, exactly as in the app. Unlinked
  * accounts only get the way to link.
  */
+import { isSuspended } from "../platform";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { users } from "@/db/schema";
@@ -62,6 +63,8 @@ export function commandList(locale: Locale) {
 async function contextOf(link: TelegramLink): Promise<Context | null> {
   const [user] = await getDb().select().from(users).where(eq(users.id, link.userId));
   if (!user) return null;
+  // A suspended company (or one still in review) is closed in the chat as well.
+  if (link.organizationId && !user.isPlatformAdmin && (await isSuspended(link.organizationId))) return null;
   return contextFor({
     sessionId: "telegram",
     userId: user.id,

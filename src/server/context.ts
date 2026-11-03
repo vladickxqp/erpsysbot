@@ -9,6 +9,7 @@ import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { cleanModules, type AppModule } from "@/lib/modules";
 import { memberships, organizations } from "@/db/schema";
+import { entitlementsOf, PLAN_MODULE_OF } from "./billing";
 import { permissionsFor, type Permission, type Role } from "./permissions";
 import type { SessionUser } from "./auth/sessions";
 
@@ -47,6 +48,16 @@ export async function contextFor(user: SessionUser): Promise<Context | null> {
   for (const m of disabledModules) for (const p of MODULE_PERMISSIONS[m] ?? []) permissions.delete(p);
   // Reading content serves the social channels too: it goes only when both are off.
   if (disabledModules.has("content") && disabledModules.has("social")) permissions.delete("content.read");
+  // What the plan does not include (or everything, once the subscription ended) is not allowed —
+  // in every action and route, not only on the pages. Billing and settings stay reachable.
+  const ent = await entitlementsOf(active.organization.id);
+  if (!ent.unlimited) {
+    for (const p of [...permissions]) {
+      if (p === "billing.manage" || p === "settings.manage") continue;
+      const planModule = PLAN_MODULE_OF[p.split(".")[0]];
+      if (!ent.active || (planModule && !ent.modules.has(planModule))) permissions.delete(p);
+    }
+  }
   return {
     user,
     organization: active.organization,

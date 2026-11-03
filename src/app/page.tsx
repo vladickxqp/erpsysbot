@@ -1,5 +1,6 @@
 import { ArrowRight, Bot, Receipt, Users } from "lucide-react";
 import Link from "next/link";
+import { LegalLinks } from "@/components/app/legal-links";
 import { LocaleSwitch } from "@/components/app/locale-switch";
 import { Logo } from "@/components/app/logo";
 import { ThemeToggle } from "@/components/app/theme-toggle";
@@ -50,6 +51,7 @@ export default async function Home() {
           ))}
         </section>
       </main>
+      <LegalLinks />
     </div>
   );
 }

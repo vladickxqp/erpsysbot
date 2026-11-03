@@ -22,6 +22,23 @@ export function setMailSender(fn: Sender | null): void {
   override = fn;
 }
 
+/**
+ * Mails per company and day (MAIL_DAILY_LIMIT, default 200): the server's
+ * sender address must not become anyone's spam cannon. Counted in memory,
+ * reset with the day.
+ */
+const sentToday = new Map<string, { day: string; count: number }>();
+
+export function takeMailBudget(organizationId: string): boolean {
+  const limit = Number(process.env.MAIL_DAILY_LIMIT) > 0 ? Math.floor(Number(process.env.MAIL_DAILY_LIMIT)) : 200;
+  const day = new Date().toISOString().slice(0, 10);
+  const entry = sentToday.get(organizationId);
+  const count = entry?.day === day ? entry.count : 0;
+  if (count >= limit) return false;
+  sentToday.set(organizationId, { day, count: count + 1 });
+  return true;
+}
+
 export function mailAvailable(): boolean {
   return override !== null || smtp() !== null;
 }

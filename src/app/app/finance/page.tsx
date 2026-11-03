@@ -1,13 +1,17 @@
-import { ArrowDownRight, ArrowUpRight, Scale } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Landmark, Scale } from "lucide-react";
+import Link from "next/link";
 import { FilterChips } from "@/components/app/list-controls";
 import { FlowChart } from "@/components/app/flow-chart";
 import { PageHeader, StatCard } from "@/components/app/page";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney } from "@/i18n";
 import { getT } from "@/i18n/server";
+import { datevOf } from "@/server/datev";
 import { financeSummary, listTransactions, monthlyFlow } from "@/server/finance";
 import { today } from "@/server/money";
 import { requirePageContext } from "@/server/request";
+import { DatevDialog } from "./datev-dialog";
 import { Transactions } from "./transactions";
 
 export async function generateMetadata() {
@@ -49,7 +53,26 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const money = (c: number) => formatMoney(c, locale, region);
   return (
     <>
-      <PageHeader title={t("finance.title")} />
+      <PageHeader
+        title={t("finance.title")}
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/app/finance/bank">
+                <Landmark className="size-4" /> {t("bank.title")}
+              </Link>
+            </Button>
+            {ctx.permissions.has("finance.export") && ["DE", "AT"].includes(ctx.organization.country) && (
+              <DatevDialog
+                settings={datevOf(ctx.organization.datev)}
+                canSetUp={ctx.permissions.has("settings.manage")}
+                from={`${from.slice(0, 4)}-${from.slice(5, 7)}-01`}
+                to={to}
+              />
+            )}
+          </>
+        }
+      />
       <div className="mb-4">
         <FilterChips name="period" options={PERIODS.map((p) => ({ value: p === "thisMonth" ? null : p, label: t(`finance.${p}`) }))} />
       </div>

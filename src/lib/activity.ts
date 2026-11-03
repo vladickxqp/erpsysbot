@@ -21,6 +21,7 @@ export const ACTIVITY_VERB: Record<string, string> = {
   payment: "paid",
   publish: "published",
   receive: "received",
+  import: "created",
 };
 
 export const ACTIVITY_ENTITIES = [

@@ -33,8 +33,11 @@ describe("platform admin", () => {
     await expect(registerAccount({ name: "Ohne", email: unique("ohne"), password: "long enough password", company: "Ohne GmbH", country: "DE" })).rejects.toMatchObject({ code: "REGISTRATION_CLOSED" });
     await expect(invitePlatform(first.user, unique("x"))).rejects.toMatchObject({ code: "NOT_ADMIN" });
 
-    const token = await invitePlatform(admin, unique("neu"));
-    const created = await registerAccount({ name: "Neu", email: unique("neu2"), password: "long enough password", company: "Eingeladen GmbH", country: "DE" }, token);
+    const invited = unique("neu");
+    const token = await invitePlatform(admin, invited);
+    // The invitation is for its address: another one is still refused.
+    await expect(registerAccount({ name: "Fremd", email: unique("fremd"), password: "long enough password", company: "Fremd GmbH", country: "DE" }, token)).rejects.toMatchObject({ code: "REGISTRATION_CLOSED" });
+    const created = await registerAccount({ name: "Neu", email: invited, password: "long enough password", company: "Eingeladen GmbH", country: "DE" }, token);
     await expect(registerAccount({ name: "Zwei", email: unique("zwei"), password: "long enough password", company: "Zweimal GmbH", country: "DE" }, token)).rejects.toMatchObject({ code: "REGISTRATION_CLOSED" });
 
     expect((await listCompanies(admin)).some((c) => c.id === created.organizationId)).toBe(true);
