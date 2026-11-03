@@ -55,9 +55,34 @@ export const users = pgTable(
     name: text("name").notNull(),
     locale: text("locale").notNull().default("de"),
     isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+    /** Two-factor sign-in (TOTP, RFC 6238): the shared secret once confirmed, base32. */
+    totpSecret: text("totp_secret"),
+    /** A secret being set up, until the first code confirms it. */
+    totpPendingSecret: text("totp_pending_secret"),
+    /** The last 30-second step a code was accepted for: a code works once. */
+    totpLastStep: integer("totp_last_step"),
+    /** SHA-256 of the unused recovery codes. */
+    recoveryCodes: text("recovery_codes").array().notNull().default(sql`'{}'::text[]`),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_email_key").on(sql`lower(${t.email})`)],
+);
+
+/** A password accepted, the second factor still to come (5 minutes, 5 tries). Only the hash is stored. */
+export const loginChallenges = pgTable(
+  "login_challenges",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    organizationId: uuid("organization_id"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("login_challenges_token_key").on(t.tokenHash)],
 );
 
 export const sessions = pgTable(
@@ -71,6 +96,9 @@ export const sessions = pgTable(
     tokenHash: text("token_hash").notNull(),
     activeOrganizationId: uuid("active_organization_id"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Shown in the list of one's sessions. */
+    userAgent: text("user_agent"),
+    ipCountry: text("ip_country"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("sessions_token_key").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
@@ -110,6 +138,8 @@ export const organizations = pgTable("organizations", {
   signupIpCountry: text("signup_ip_country"),
   /** Modules switched off for the whole company (src/lib/modules.ts). */
   disabledModules: text("disabled_modules").array().notNull().default(sql`'{}'::text[]`),
+  /** DATEV export: { consultant, client, chart: "SKR03" | "SKR04" } (src/server/datev.ts). */
+  datev: jsonb("datev"),
   createdAt: createdAt(),
 });
 
@@ -995,6 +1025,62 @@ export const socialStats = pgTable(
   (t) => [uniqueIndex("social_stats_day_key").on(t.accountId, t.day), index("social_stats_org_day_idx").on(t.organizationId, t.day)],
 );
 
+// --- Recurring invoices ------------------------------------------------------------------------
+/** An invoice that comes back: on `nextDate` a draft (or an issued invoice) is made from it. */
+export const recurringInvoices = pgTable(
+  "recurring_invoices",
+  {
+    id: id(),
+    organizationId: orgId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    title: text("title"),
+    /** The lines as the invoice form sends them (src/server/money.ts lineInput). */
+    items: jsonb("items").notNull(),
+    interval: text("interval").notNull(),
+    /** The day of the month it was started on, so 31 → 30 → 31 does not drift. */
+    anchorDay: integer("anchor_day").notNull(),
+    nextDate: date("next_date").notNull(),
+    endDate: date("end_date"),
+    autoIssue: boolean("auto_issue").notNull().default(false),
+    autoSend: boolean("auto_send").notNull().default(false),
+    active: boolean("active").notNull().default(true),
+    lastInvoiceId: uuid("last_invoice_id"),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("recurring_invoices_due_idx").on(t.organizationId, t.active, t.nextDate)],
+);
+
+// --- Bank -----------------------------------------------------------------------------------------
+export const bankEntryStatusEnum = pgEnum("bank_entry_status", ["NEW", "MATCHED", "BOOKED", "IGNORED"]);
+
+/** One line of an imported bank statement; matched to an invoice or booked as income/expense. */
+export const bankTransactions = pgTable(
+  "bank_transactions",
+  {
+    id: id(),
+    organizationId: orgId(),
+    bookedOn: date("booked_on").notNull(),
+    /** Positive: money in; negative: money out. */
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("EUR"),
+    counterparty: text("counterparty"),
+    counterpartyIban: text("counterparty_iban"),
+    purpose: text("purpose"),
+    /** Same statement line imported twice → same key, kept once. */
+    dedupeKey: text("dedupe_key").notNull(),
+    status: bankEntryStatusEnum("status").notNull().default("NEW"),
+    invoiceId: uuid("invoice_id"),
+    transactionId: uuid("transaction_id"),
+    importedBy: uuid("imported_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("bank_transactions_dedupe_key").on(t.organizationId, t.dedupeKey), index("bank_transactions_org_idx").on(t.organizationId, t.status, t.bookedOn)],
+);
+
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
 export const TENANT_TABLES = [
   "counters",
@@ -1029,4 +1115,6 @@ export const TENANT_TABLES = [
   "content_generations",
   "social_accounts",
   "social_stats",
+  "recurring_invoices",
+  "bank_transactions",
 ] as const;

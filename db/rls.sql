@@ -217,7 +217,7 @@ DO $$
 DECLARE
   t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats'] LOOP
+  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats', 'recurring_invoices', 'bank_transactions'] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (organization_id = app_org_id()) WITH CHECK (organization_id = app_org_id())', t);
@@ -233,6 +233,10 @@ CREATE OR REPLACE FUNCTION invoices_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
+    -- Deleting a whole company (its owner, after the export; src/server/privacy.ts).
+    IF current_setting('app.purge_org', true) = OLD.organization_id::text THEN
+      RETURN OLD;
+    END IF;
     IF OLD.status <> 'DRAFT' THEN
       RAISE EXCEPTION 'issued invoice % cannot be deleted', OLD.number USING ERRCODE = 'check_violation';
     END IF;
@@ -259,6 +263,9 @@ LANGUAGE plpgsql AS $$
 DECLARE
   state text;
 BEGIN
+  IF TG_OP = 'DELETE' AND current_setting('app.purge_org', true) = OLD.organization_id::text THEN
+    RETURN OLD;
+  END IF;
   SELECT status INTO state FROM invoices WHERE id = COALESCE(NEW.invoice_id, OLD.invoice_id);
   IF state IS NOT NULL AND state <> 'DRAFT' THEN
     RAISE EXCEPTION 'lines of an issued invoice cannot be changed' USING ERRCODE = 'check_violation';

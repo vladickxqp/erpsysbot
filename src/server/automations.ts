@@ -123,7 +123,7 @@ function matches(rule: Automation, subject: Subject): boolean {
 const fill = (template: string, vars: Record<string, string>) => template.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
 
 /** The owner's context: automations act for the company, not for whoever caused the event. */
-async function companyContext(organizationId: string): Promise<Context | null> {
+export async function companyContext(organizationId: string): Promise<Context | null> {
   const [owner] = await getDb()
     .select({ user: users })
     .from(memberships)

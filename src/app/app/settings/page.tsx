@@ -6,7 +6,10 @@ import { currencyLocked } from "@/server/company";
 import { requireContext } from "@/server/request";
 import { botToken } from "@/server/settings";
 import { linkOfUser } from "@/server/telegram/links";
+import { listSessions, recoveryCodesLeft, twoFactorEnabled } from "@/server/auth/two-factor";
 import { CompanyForm } from "./company-form";
+import { PrivacyCard } from "./privacy-card";
+import { SecurityCard } from "./security-card";
 import { ModulesCard } from "./modules-card";
 import { TelegramCard } from "./telegram-card";
 
@@ -20,6 +23,7 @@ export default async function SettingsPage() {
   const { t, locale } = await getT();
   const o = ctx.organization;
   const telegram = botToken() ? await linkOfUser(ctx.user.userId) : undefined;
+  const [twoFactor, recoveryLeft, sessions] = [await twoFactorEnabled(ctx.user.userId), await recoveryCodesLeft(ctx.user.userId), await listSessions(ctx.user.userId)];
   return (
     <>
       <PageHeader title={t("settings.title")} />
@@ -68,6 +72,12 @@ export default async function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          <SecurityCard
+            enabled={twoFactor}
+            recoveryLeft={recoveryLeft}
+            sessions={sessions.map((s) => ({ ...s, createdAt: s.createdAt.toISOString(), current: s.id === ctx.user.sessionId }))}
+          />
+          <PrivacyCard owner={ctx.role === "OWNER"} companyName={o.name} />
           {telegram !== undefined && (
             <TelegramCard linked={telegram ? { name: telegram.username ? `@${telegram.username}` : "Telegram", notify: telegram.notify } : null} />
           )}

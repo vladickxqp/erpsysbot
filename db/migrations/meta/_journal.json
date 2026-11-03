@@ -71,6 +71,20 @@
       "when": 1793644093381,
       "tag": "0009_studio_dashboards",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793701467802,
+      "tag": "0010_security_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793701727193,
+      "tag": "0011_recurring_bank",
+      "breakpoints": true
     }
   ]
 }

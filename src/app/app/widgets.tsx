@@ -8,6 +8,7 @@ import { GrowthChart } from "@/components/app/growth-chart";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatMoney, intlTag } from "@/i18n";
 import { useI18n } from "@/i18n/client";
+import { ACTIVITY_VERB } from "@/lib/activity";
 import { CONTENT_STATUSES } from "@/lib/content";
 import { cn } from "@/lib/utils";
 import type { WidgetType } from "@/server/dashboards";
@@ -73,29 +74,6 @@ function Notices({ items, empty, icon: Icon }: { items: Notice[]; empty: string;
   );
 }
 
-const VERB: Record<string, string> = {
-  create: "created",
-  draft: "created",
-  upload: "created",
-  invite: "created",
-  connect: "created",
-  update: "changed",
-  status: "changed",
-  move: "changed",
-  role: "changed",
-  adjust: "changed",
-  modules: "changed",
-  password_link: "changed",
-  delete: "deleted",
-  delete_draft: "deleted",
-  remove: "deleted",
-  disconnect: "deleted",
-  cancel: "cancelled",
-  issue: "issued",
-  payment: "paid",
-  publish: "published",
-  receive: "received",
-};
 
 export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData }) {
   const { t, locale, region } = useI18n();
@@ -295,7 +273,7 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
               return (
                 <div key={a.id} className="flex items-center gap-2 py-1.5 text-sm">
                   <span className="min-w-0 flex-1 truncate">
-                    {a.who ?? "—"} · {t(`activity.entity.${entity}`)}: {t(`activity.verb.${VERB[verb] ?? "changed"}`)}
+                    {a.who ?? "—"} · {t(`activity.entity.${entity}`)}: {t(`activity.verb.${ACTIVITY_VERB[verb] ?? "changed"}`)}
                     {a.via !== "web" && <span className="text-muted-foreground"> · {a.via === "ai" ? "AI" : "Telegram"}</span>}
                   </span>
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">

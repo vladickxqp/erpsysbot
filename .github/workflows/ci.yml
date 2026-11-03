@@ -1,0 +1,31 @@
+# Every push and pull request: lint, types, tests (embedded database) and the
+# production build. A red check means: do not deploy this commit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx eslint src tests
+      - run: npx tsc --noEmit -p .
+      - run: npx vitest run
+      - run: npx next build

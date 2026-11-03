@@ -8,5 +8,7 @@ export async function register() {
     await startTelegram();
     const { startSocialTimer } = await import("./server/social");
     startSocialTimer();
+    const { startScheduler } = await import("./server/scheduler");
+    startScheduler();
   }
 }

@@ -47,7 +47,7 @@ export class DocumentError extends Error {
 
 export type Document = typeof documents.$inferSelect;
 
-function uploadDir(): string {
+export function uploadDir(): string {
   return process.env.UPLOAD_DIR || path.join(process.env.ERP_ROOT ?? process.cwd(), ".data", "uploads");
 }
 

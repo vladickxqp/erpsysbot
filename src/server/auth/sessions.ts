@@ -16,12 +16,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export async function createSession(userId: string, organizationId: string | null) {
+export async function createSession(userId: string, organizationId: string | null, device: { userAgent?: string | null; ipCountry?: string | null } = {}) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * DAY_MS);
   await getDb()
     .insert(sessions)
-    .values({ userId, tokenHash: digest(token), activeOrganizationId: organizationId, expiresAt });
+    .values({
+      userId,
+      tokenHash: digest(token),
+      activeOrganizationId: organizationId,
+      expiresAt,
+      userAgent: device.userAgent?.slice(0, 300) || null,
+      ipCountry: device.ipCountry?.slice(0, 2) || null,
+    });
   return { token, expiresAt };
 }
 
