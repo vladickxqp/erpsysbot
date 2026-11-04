@@ -99,6 +99,27 @@
       "when": 1793785535919,
       "tag": "0013_project_costs",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793787245406,
+      "tag": "0014_personal_sponsors",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793787828320,
+      "tag": "0015_currency_keys_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793788376211,
+      "tag": "0016_private_rows",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,7 @@ import { withTenant } from "@/db/tenant";
 import { cleanModules, withDependents, type AppModule } from "@/lib/modules";
 import { audit } from "./audit";
 import type { Context } from "./context";
-import { requirePermission } from "./permissions";
+import { ForbiddenError, requirePermission } from "./permissions";
 
 export async function setCompanyModules(ctx: Context, disabled: readonly string[]): Promise<AppModule[]> {
   requirePermission(ctx.permissions, "settings.manage");
@@ -29,6 +29,11 @@ export async function setMyModules(ctx: Context, hidden: readonly string[]): Pro
     .set({ hiddenModules: modules })
     .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, ctx.user.userId)));
   return modules;
+}
+
+/** For modules without rights of their own: closed on the server like the others. */
+export function assertModule(ctx: Pick<Context, "disabledModules">, module: AppModule): void {
+  if (ctx.disabledModules.has(module)) throw new ForbiddenError("settings.manage");
 }
 
 /** On for this person: switched on for the company and not hidden by them. */

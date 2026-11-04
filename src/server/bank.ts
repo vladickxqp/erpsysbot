@@ -8,7 +8,7 @@
  * likeliest invoice suggested.
  */
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { bankTransactions, clients, invoices } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
@@ -196,7 +196,8 @@ async function openInvoices(ctx: Context): Promise<OpenInvoice[]> {
       .select({ invoice: invoices, client: { companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName } })
       .from(invoices)
       .innerJoin(clients, eq(clients.id, invoices.clientId))
-      .where(and(eq(invoices.kind, "INVOICE"), inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID"])));
+      // A statement is in the company's currency: invoices in another one are matched by hand in their own amount.
+      .where(and(eq(invoices.kind, "INVOICE"), inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID"]), isNull(invoices.currency)));
     return rows.map((r) => ({ id: r.invoice.id, number: r.invoice.number, openCents: r.invoice.grossCents - r.invoice.paidCents, clientName: displayName(r.client) }));
   });
 }

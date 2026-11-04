@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Mail, MapPin, Pencil, Phone, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Mail, MapPin, Pencil, Phone, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/i18n/client";
-import { deleteClientAction } from "../actions";
+import { archiveClientAction, deleteClientAction } from "../actions";
 import { ClientDialog, type ClientValues } from "../client-form";
 import { StatusBadge } from "../clients-view";
 
@@ -39,7 +39,7 @@ export function ClientDetail({
   canEdit,
   canDelete,
 }: {
-  client: ClientValues & { id: string; number: number };
+  client: ClientValues & { id: string; number: number; archived: boolean };
   name: string;
   created: string;
   canEdit: boolean;
@@ -83,6 +83,22 @@ export function ClientDetail({
             {canEdit && (
               <Button variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="size-4" /> {t("common.edit")}
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="outline"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    const result = await archiveClientAction(client.id, !client.archived);
+                    if (result.error) toast.error(t("common.error"));
+                    router.refresh();
+                  })
+                }
+              >
+                {client.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+                <span className="sr-only sm:not-sr-only">{t(client.archived ? "crm.unarchive" : "crm.archive")}</span>
               </Button>
             )}
             {canDelete && (

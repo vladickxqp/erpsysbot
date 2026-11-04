@@ -12,6 +12,7 @@ import { audit } from "./audit";
 import type { Context } from "./context";
 import { clientParty, pdfData, sellerOf } from "./invoices";
 import { emailVerified } from "./auth/email-verification";
+import { companyLogo } from "./documents";
 import { mailAvailable, sendMail, takeMailBudget } from "./mail";
 import { registrationOpen } from "./settings";
 import { invoicePdf, quotePdf, reminderPdf } from "./pdf";
@@ -33,7 +34,7 @@ const docLocale = (ctx: Context): Locale => (isLocale(ctx.organization.locale) ?
 
 export async function renderInvoice(ctx: Context, id: string, locale = docLocale(ctx)): Promise<RenderedDocument & { draft: boolean }> {
   const data = await pdfData(ctx, id);
-  const pdf = await invoicePdf({ ...data, locale });
+  const pdf = await invoicePdf({ ...data, locale, logo: await companyLogo(ctx) });
   const number = data.invoice.number ?? "Entwurf";
   return {
     filename: `${number}.pdf`,
@@ -48,13 +49,13 @@ export async function renderInvoice(ctx: Context, id: string, locale = docLocale
 export async function renderQuote(ctx: Context, id: string, locale = docLocale(ctx)): Promise<RenderedDocument> {
   const { quote, items, client } = await getQuote(ctx, id);
   const buyer = await withTenant(ctx.organization.id, (tx) => clientParty(tx, quote.clientId));
-  const pdf = await quotePdf({ quote, items, seller: sellerOf(ctx.organization), buyer, locale });
+  const pdf = await quotePdf({ quote, items, seller: sellerOf(ctx.organization), buyer, locale, logo: await companyLogo(ctx) });
   return { filename: `${quote.number}.pdf`, pdf, number: quote.number, clientEmail: client?.email ?? null, total: quote.grossCents };
 }
 
 export async function renderReminder(ctx: Context, id: string, locale = docLocale(ctx)): Promise<RenderedDocument> {
   const { reminder, invoice, buyer, seller } = await reminderData(ctx, id);
-  const pdf = await reminderPdf({ reminder, invoice: { number: invoice.number!, issueDate: invoice.issueDate, dueDate: invoice.dueDate }, seller, buyer, locale });
+  const pdf = await reminderPdf({ reminder, invoice: { number: invoice.number!, issueDate: invoice.issueDate, dueDate: invoice.dueDate }, seller, buyer, locale, logo: await companyLogo(ctx) });
   const number = `${invoice.number}-M${reminder.level}`;
   return { filename: `${number}.pdf`, pdf, number, clientEmail: await clientEmail(ctx, invoice.clientId), total: reminder.openCents + reminder.feeCents };
 }

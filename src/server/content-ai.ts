@@ -145,7 +145,8 @@ async function generationsSince(ctx: Context, since: Date, own: boolean): Promis
   return Number(row?.n ?? 0);
 }
 
-async function checkLimits(ctx: Context): Promise<void> {
+/** The same daily limits as the assistant, for every AI call of the app. */
+export async function checkAiLimits(ctx: Context): Promise<void> {
   const dayAgo = new Date(Date.now() - 86_400_000);
   if ((await usedToday(ctx)) + (await generationsSince(ctx, dayAgo, true)) >= assistantDailyLimit()) throw new AssistantError("LIMIT");
   const [server] = await getDb().select({ n: count() }).from(contentGenerations).where(gte(contentGenerations.createdAt, dayAgo));
@@ -154,12 +155,24 @@ async function checkLimits(ctx: Context): Promise<void> {
   if (!ent.unlimited && (await generationsSince(ctx, dayAgo, false)) >= ent.aiPerDay) throw new AssistantError("LIMIT");
 }
 
+export async function recordGeneration(ctx: Context, kind: string, response: Anthropic.Beta.BetaMessage): Promise<void> {
+  await withTenant(ctx.organization.id, (tx) =>
+    tx.insert(contentGenerations).values({
+      organizationId: ctx.organization.id,
+      userId: ctx.user.userId,
+      kind,
+      inputTokens: (response.usage?.input_tokens ?? 0) + (response.usage?.cache_read_input_tokens ?? 0),
+      outputTokens: response.usage?.output_tokens ?? 0,
+    }),
+  );
+}
+
 export async function generateContent(ctx: Context, raw: GenerationInput, create: CreateMessage = defaultCreate): Promise<Suggestion[]> {
   requirePermission(ctx.permissions, "content.manage");
   requirePermission(ctx.permissions, "ai.use");
   if (!assistantAvailable() && create === defaultCreate) throw new AssistantError("NOT_CONFIGURED");
   const input = generationInput.parse(raw);
-  await checkLimits(ctx);
+  await checkAiLimits(ctx);
   const { system, user } = generationPrompt(input, ctx.organization.name);
 
   let response: Anthropic.Beta.BetaMessage;
@@ -181,15 +194,7 @@ export async function generateContent(ctx: Context, raw: GenerationInput, create
     throw e;
   }
 
-  await withTenant(ctx.organization.id, (tx) =>
-    tx.insert(contentGenerations).values({
-      organizationId: ctx.organization.id,
-      userId: ctx.user.userId,
-      kind: input.kind,
-      inputTokens: (response.usage?.input_tokens ?? 0) + (response.usage?.cache_read_input_tokens ?? 0),
-      outputTokens: response.usage?.output_tokens ?? 0,
-    }),
-  );
+  await recordGeneration(ctx, input.kind, response);
   if (response.stop_reason === "refusal") throw new AssistantError("REFUSED");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")

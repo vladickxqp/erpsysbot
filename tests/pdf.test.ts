@@ -22,6 +22,8 @@ const invoice = {
   grossCents: 48106,
   paidCents: 0,
   smallBusiness: false,
+  currency: null,
+  exchangeRate: null,
   issuedAt: new Date(),
   createdAt: new Date(),
   updatedAt: new Date(),

@@ -39,6 +39,16 @@ export function takeMailBudget(organizationId: string): boolean {
   return true;
 }
 
+/** A few of one kind per day, e.g. links to one address: mail must not be turned on someone. */
+export function takeMailThrottle(key: string, perDay = 5): boolean {
+  const day = new Date().toISOString().slice(0, 10);
+  const entry = sentToday.get(key);
+  const count = entry?.day === day ? entry.count : 0;
+  if (count >= perDay) return false;
+  sentToday.set(key, { day, count: count + 1 });
+  return true;
+}
+
 export function mailAvailable(): boolean {
   return override !== null || smtp() !== null;
 }

@@ -57,14 +57,15 @@ export async function invoiceStats(ctx: Context): Promise<InvoiceStats> {
   requirePermission(ctx.permissions, "invoices.read");
   const now = today(ctx.organization.timezone);
   return withTenant(ctx.organization.id, async (tx) => {
-    const open = sql`${invoices.grossCents} - ${invoices.paidCents}`;
+    // In the company's currency: invoices in another one count at their rate.
+    const open = sql`(${invoices.grossCents} - ${invoices.paidCents}) * coalesce(${invoices.exchangeRate}, 1)`;
     const late = sql`${invoices.dueDate} < ${now}`;
     const [row] = await tx
       .select({
-        outstandingCents: sql<number>`coalesce(sum(${open}), 0)::bigint`,
+        outstandingCents: sql<number>`coalesce(round(sum(${open})), 0)::bigint`,
         outstanding: sql<number>`count(*)::int`,
         overdue: sql<number>`count(*) filter (where ${late})::int`,
-        overdueCents: sql<number>`coalesce(sum(${open}) filter (where ${late}), 0)::bigint`,
+        overdueCents: sql<number>`coalesce(round(sum(${open}) filter (where ${late})), 0)::bigint`,
       })
       .from(invoices)
       .where(and(eq(invoices.kind, "INVOICE"), inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID"])));

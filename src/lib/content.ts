@@ -40,3 +40,7 @@ export const LANGUAGE_ENDONYMS: Record<(typeof OUTPUT_LANGUAGES)[number], string
   pl: "Polski",
   tr: "Türkçe",
 };
+
+/** A sponsoring deal from the first contact to the money. */
+export const SPONSOR_STATUSES = ["LEAD", "NEGOTIATION", "CONFIRMED", "DELIVERED", "PAID", "CANCELLED"] as const;
+export type SponsorStatus = (typeof SPONSOR_STATUSES)[number];

@@ -111,6 +111,21 @@ Protokoll, Rolle Viewer; Modul-Abhängigkeiten und Sperre in Serverfunktionen un
 Nutzertyp, Schnellaktionen, mehrere eigene Arbeitsbereiche; CRM-Kontaktpersonen, Timeline, Website, Branche;
 Zeiterfassung mit Abrechnung; Projektseite mit Aufgaben, Zeit, Dateien, Kosten und Rechnungen.
 
-Offen bleiben die Punkte 6–9. „Archivieren“ von Kunden ist weiterhin der Status „Inaktiv“. Rechte einzelner Module
-gelten serverseitig nur, soweit ein Modul eigene Rechte hat: `pipeline`, `reports`, `team` und `integrations` sind
-über Menü und Seiten gesperrt, ihre Rechte teilen sie mit anderen Modulen.
+Danach auch Punkte 6 und 7: Sponsoring, Ziele und Gewohnheiten, Glocke, Abteilungen, Rechte je Person, Kundenarchiv,
+Sperre von `pipeline`, `reports`, `team`, `integrations` auf dem Server. Zusätzlich: Suche über alle Module, Rechnungen in
+Fremdwährung, Logo auf Dokumenten, Kundenlinks mit Annahme von Angeboten, Kalender-Link, öffentliche API mit Schlüsseln,
+Belege per KI lesen, Steuersätze der US-Bundesstaaten als Vorschlag.
+
+Eine zweite unabhängige Sicherheitsprüfung fand 9 Befunde (3 hoch, 2 mittel, 4 niedrig), keine Leckage zwischen Firmen; alle behoben und mit Tests belegt: Rechte nur bis zur eigenen Höhe vergeben, Rechte beim Rollenwechsel zurücksetzen, Ziele und Gewohnheiten aus dem Firmenexport heraus, Kundenlinks nur für Berechtigte und widerrufbar, Arbeitsbereiche ohne neue Testphase, Drosselung von Mails und Passwortversuchen.
+
+## 9. Bewusst nicht gebaut
+
+| Punkt | Warum |
+|---|---|
+| ZUGFeRD | Verlangt PDF/A-3 mit ICC-Profil und XML im CII-Format. Ohne amtlichen Validator ist nicht prüfbar, ob eine Datei gültig ist; eine ungeprüfte Datei „ZUGFeRD“ zu nennen wäre falsch. XRechnung deckt die Pflicht in Deutschland. |
+| ESF Kasachstan, E-Rechnung Ukraine | Brauchen staatliche Zugänge und Zertifikate des Unternehmens. |
+| Instagram, TikTok, Facebook, LinkedIn, X | Brauchen freigegebene Entwickler-Apps des Betreibers. |
+| Online-Zahlung durch Kunden | Braucht Stripe Connect mit dem Konto jeder Firma. |
+| Import aus lexoffice, sevDesk | Kunden gehen über CSV; Belege brauchen deren API-Zugänge. |
+| E-Commerce, Support | Abschnitte des Prompts liegen nicht vor. |
+| Bedienung im Browser automatisch testen (Playwright) | Noch offen; Prüfung bisher von Hand und über Servertests. |

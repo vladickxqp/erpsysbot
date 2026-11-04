@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/i18n/client";
+import { ShareButton } from "@/components/app/share-button";
 import { formatDate, formatMoney } from "@/i18n";
 import { PAYMENT_METHODS } from "@/lib/domain";
 import type { Totals } from "@/server/money";
@@ -23,6 +24,7 @@ import { cancelAction, deleteDraftAction, issueAction, paymentAction, reminderAc
 
 type Detail = {
   id: string;
+  currency: string | null;
   kind: "INVOICE" | "CREDIT_NOTE";
   status: string;
   number: string | null;
@@ -67,7 +69,7 @@ export function InvoiceDetail({
 }) {
   const { t, locale, region } = useI18n();
   const router = useRouter();
-  const money = (c: number) => formatMoney(c, locale, region);
+  const money = (c: number) => formatMoney(c, locale, { ...region, currency: invoice.currency ?? region.currency });
   const [pending, start] = useTransition();
   const [dialog, setDialog] = useState<null | "issue" | "cancel" | "delete" | "pay">(null);
   const remaining = invoice.grossCents - invoice.paidCents;
@@ -158,6 +160,7 @@ export function InvoiceDetail({
               <Download className="size-4" /> {t("invoices.pdf")}
             </a>
           </Button>
+          {!draft && <ShareButton kind="invoice" id={invoice.id} />}
           {!draft && invoice.kind === "INVOICE" && region.country === "DE" && (
             <Button variant="outline" asChild>
               <a href={`/app/invoices/${invoice.id}/xrechnung`} download>

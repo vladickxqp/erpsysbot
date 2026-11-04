@@ -25,7 +25,7 @@ export async function createWorkspaceAction(name: string): Promise<{ error?: str
   try {
     await createWorkspace(ctx, name);
   } catch (e) {
-    if (e instanceof WorkspaceError) return { error: "workspace.TOO_MANY" };
+    if (e instanceof WorkspaceError) return { error: e.code === "TOO_MANY" ? "workspace.TOO_MANY" : "common.forbidden" };
     if (e instanceof ZodError) return { error: "auth.check" };
     throw e;
   }

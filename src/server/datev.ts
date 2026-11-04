@@ -14,6 +14,7 @@ import { clients, invoiceItems, invoices, organizations, payments } from "@/db/s
 import { withTenant } from "@/db/tenant";
 import { displayName } from "./clients";
 import type { Context } from "./context";
+import { inBase } from "./invoices";
 import { requirePermission } from "./permissions";
 
 export const datevSettings = z.object({
@@ -89,7 +90,11 @@ export async function datevRows(ctx: Context, from: string, to: string, chart: "
     for (const { invoice, client } of issued) {
       const debtor = 10000 + client.number;
       const credit = invoice.kind === "CREDIT_NOTE";
-      for (const part of grossByRate(lines.filter((l) => l.invoiceId === invoice.id), invoice.grossCents, invoice.smallBusiness)) {
+      for (const part of grossByRate(
+        lines.filter((l) => l.invoiceId === invoice.id).map((l) => ({ ...l, netCents: inBase(l.netCents, invoice) })),
+        inBase(invoice.grossCents, invoice),
+        invoice.smallBusiness,
+      )) {
         const contra = invoice.smallBusiness ? acc.smallBusiness : (acc.revenue[part.rate] ?? acc.taxFree);
         const negative = part.cents < 0;
         rows.push({
@@ -112,7 +117,7 @@ export async function datevRows(ctx: Context, from: string, to: string, chart: "
       .orderBy(asc(payments.paidOn));
     for (const { payment, invoice, client } of paid) {
       rows.push({
-        cents: payment.amountCents,
+        cents: inBase(payment.amountCents, invoice),
         side: "S",
         account: payment.method === "CASH" ? acc.cash : acc.bank,
         contra: 10000 + client.number,

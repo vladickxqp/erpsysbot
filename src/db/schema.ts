@@ -86,6 +86,44 @@ export const emailVerifications = pgTable(
   (t) => [uniqueIndex("email_verifications_token_key").on(t.tokenHash)],
 );
 
+/** Keys for the public API: the company and the person they act for. Only the hash is stored. */
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    writable: boolean("writable").notNull().default(false),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("api_keys_token_key").on(t.tokenHash), index("api_keys_org_idx").on(t.organizationId)],
+);
+
+/** A link a client opens without an account: one quote or invoice. Only the hash is stored. */
+export const shareLinks = pgTable(
+  "share_links",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("share_links_token_key").on(t.tokenHash)],
+);
+
 /** A password accepted, the second factor still to come (5 minutes, 5 tries). Only the hash is stored. */
 export const loginChallenges = pgTable(
   "login_challenges",
@@ -160,6 +198,8 @@ export const organizations = pgTable("organizations", {
   datev: jsonb("datev"),
   /** BUSINESS, CREATOR, FREELANCER or PERSONAL (src/lib/modules.ts); null: not chosen yet. */
   workspaceType: text("workspace_type"),
+  /** Picture from the documents store, printed on invoices and quotes. */
+  logoDocumentId: uuid("logo_document_id"),
   createdAt: createdAt(),
 });
 
@@ -178,6 +218,9 @@ export const memberships = pgTable(
     permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
     /** Modules this person keeps out of their own menu. */
     hiddenModules: text("hidden_modules").array().notNull().default(sql`'{}'::text[]`),
+    departmentId: uuid("department_id"),
+    /** SHA-256 of the secret in this person's calendar feed link. */
+    calendarTokenHash: text("calendar_token_hash"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_org_user_key").on(t.organizationId, t.userId)],
@@ -360,6 +403,8 @@ export const clients = pgTable(
     source: text("source"),
     assignedUserId: uuid("assigned_user_id"),
     lastInteractionAt: timestamp("last_interaction_at", { withTimezone: true }),
+    /** Out of the lists, kept with all its history. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -655,6 +700,10 @@ export const invoices = pgTable(
     vatCents: integer("vat_cents").notNull().default(0),
     grossCents: integer("gross_cents").notNull().default(0),
     paidCents: integer("paid_cents").notNull().default(0),
+    /** Billed in another currency than the company's; amounts here are in it. */
+    currency: text("currency"),
+    /** Company currency per 1 of `currency`, for the books. */
+    exchangeRate: numeric("exchange_rate", { precision: 14, scale: 6, mode: "number" }),
     smallBusiness: boolean("small_business").notNull().default(false),
     issuedAt: timestamp("issued_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -1164,6 +1213,89 @@ export const timeEntries = pgTable(
   (t) => [index("time_entries_user_idx").on(t.organizationId, t.userId, t.startedAt), index("time_entries_project_idx").on(t.projectId)],
 );
 
+// --- Team structure ------------------------------------------------------------------------------
+export const departments = pgTable(
+  "departments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    managerUserId: uuid("manager_user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("departments_org_name_key").on(t.organizationId, t.name)],
+);
+
+// --- Creator: sponsoring -------------------------------------------------------------------------
+/** A deal with a brand: what is owed for which piece of content, up to the invoice. */
+export const sponsorships = pgTable(
+  "sponsorships",
+  {
+    id: id(),
+    organizationId: orgId(),
+    brand: text("brand").notNull(),
+    title: text("title"),
+    status: text("status").notNull().default("LEAD"),
+    amountCents: integer("amount_cents").notNull().default(0),
+    dueDate: date("due_date"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    contentId: uuid("content_id").references(() => contentItems.id, { onDelete: "set null" }),
+    invoiceId: uuid("invoice_id"),
+    notes: text("notes"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sponsorships_org_idx").on(t.organizationId, t.status)],
+);
+
+// --- Personal ------------------------------------------------------------------------------------
+/** One person's own goals: nobody else in the workspace sees them. */
+export const goals = pgTable(
+  "goals",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    targetDate: date("target_date"),
+    progress: integer("progress").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("goals_user_idx").on(t.organizationId, t.userId)],
+);
+
+export const habits = pgTable(
+  "habits",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("habits_user_idx").on(t.organizationId, t.userId)],
+);
+
+export const habitChecks = pgTable(
+  "habit_checks",
+  {
+    id: id(),
+    organizationId: orgId(),
+    habitId: uuid("habit_id")
+      .notNull()
+      .references(() => habits.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+  },
+  (t) => [uniqueIndex("habit_checks_day_key").on(t.habitId, t.day)],
+);
+
+/** One person's own rows: not part of what an owner exports of the company. */
+export const PRIVATE_TABLES: readonly string[] = ["goals", "habits", "habit_checks"];
+
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
 export const TENANT_TABLES = [
   "counters",
@@ -1203,4 +1335,9 @@ export const TENANT_TABLES = [
   "client_contacts",
   "client_activities",
   "time_entries",
+  "departments",
+  "sponsorships",
+  "goals",
+  "habits",
+  "habit_checks",
 ] as const;

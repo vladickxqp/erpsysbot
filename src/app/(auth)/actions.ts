@@ -9,7 +9,7 @@ import { sendVerificationMail } from "@/server/auth/email-verification";
 import { SESSION_COOKIE, createSession, deleteSession, readSession } from "@/server/auth/sessions";
 import { completeChallenge, createChallenge, TwoFactorError, twoFactorEnabled } from "@/server/auth/two-factor";
 import { LOCALE_COOKIE, MESSAGES, isLocale, translator } from "@/i18n";
-import { sendMail } from "@/server/mail";
+import { sendMail, takeMailThrottle } from "@/server/mail";
 import { currentUser, publicBase } from "@/server/request";
 import { TeamError, acceptInvitation, passwordTokenForEmail, registerWithInvitation, resetPassword } from "@/server/team";
 
@@ -154,7 +154,8 @@ export async function acceptInviteAction(token: string): Promise<AuthState> {
 
 /** Always the same answer, whether the address has an account or not. */
 export async function forgotAction(_: AuthState, form: FormData): Promise<AuthState> {
-  const found = await passwordTokenForEmail(String(form.get("email") ?? ""));
+  const address = String(form.get("email") ?? "").trim().toLowerCase();
+  const found = takeMailThrottle(`reset:${address}`) ? await passwordTokenForEmail(address) : null;
   if (found) {
     const locale = isLocale(found.locale) ? found.locale : "de";
     const t = translator(MESSAGES[locale]);

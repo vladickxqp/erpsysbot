@@ -31,6 +31,8 @@ Current state, module map and roadmap: [docs/NEXORA_ONE_AUDIT.md](docs/NEXORA_ON
 | Recurring invoices, bank statement import (CAMT.053/CSV) with matching, DATEV export | ✅ |
 | Workspaces by type (company, creator, freelancer, personal), module dependencies enforced on the server, quick actions | ✅ |
 | CRM contact persons and timeline, time tracking with billing, project overview, viewer role, e-mail confirmation | ✅ |
+| Sponsoring, goals and habits, notifications bell, departments, rights per person, client archive, search across modules | ✅ |
+| Invoices in another currency, logo on documents, client links, calendar link, public API, reading receipts with AI | ✅ |
 
 ## How tenants are kept apart
 
@@ -193,6 +195,28 @@ background jobs; what depends on it goes off with it.
 - **DATEV:** Finance → DATEV (German/Austrian companies). Adviser and client
   number, SKR03/SKR04; exports issued invoices (split by tax rate) and payments
   as an EXTF booking batch per fiscal year. Expenses stay with the adviser.
+
+### Public API
+
+Integrations → API keys (shown once). A key acts with the rights of the person
+who made it, read-only unless made writable; 120 requests per minute.
+
+```
+curl -H "Authorization: Bearer nx_…" https://<your domain>/api/v1/clients
+```
+
+| Route | Does |
+|---|---|
+| `GET /api/v1/clients?q=&page=` | clients |
+| `POST /api/v1/clients` | new client (JSON like the client form) |
+| `GET /api/v1/invoices?q=&page=` | invoices |
+| `GET /api/v1/tasks?q=&open=1` | tasks |
+| `POST /api/v1/tasks` | new task |
+
+Client links (`/p/…`, 30 days) show one quote or invoice without an account and
+take the answer to a quote. Calendar links (`/api/calendar/….ics`, Settings) put
+one's appointments, due tasks and planned content into a phone calendar.
+`MAIL_DAILY_LIMIT` caps mails per company and day (default 200).
 
 ## Develop
 

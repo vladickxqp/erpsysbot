@@ -56,8 +56,23 @@ export const invoiceInput = z.object({
     .nullish()
     .transform((v) => v || null),
   items: linesInput,
+  /** Another currency than the company's, with its rate; left out: the company's. */
+  currency: z.string().trim().toUpperCase().length(3).nullish().transform((v) => v || null),
+  exchangeRate: z.coerce.number().positive().max(1_000_000).nullish().transform((v) => v || null),
 });
 export type InvoiceInput = z.input<typeof invoiceInput>;
+
+/** Only a real foreign currency is kept, and it needs its rate. */
+function foreignCurrency(org: Organization, input: { currency: string | null; exchangeRate: number | null }) {
+  if (!input.currency || input.currency === org.currency) return { currency: null, exchangeRate: null };
+  if (!Intl.supportedValuesOf("currency").includes(input.currency) || !input.exchangeRate) {
+    throw new z.ZodError([{ code: "custom", path: ["exchangeRate"], message: "rate" }]);
+  }
+  return { currency: input.currency, exchangeRate: input.exchangeRate };
+}
+
+/** An amount of this invoice in the company's currency. */
+export const inBase = (cents: number, invoice: { exchangeRate: number | null }) => Math.round(cents * (invoice.exchangeRate ?? 1));
 
 export type Party = {
   name: string;
@@ -152,6 +167,7 @@ export async function createInvoiceDraft(ctx: Context, raw: InvoiceInput, via: V
         serviceDate: input.serviceDate,
         dueDate: input.dueDate,
         notes: input.notes,
+        ...foreignCurrency(ctx.organization, input),
         smallBusiness: ctx.organization.smallBusiness,
         netCents: sum.netCents,
         vatCents: sum.vatCents,
@@ -179,6 +195,7 @@ export async function updateInvoiceDraft(ctx: Context, id: string, raw: InvoiceI
         serviceDate: input.serviceDate,
         dueDate: input.dueDate,
         notes: input.notes,
+        ...foreignCurrency(ctx.organization, input),
         smallBusiness: ctx.organization.smallBusiness,
         netCents: sum.netCents,
         vatCents: sum.vatCents,
@@ -242,7 +259,7 @@ export async function issueInvoice(ctx: Context, id: string, via: Via = "web"): 
         issueDate: issued,
         serviceDate: draft.serviceDate ?? issued,
         dueDate: draft.dueDate ?? addDays(issued, org.paymentTermsDays),
-        sellerSnapshot: sellerOf(org),
+        sellerSnapshot: { ...sellerOf(org), currency: draft.currency ?? org.currency },
         buyerSnapshot: await clientParty(tx, draft.clientId),
         issuedAt: new Date(),
         updatedAt: new Date(),
@@ -291,7 +308,7 @@ export async function recordPayment(ctx: Context, id: string, raw: PaymentInput,
     await tx.insert(transactions).values({
       organizationId: ctx.organization.id,
       type: "INCOME",
-      amountCents: input.amountCents,
+      amountCents: inBase(input.amountCents, inv),
       bookedOn: input.paidOn,
       category: "invoice",
       description: inv.number,
@@ -327,6 +344,8 @@ export async function cancelInvoice(ctx: Context, id: string, via: Via = "web"):
         correctsId: inv.id,
         serviceDate: inv.serviceDate,
         notes: inv.number,
+        currency: inv.currency,
+        exchangeRate: inv.exchangeRate,
         smallBusiness: inv.smallBusiness,
         netCents: -inv.netCents,
         vatCents: -inv.vatCents,
@@ -448,7 +467,7 @@ export async function pdfData(ctx: Context, id: string) {
   const buyer =
     (invoice.buyerSnapshot as Party | null) ??
     (await withTenant(ctx.organization.id, (tx) => clientParty(tx, invoice.clientId)));
-  const seller = (invoice.sellerSnapshot as Seller | null) ?? sellerOf(ctx.organization);
+  const seller = (invoice.sellerSnapshot as Seller | null) ?? { ...sellerOf(ctx.organization), currency: invoice.currency ?? ctx.organization.currency };
   const corrects = invoice.correctsId ? related.find((r) => r.id === invoice.correctsId)?.number ?? null : null;
   return { invoice, items, seller, buyer, corrects };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Clapperboard, FileText, Plus, Trash2, WandSparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clapperboard, FileText, Handshake, Plus, Trash2, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -187,6 +187,13 @@ export function ContentView({
         title={t("studio.title")}
         actions={
           <>
+            {canManage && (
+              <Button asChild variant="outline">
+                <Link href="/app/content/sponsors">
+                  <Handshake className="size-4" /> {t("sponsors.title")}
+                </Link>
+              </Button>
+            )}
             {canGenerate && (
               <Button asChild variant="outline">
                 <Link href="/app/content/generate">

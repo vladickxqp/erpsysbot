@@ -165,6 +165,18 @@ export async function readDocument(ctx: Context, id: string): Promise<{ doc: Doc
   return { doc, bytes };
 }
 
+/** The company's logo for documents: read for whoever prints, whatever their rights on files. */
+export async function companyLogo(ctx: Pick<Context, "organization">): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  const id = ctx.organization.logoDocumentId;
+  if (!id) return null;
+  const [doc] = await withTenant(ctx.organization.id, (tx) => tx.select().from(documents).where(eq(documents.id, id)));
+  if (!doc || !["image/png", "image/jpeg"].includes(doc.mimeType)) return null;
+  const file = path.resolve(uploadDir(), doc.storageKey);
+  if (!file.startsWith(path.resolve(uploadDir()) + path.sep)) return null;
+  const bytes = await readFile(file).catch(() => null);
+  return bytes && { bytes, mime: doc.mimeType };
+}
+
 export type MediaQuery = { kind?: MediaKind; collection?: Collection; q?: string };
 
 /** The media library: every file of the company, newest first, by kind or collection. */

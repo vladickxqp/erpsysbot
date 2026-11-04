@@ -21,6 +21,8 @@ export type InvoiceFormValues = {
   dueDate: string;
   notes: string;
   lines: EditableLine[];
+  currency?: string;
+  exchangeRate?: string;
 };
 
 export function InvoiceForm({
@@ -55,6 +57,8 @@ export function InvoiceForm({
         dueDate: v.dueDate || null,
         notes: v.notes,
         items,
+        currency: v.currency && v.currency !== region.currency ? v.currency : null,
+        exchangeRate: v.exchangeRate ? Number(v.exchangeRate.replace(",", ".")) : null,
       });
       if (result.ok && result.id) {
         toast.success(t("common.saved"));
@@ -102,6 +106,16 @@ export function InvoiceForm({
             <Input type="date" value={v.dueDate} onChange={(e) => setV({ ...v, dueDate: e.target.value })} />
             <span className="text-xs text-muted-foreground">{t("invoices.dueHint")}</span>
           </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium">{t("company.currency")}</span>
+            <Input value={v.currency ?? region.currency} onChange={(e) => setV({ ...v, currency: e.target.value.toUpperCase().slice(0, 3) })} maxLength={3} />
+          </label>
+          {(v.currency ?? region.currency) !== region.currency && (
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">{t("invoices.rate", { from: v.currency ?? "", to: region.currency })}</span>
+              <Input inputMode="decimal" value={v.exchangeRate ?? ""} onChange={(e) => setV({ ...v, exchangeRate: e.target.value })} required />
+            </label>
+          )}
           <label className="grid gap-1.5 sm:col-span-3">
             <span className="text-sm font-medium">{t("invoices.notes")}</span>
             <Textarea rows={2} value={v.notes} onChange={(e) => setV({ ...v, notes: e.target.value })} />

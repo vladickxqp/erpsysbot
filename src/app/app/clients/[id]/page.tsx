@@ -30,6 +30,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       client={{
         id: client.id,
         number: client.number,
+        archived: !!client.archivedAt,
         type: client.type,
         status: client.status,
         firstName: client.firstName,

@@ -10,7 +10,7 @@ export function InvoiceEditor({
   products,
   smallBusiness,
 }: {
-  invoice: { id: string; clientId: string; serviceDate: string; dueDate: string; notes: string };
+  invoice: { id: string; clientId: string; serviceDate: string; dueDate: string; notes: string; currency?: string; exchangeRate?: string };
   items: Parameters<typeof toEditable>[0];
   clients: { id: string; name: string; number: number }[];
   products: ProductOption[];

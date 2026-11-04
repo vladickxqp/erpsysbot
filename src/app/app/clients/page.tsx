@@ -18,7 +18,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const status = ["LEAD", "ACTIVE", "INACTIVE"].includes(sp.status ?? "") ? (sp.status as "LEAD") : undefined;
   const sort = (SORTS as readonly string[]).includes(sp.sort ?? "") ? (sp.sort as ClientSort) : undefined;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
-  const { rows, total, pageSize } = await listClients(ctx, { q: sp.q, status, sort, page });
+  const { rows, total, pageSize } = await listClients(ctx, { q: sp.q, status, sort, page, archived: sp.status === "ARCHIVED" });
   return (
     <>
       <PageHeader title={t("clients.title")} />

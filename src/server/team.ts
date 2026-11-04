@@ -10,13 +10,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
+import { apiKeys, goals, habits, invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
 import { assertSeat } from "./billing";
 import { MIN_PASSWORD_LENGTH, hashPassword } from "./auth/password";
 import type { Context } from "./context";
-import { requirePermission, type Role } from "./permissions";
+import { PERMISSIONS, permissionsFor, requirePermission, ROLE_PERMISSIONS, type Role } from "./permissions";
 import { LOCALES } from "@/i18n";
 
 const INVITE_DAYS = 7;
@@ -36,7 +36,15 @@ export async function listTeam(ctx: Context) {
   requirePermission(ctx.permissions, "employees.read");
   const db = getDb();
   const members = await db
-    .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, since: memberships.createdAt })
+    .select({
+      userId: users.id,
+      name: users.name,
+      email: users.email,
+      role: memberships.role,
+      permissions: memberships.permissions,
+      departmentId: memberships.departmentId,
+      since: memberships.createdAt,
+    })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(eq(memberships.organizationId, ctx.organization.id))
@@ -53,8 +61,22 @@ export async function listTeam(ctx: Context) {
 
 const inviteInput = z.object({ email: z.string().trim().toLowerCase().email().max(200), role: z.enum(ASSIGNABLE_ROLES) });
 
+/** Nobody hands out a role that holds more than they do themselves. */
 function guardRole(ctx: Context, role: Role) {
   if (role === "OWNER" && ctx.role !== "OWNER") throw new TeamError("OWNER_ONLY");
+  if (ctx.role !== "OWNER" && ROLE_PERMISSIONS[role].some((p) => !ctx.permissions.has(p))) throw new TeamError("OWNER_ONLY");
+}
+
+/** Nobody touches a person who holds more than they do, and only an owner changes themselves. */
+async function guardTarget(ctx: Context, userId: string): Promise<void> {
+  if (ctx.role === "OWNER") return;
+  if (userId === ctx.user.userId) throw new TeamError("OWNER_ONLY");
+  const [row] = await getDb()
+    .select({ role: memberships.role, permissions: memberships.permissions })
+    .from(memberships)
+    .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
+  if (!row) return;
+  if ([...permissionsFor(row.role as Role, row.permissions)].some((p) => !ctx.permissions.has(p))) throw new TeamError("OWNER_ONLY");
 }
 
 /** Creates (or renews) the invitation for an address; returns the secret token for the link. */
@@ -122,26 +144,52 @@ export async function changeRole(ctx: Context, userId: string, role: Role): Prom
   if (!current) throw new TeamError("NOT_MEMBER");
   if (current === role) return;
   guardRole(ctx, role);
+  await guardTarget(ctx, userId);
   if (current === "OWNER") {
     if (ctx.role !== "OWNER") throw new TeamError("OWNER_ONLY");
     if ((await ownerCount(ctx.organization.id)) <= 1) throw new TeamError("LAST_OWNER");
   }
   await getDb()
     .update(memberships)
-    .set({ role })
+    // A fixed role is exactly its rights: what a custom one held does not stay behind.
+    .set({ role, permissions: [] })
     .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.role", "user", userId, { from: current, to: role }));
+}
+
+/**
+ * Exactly these rights for one person (role CUSTOM). Nobody hands out what
+ * they do not hold themselves; an OWNER is never reduced this way.
+ */
+export async function setMemberPermissions(ctx: Context, userId: string, wanted: readonly string[]): Promise<void> {
+  requirePermission(ctx.permissions, "employees.manage");
+  const current = await memberRole(ctx.organization.id, userId);
+  if (!current) throw new TeamError("NOT_MEMBER");
+  if (current === "OWNER" || userId === ctx.user.userId) throw new TeamError("OWNER_ONLY");
+  await guardTarget(ctx, userId);
+  const granted = PERMISSIONS.filter((p) => wanted.includes(p) && ctx.permissions.has(p));
+  await getDb()
+    .update(memberships)
+    .set({ role: "CUSTOM", permissions: granted })
+    .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
+  await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.role", "user", userId, { to: "CUSTOM", permissions: granted.length }));
 }
 
 export async function removeMember(ctx: Context, userId: string): Promise<void> {
   requirePermission(ctx.permissions, "employees.manage");
   const current = await memberRole(ctx.organization.id, userId);
   if (!current) throw new TeamError("NOT_MEMBER");
+  await guardTarget(ctx, userId);
   if (current === "OWNER") {
     if (ctx.role !== "OWNER") throw new TeamError("OWNER_ONLY");
     if ((await ownerCount(ctx.organization.id)) <= 1) throw new TeamError("LAST_OWNER");
   }
   await getDb().delete(memberships).where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
+  // One's own goals and habits leave with the person.
+  await withTenant(ctx.organization.id, async (tx) => {
+    await tx.delete(goals).where(eq(goals.userId, userId));
+    await tx.delete(habits).where(eq(habits.userId, userId));
+  });
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.remove", "user", userId, { role: current }));
 }
 
@@ -229,6 +277,7 @@ export async function passwordLinkForMember(ctx: Context, userId: string): Promi
   const role = await memberRole(ctx.organization.id, userId);
   if (!role) throw new TeamError("NOT_MEMBER");
   if (role === "OWNER" && ctx.role !== "OWNER") throw new TeamError("OWNER_ONLY");
+  await guardTarget(ctx, userId);
   const [target] = await getDb().select({ admin: users.isPlatformAdmin }).from(users).where(eq(users.id, userId));
   const elsewhere = await getDb()
     .select({ id: memberships.id })
@@ -263,6 +312,8 @@ export async function resetPassword(token: string, password: string): Promise<st
     await tx.update(users).set({ passwordHash }).where(eq(users.id, row.userId));
     await tx.delete(sessions).where(eq(sessions.userId, row.userId));
     await tx.delete(passwordResets).where(eq(passwordResets.userId, row.userId));
+    // A reset may follow a stolen account: keys made meanwhile must not survive it.
+    await tx.delete(apiKeys).where(eq(apiKeys.userId, row.userId));
     return row.userId;
   });
 }

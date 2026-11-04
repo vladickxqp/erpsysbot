@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, KeyRound, MoreHorizontal, Trash2, UserPlus, X } from "lucide-react";
+import { Copy, KeyRound, MoreHorizontal, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -17,11 +17,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import type { Role } from "@/server/permissions";
-import { inviteAction, passwordLinkAction, removeAction, revokeAction, roleAction, type TeamResult } from "./actions";
+import { assignDepartmentAction, inviteAction, passwordLinkAction, removeAction, revokeAction, roleAction, type TeamResult } from "./actions";
+import { DepartmentsCard, PermissionsDialog, type Department } from "./team-extras";
 
-const ROLES: Role[] = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT"];
+const ROLES: Role[] = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT", "VIEWER"];
 
-type Member = { userId: string; name: string; email: string; role: string; since: string };
+type Member = { userId: string; name: string; email: string; role: string; permissions: string[]; departmentId: string | null; since: string };
 type Pending = { id: string; email: string; role: string; expiresAt: string };
 
 function LinkBox({ url }: { url: string }) {
@@ -42,7 +43,25 @@ function LinkBox({ url }: { url: string }) {
   );
 }
 
-export function TeamView({ me, myRole, canManage, members, pending }: { me: string; myRole: string; canManage: boolean; members: Member[]; pending: Pending[] }) {
+export function TeamView({
+  me,
+  myRole,
+  canManage,
+  members,
+  pending,
+  departments,
+  allPermissions,
+  myPermissions,
+}: {
+  me: string;
+  myRole: string;
+  canManage: boolean;
+  members: Member[];
+  pending: Pending[];
+  departments: Department[];
+  allPermissions: readonly string[];
+  myPermissions: string[];
+}) {
   const { t, locale, region } = useI18n();
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -51,6 +70,7 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
   const [role, setRole] = useState<Role>("EMPLOYEE");
   const [link, setLink] = useState<{ title: string; url: string; mailed?: boolean } | null>(null);
   const [removing, setRemoving] = useState<Member | null>(null);
+  const [rights, setRights] = useState<Member | null>(null);
 
   const roles = ROLES.filter((r) => r !== "OWNER" || myRole === "OWNER");
   const run = (work: () => Promise<TeamResult>, done?: (r: TeamResult) => void) =>
@@ -79,6 +99,7 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
             <TableRow>
               <TableHead>{t("team.name")}</TableHead>
               <TableHead>{t("settings.role")}</TableHead>
+              {departments.length > 0 && <TableHead className="hidden md:table-cell">{t("departments.one")}</TableHead>}
               <TableHead className="hidden sm:table-cell">{t("team.since")}</TableHead>
               <TableHead className="w-12" />
             </TableRow>
@@ -104,12 +125,34 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
                               {t(`settings.${r}`)}
                             </SelectItem>
                           ))}
+                          {m.role === "CUSTOM" && <SelectItem value="CUSTOM">{t("settings.CUSTOM")}</SelectItem>}
                         </SelectContent>
                       </Select>
                     ) : (
                       <Badge variant="secondary">{t(`settings.${m.role}`)}</Badge>
                     )}
                   </TableCell>
+                  {departments.length > 0 && (
+                    <TableCell className="hidden md:table-cell">
+                      {canManage ? (
+                        <Select value={m.departmentId ?? "NONE"} onValueChange={(d) => run(() => assignDepartmentAction(m.userId, d === "NONE" ? null : d))}>
+                          <SelectTrigger className="w-40" aria-label={t("departments.one")} disabled={busy}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NONE">{t("common.none")}</SelectItem>
+                            {departments.map((d) => (
+                              <SelectItem key={d.id} value={d.id}>
+                                {d.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        (departments.find((d) => d.id === m.departmentId)?.name ?? t("common.none"))
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="hidden text-muted-foreground sm:table-cell">{formatDate(m.since, locale, region)}</TableCell>
                   <TableCell className="text-right">
                     {editable && (
@@ -125,6 +168,11 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
                           >
                             <KeyRound className="size-4" /> {t("team.passwordLink")}
                           </DropdownMenuItem>
+                          {m.role !== "OWNER" && (
+                            <DropdownMenuItem onClick={() => setRights(m)}>
+                              <ShieldCheck className="size-4" /> {t("permissions.edit")}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem className="text-destructive" onClick={() => setRemoving(m)}>
                             <Trash2 className="size-4" /> {t("team.remove")}
                           </DropdownMenuItem>
@@ -138,6 +186,9 @@ export function TeamView({ me, myRole, canManage, members, pending }: { me: stri
           </TableBody>
         </Table>
       </div>
+
+      {canManage && <DepartmentsCard departments={departments} members={members} />}
+      {rights && <PermissionsDialog member={rights} all={allPermissions} mine={myPermissions} onClose={() => setRights(null)} />}
 
       {pending.length > 0 && (
         <Card>

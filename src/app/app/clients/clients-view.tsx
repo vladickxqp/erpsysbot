@@ -107,6 +107,7 @@ export function ClientsView({
                 {t(`clients.${s}`)}
               </SelectItem>
             ))}
+            <SelectItem value="ARCHIVED">{t("crm.archived")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={params.get("sort") ?? "newest"} onValueChange={(v) => go({ sort: v === "newest" ? null : v })}>

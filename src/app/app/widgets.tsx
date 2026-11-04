@@ -316,7 +316,7 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
                   </div>
                 </div>
                 <InvoiceStatusBadge status={inv.status} overdue={inv.overdue} kind={inv.kind} />
-                <div className="w-28 text-right tabular-nums">{money(inv.grossCents)}</div>
+                <div className="w-28 text-right tabular-nums">{formatMoney(inv.grossCents, locale, { ...region, currency: inv.currency ?? region.currency })}</div>
               </Link>
             ))}
           </div>

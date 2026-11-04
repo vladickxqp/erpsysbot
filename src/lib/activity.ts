@@ -29,6 +29,7 @@ export const ACTIVITY_VERB: Record<string, string> = {
 };
 
 export const ACTIVITY_ENTITIES = [
+  "apikey",
   "appointment",
   "auth",
   "automation",
@@ -46,6 +47,7 @@ export const ACTIVITY_ENTITIES = [
   "quote",
   "reminder",
   "social",
+  "sponsor",
   "stock",
   "task",
   "team",

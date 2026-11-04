@@ -16,7 +16,7 @@
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { memberships, organizations, platformInvites, sessions, suspensions, users } from "@/db/schema";
+import { memberships, organizations, passwordResets, platformInvites, sessions, suspensions, users } from "@/db/schema";
 import { LOCALES } from "@/i18n";
 import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
@@ -195,11 +195,19 @@ export class PasswordChangeError extends Error {
 /** Changes one's own password; every other device has to sign in again. */
 export async function changePassword(userId: string, sessionId: string, current: string, next: string): Promise<void> {
   if (next.length < MIN_PASSWORD_LENGTH || next.length > 200) throw new PasswordChangeError("TOO_SHORT");
-  if (!(await passwordMatches(userId, current))) throw new PasswordChangeError("WRONG_PASSWORD");
+  // A session alone must not be able to guess the password.
+  const key = `change|${userId}`;
+  if (throttled(key)) throw new PasswordChangeError("WRONG_PASSWORD");
+  if (!(await passwordMatches(userId, current))) {
+    remember(key);
+    throw new PasswordChangeError("WRONG_PASSWORD");
+  }
+  attempts.delete(key);
   const passwordHash = await hashPassword(next);
   await getDb().transaction(async (tx) => {
     await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
     await tx.delete(sessions).where(and(eq(sessions.userId, userId), ne(sessions.id, sessionId)));
+    await tx.delete(passwordResets).where(eq(passwordResets.userId, userId));
   });
 }
 

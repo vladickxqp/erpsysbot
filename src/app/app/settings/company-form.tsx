@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/client";
+import { US_STATE_TAX } from "@/lib/us-tax";
 import { countryProfile } from "@/lib/countries";
 import { saveCompanyAction } from "./actions";
 
@@ -176,6 +177,24 @@ export function CompanyForm({
               </SelectContent>
             </Select>
           </label>
+          {country === "US" && (
+            <label className="grid gap-1.5 sm:col-span-2">
+              <span className="text-sm font-medium">{t("company.usState")}</span>
+              <select
+                className="h-9 rounded-md border bg-transparent px-2 text-sm"
+                disabled={!canEdit}
+                defaultValue=""
+                onChange={(e) => e.target.value && setV({ ...v, taxRates: String(US_STATE_TAX[e.target.value]) })}
+              >
+                <option value="">—</option>
+                {Object.entries(US_STATE_TAX).map(([state, rate]) => (
+                  <option key={state} value={state}>
+                    {state} · {rate} %
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {field("taxRates", "sm:col-span-2", { placeholder: profile.taxRates.join("; ") || "0", inputMode: "decimal" })}
           {profile.smallBusiness && (
             <label className="flex items-center gap-2 text-sm sm:col-span-6">

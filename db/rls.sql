@@ -217,7 +217,7 @@ DO $$
 DECLARE
   t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats', 'recurring_invoices', 'bank_transactions', 'client_contacts', 'client_activities', 'time_entries'] LOOP
+  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats', 'recurring_invoices', 'bank_transactions', 'client_contacts', 'client_activities', 'time_entries', 'departments', 'sponsorships', 'goals', 'habits', 'habit_checks'] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (organization_id = app_org_id()) WITH CHECK (organization_id = app_org_id())', t);
@@ -248,7 +248,8 @@ BEGIN
     OR NEW.client_id <> OLD.client_id OR NEW.issue_date IS DISTINCT FROM OLD.issue_date
     OR NEW.buyer_snapshot IS DISTINCT FROM OLD.buyer_snapshot
     OR NEW.seller_snapshot IS DISTINCT FROM OLD.seller_snapshot
-    OR NEW.kind <> OLD.kind OR NEW.status = 'DRAFT') THEN
+    OR NEW.kind <> OLD.kind OR NEW.status = 'DRAFT'
+    OR NEW.currency IS DISTINCT FROM OLD.currency OR NEW.exchange_rate IS DISTINCT FROM OLD.exchange_rate) THEN
     RAISE EXCEPTION 'issued invoice % cannot be changed', OLD.number USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;

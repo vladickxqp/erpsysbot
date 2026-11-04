@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
 import { NAV, isActive, type Feature, type NavItem } from "./nav";
+import { NotificationBell } from "./notification-bell";
 import { ThemeToggle } from "./theme-toggle";
 
 export type ShellProps = {
@@ -119,14 +120,14 @@ function GlobalSearch() {
       className="relative hidden md:block w-full max-w-sm"
       onSubmit={(e) => {
         e.preventDefault();
-        router.push(`/app/clients?q=${encodeURIComponent(q.trim())}`);
+        router.push(`/app/search?q=${encodeURIComponent(q.trim())}`);
       }}
     >
       <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder={t("clients.searchPlaceholder")}
+        placeholder={t("common.search")}
         aria-label={t("common.search")}
         className="pl-8 bg-background"
       />
@@ -210,6 +211,7 @@ export function Shell({ user, company, companies, permissions, features, offModu
           </Link>
           <GlobalSearch />
           <div className="ml-auto flex items-center gap-1">
+            <NotificationBell />
             <LocaleSwitch />
             <ThemeToggle />
             <UserMenu user={user} />

@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
+import { NotFoundError } from "@/server/clients";
 import { MESSAGES, isLocale, translator } from "@/i18n";
 import { BillingError } from "@/server/billing";
+import { emailVerified } from "@/server/auth/email-verification";
 import { mailAvailable, sendMail, takeMailBudget } from "@/server/mail";
+import { registrationOpen } from "@/server/settings";
 import { ForbiddenError, type Role } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
-import { TeamError, changeRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation } from "@/server/team";
+import { assignDepartment, deleteDepartment, saveDepartment } from "@/server/departments";
+import { TeamError, changeRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation, setMemberPermissions } from "@/server/team";
 
 export type TeamResult = { ok?: boolean; url?: string; mailed?: boolean; error?: string };
 
@@ -21,8 +25,41 @@ async function guarded(work: () => Promise<TeamResult>): Promise<TeamResult> {
     if (e instanceof TeamError) return { error: `team.${e.code}` };
     if (e instanceof BillingError) return { error: `billing.${e.code}` };
     if (e instanceof ZodError) return { error: "auth.check" };
+    if (e instanceof NotFoundError) return { error: "common.error" };
     throw e;
   }
+}
+
+export async function permissionsAction(userId: string, permissions: string[]): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await setMemberPermissions(ctx, userId, permissions);
+    return { ok: true };
+  });
+}
+
+export async function saveDepartmentAction(name: string): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await saveDepartment(ctx, null, { name });
+    return { ok: true };
+  });
+}
+
+export async function deleteDepartmentAction(id: string): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await deleteDepartment(ctx, id);
+    return { ok: true };
+  });
+}
+
+export async function assignDepartmentAction(userId: string, departmentId: string | null): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await assignDepartment(ctx, userId, departmentId);
+    return { ok: true };
+  });
 }
 
 export async function inviteAction(email: string, role: Role): Promise<TeamResult> {
@@ -31,7 +68,9 @@ export async function inviteAction(email: string, role: Role): Promise<TeamResul
     const invite = await inviteMember(ctx, { email, role: role as never });
     const url = `${await publicBase()}/invite/${invite.token}`;
     let mailed = false;
-    if (mailAvailable() && takeMailBudget(ctx.organization.id)) {
+    // Unproven people get the link to pass on; the shared sender stays out of it on open sign-up.
+    const mayMail = !registrationOpen() || (await emailVerified(ctx.user.userId));
+    if (mailAvailable() && mayMail && takeMailBudget(ctx.organization.id)) {
       const t = translator(MESSAGES[isLocale(ctx.user.locale) ? ctx.user.locale : "de"]);
       mailed = await sendMail({
         to: invite.email,

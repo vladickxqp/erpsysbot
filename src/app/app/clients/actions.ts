@@ -7,6 +7,7 @@ import {
   deleteClient,
   DuplicateClientError,
   NotFoundError,
+  setClientArchived,
   updateClient,
   type ClientInput,
 } from "@/server/clients";
@@ -128,6 +129,10 @@ async function crm(work: (ctx: Awaited<ReturnType<typeof requireContext>>) => Pr
     if (e instanceof ZodError || e instanceof NotFoundError) return { error: "check" };
     throw e;
   }
+}
+
+export async function archiveClientAction(id: string, archived: boolean): Promise<ClientResult> {
+  return crm((ctx) => setClientArchived(ctx, id, archived));
 }
 
 export async function saveContactAction(clientId: string, id: string | null, input: ContactInput): Promise<ClientResult> {

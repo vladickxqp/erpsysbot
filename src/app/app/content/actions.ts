@@ -20,10 +20,11 @@ import {
   type TemplateInput,
 } from "@/server/content";
 import { generateContent, type GenerationInput, type Suggestion } from "@/server/content-ai";
-import { addDays, today } from "@/server/money";
+import { addDays, parseMoney, today } from "@/server/money";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 import { publishToTelegram, SocialError } from "@/server/social";
+import { deleteSponsorship, invoiceSponsorship, saveSponsorship, SponsorError, type SponsorInput } from "@/server/sponsorships";
 
 export type ContentResult = { ok?: boolean; id?: string; url?: string | null; error?: string };
 
@@ -33,6 +34,7 @@ function failure(e: unknown): ContentResult {
   if (e instanceof ZodError) return { error: "auth.check" };
   if (e instanceof ContentError) return { error: `studio.${e.code}` };
   if (e instanceof SocialError) return { error: `social.${e.code}` };
+  if (e instanceof SponsorError) return { error: `sponsors.${e.code}` };
   if (e instanceof AssistantError) return { error: `assistant.${({ NOT_CONFIGURED: "notConfigured", LIMIT: "limit", BUSY: "busy", REFUSED: "refused", FAILED: "failed" } as const)[e.code]}` };
   throw e;
 }
@@ -134,6 +136,44 @@ export async function publishTelegramAction(id: string, accountId: string): Prom
     const url = await publishToTelegram(ctx, id, accountId);
     refresh();
     return { ok: true, url };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function saveSponsorAction(
+  id: string | null,
+  p: Omit<SponsorInput, "amountCents"> & { amount: string },
+): Promise<ContentResult> {
+  const ctx = await requireContext();
+  try {
+    const { amount, ...rest } = p;
+    const row = await saveSponsorship(ctx, id, { ...rest, amountCents: amount.trim() ? (parseMoney(amount) ?? -1) : 0 });
+    revalidatePath("/app/content/sponsors");
+    return { ok: true, id: row.id };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function deleteSponsorAction(id: string): Promise<ContentResult> {
+  const ctx = await requireContext();
+  try {
+    await deleteSponsorship(ctx, id);
+    revalidatePath("/app/content/sponsors");
+    return { ok: true };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function invoiceSponsorAction(id: string): Promise<ContentResult> {
+  const ctx = await requireContext();
+  try {
+    const invoice = await invoiceSponsorship(ctx, id);
+    revalidatePath("/app/content/sponsors");
+    revalidatePath("/app/invoices");
+    return { ok: true, id: invoice.id };
   } catch (e) {
     return failure(e);
   }

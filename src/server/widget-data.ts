@@ -124,7 +124,7 @@ export async function loadWidgetData(ctx: Context, types: Set<WidgetType>) {
       via: a.via,
       at: a.createdAt.toISOString(),
     })),
-    recentInvoices: invoices?.rows.map((i) => ({ id: i.id, number: i.number, clientName: i.clientName, status: i.status, overdue: i.overdue, kind: i.kind, grossCents: i.grossCents, issueDate: i.issueDate })),
+    recentInvoices: invoices?.rows.map((i) => ({ id: i.id, number: i.number, clientName: i.clientName, status: i.status, overdue: i.overdue, kind: i.kind, grossCents: i.grossCents, currency: i.currency, issueDate: i.issueDate })),
     notifications: types.has("notifications") ? notifications : null,
     recommendations: types.has("recommendations") ? recommendations : null,
     assistant: has(ctx, "ai.use") && assistantAvailable() && moduleOn(ctx, "assistant"),

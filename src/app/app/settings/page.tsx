@@ -12,6 +12,7 @@ import { mailAvailable } from "@/server/mail";
 import { CompanyForm } from "./company-form";
 import { PrivacyCard } from "./privacy-card";
 import { SecurityCard } from "./security-card";
+import { CalendarLinkCard, LogoCard } from "./extras-card";
 import { ModulesCard } from "./modules-card";
 import { TelegramCard } from "./telegram-card";
 
@@ -80,6 +81,8 @@ export default async function SettingsPage() {
             recoveryLeft={recoveryLeft}
             sessions={sessions.map((s) => ({ ...s, createdAt: s.createdAt.toISOString(), current: s.id === ctx.user.sessionId }))}
           />
+          {ctx.permissions.has("settings.manage") && <LogoCard logoId={o.logoDocumentId} />}
+          <CalendarLinkCard />
           <PrivacyCard owner={ctx.role === "OWNER"} companyName={o.name} />
           {telegram !== undefined && (
             <TelegramCard linked={telegram ? { name: telegram.username ? `@${telegram.username}` : "Telegram", notify: telegram.notify } : null} />

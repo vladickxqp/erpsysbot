@@ -10,6 +10,7 @@ import { audit, type Via } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { today } from "./money";
+import { assertModule } from "./modules";
 import { requirePermission } from "./permissions";
 
 export const DEAL_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
@@ -46,6 +47,7 @@ export type DealInput = z.input<typeof dealInput>;
 const closed = (stage: DealStage) => stage === "WON" || stage === "LOST";
 
 export async function saveDeal(ctx: Context, id: string | null, raw: DealInput, via: Via = "web"): Promise<Deal> {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, id ? "clients.update" : "clients.create");
   const input = dealInput.parse(raw);
   return withTenant(ctx.organization.id, async (tx) => {
@@ -84,6 +86,7 @@ export async function saveDeal(ctx: Context, id: string | null, raw: DealInput, 
 
 /** Dragged to another column. */
 export async function moveDeal(ctx: Context, id: string, stage: DealStage): Promise<void> {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.update");
   await withTenant(ctx.organization.id, async (tx) => {
     const [current] = await tx.select().from(deals).where(eq(deals.id, id)).limit(1);
@@ -99,6 +102,7 @@ export async function moveDeal(ctx: Context, id: string, stage: DealStage): Prom
 }
 
 export async function deleteDeal(ctx: Context, id: string): Promise<void> {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.delete");
   await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ title: deals.title });
@@ -109,6 +113,7 @@ export async function deleteDeal(ctx: Context, id: string): Promise<void> {
 
 /** Open deals, plus those closed in the last 30 days. */
 export async function listDeals(ctx: Context, opts: { clientId?: string } = {}) {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.read");
   const since = new Date(Date.now() - 30 * 86_400_000);
   return withTenant(ctx.organization.id, async (tx) => {
@@ -129,6 +134,7 @@ export async function listDeals(ctx: Context, opts: { clientId?: string } = {}) 
 
 /** Pipeline value per stage and the win rate of the last 90 days. */
 export async function pipelineStats(ctx: Context) {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.read");
   const since = new Date(Date.now() - 90 * 86_400_000);
   return withTenant(ctx.organization.id, async (tx) => {
@@ -155,6 +161,7 @@ export async function pipelineStats(ctx: Context) {
 
 /** Follow-ups due today or earlier, for the morning summary. */
 export async function dueFollowUps(ctx: Context, userId?: string) {
+  assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.read");
   const now = today(ctx.organization.timezone);
   return withTenant(ctx.organization.id, async (tx) => {

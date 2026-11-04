@@ -20,7 +20,9 @@ import { audit } from "@/server/audit";
 import { isLocale } from "@/i18n";
 import { sendVerificationMail } from "@/server/auth/email-verification";
 import { SESSION_COOKIE } from "@/server/auth/sessions";
-import { updateCompany, type CompanyInput } from "@/server/company";
+import { newCalendarLink } from "@/server/calendar-feed";
+import { setCompanyLogo, updateCompany, type CompanyInput } from "@/server/company";
+import { takeMailThrottle } from "@/server/mail";
 import { deleteAccount, deleteCompany, PrivacyError } from "@/server/privacy";
 import { setCompanyModules, setMyModules } from "@/server/modules";
 import { ForbiddenError } from "@/server/permissions";
@@ -146,6 +148,7 @@ export async function changePasswordAction(current: string, next: string): Promi
 
 export async function resendVerificationAction(): Promise<SecurityResult> {
   const ctx = await requireContext();
+  if (!takeMailThrottle(`verify:${ctx.user.userId}`)) return { error: "send.LIMIT" };
   const sent = await sendVerificationMail(ctx.user.userId, ctx.user.email, isLocale(ctx.user.locale) ? ctx.user.locale : "de", await publicBase());
   return sent ? { ok: true } : { error: "common.error" };
 }
@@ -185,4 +188,21 @@ export async function deleteAccountAction(password: string): Promise<SecurityRes
   }
   (await cookies()).delete(SESSION_COOKIE);
   redirect("/login");
+}
+
+export async function setLogoAction(documentId: string | null): Promise<SecurityResult> {
+  const ctx = await requireContext();
+  try {
+    await setCompanyLogo(ctx, documentId);
+    revalidatePath("/app/settings");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "common.forbidden" };
+    return { error: "documents.TYPE" };
+  }
+}
+
+export async function calendarLinkAction(): Promise<{ url: string }> {
+  const ctx = await requireContext();
+  return { url: `${await publicBase()}/api/calendar/${await newCalendarLink(ctx)}.ics` };
 }

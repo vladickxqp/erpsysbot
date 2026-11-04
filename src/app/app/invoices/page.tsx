@@ -95,7 +95,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     <TableCell>
                       <InvoiceStatusBadge status={i.status} overdue={i.overdue} kind={i.kind} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(i.grossCents, locale, region)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(i.grossCents, locale, { ...region, currency: i.currency ?? region.currency })}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -108,7 +108,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{i.number ?? t("invoices.draftNumber")}</div>
                     <div className="truncate text-sm text-muted-foreground">
-                      {i.clientName} · {formatMoney(i.grossCents, locale, region)}
+                      {i.clientName} · {formatMoney(i.grossCents, locale, { ...region, currency: i.currency ?? region.currency })}
                     </div>
                   </div>
                   <InvoiceStatusBadge status={i.status} overdue={i.overdue} kind={i.kind} />

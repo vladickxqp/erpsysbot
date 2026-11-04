@@ -14,11 +14,12 @@ import { audit } from "./audit";
 import { startTrial } from "./billing";
 import type { Context } from "./context";
 import { requirePermission } from "./permissions";
+import { registrationOpen } from "./settings";
 
 const MAX_OWNED = 10;
 
 export class WorkspaceError extends Error {
-  constructor(public readonly code: "TOO_MANY") {
+  constructor(public readonly code: "TOO_MANY" | "NOT_ALLOWED") {
     super(code);
   }
 }
@@ -43,6 +44,8 @@ export async function createWorkspace(ctx: Context, rawName: string): Promise<st
     .from(memberships)
     .where(and(eq(memberships.userId, ctx.user.userId), eq(memberships.role, "OWNER")));
   if (Number(n) >= MAX_OWNED) throw new WorkspaceError("TOO_MANY");
+  // On a server with sign-up by invitation, a member of someone else's company does not open companies.
+  if (Number(n) === 0 && !registrationOpen()) throw new WorkspaceError("NOT_ALLOWED");
   const from = ctx.organization;
   const id = await db.transaction(async (tx) => {
     const [org] = await tx
@@ -62,6 +65,7 @@ export async function createWorkspace(ctx: Context, rawName: string): Promise<st
     await tx.update(sessions).set({ activeOrganizationId: org.id }).where(eq(sessions.id, ctx.user.sessionId));
     return org.id;
   });
-  await startTrial(id);
+  // One trial per person, with the first company: further workspaces do not start another.
+  if (Number(n) === 0) await startTrial(id);
   return id;
 }

@@ -25,6 +25,7 @@ export const APP_MODULES = [
   "automation",
   "assistant",
   "integrations",
+  "personal",
 ] as const;
 
 export type AppModule = (typeof APP_MODULES)[number];
@@ -56,6 +57,7 @@ const PATHS: [string, AppModule][] = [
   ["/app/automations", "automation"],
   ["/app/assistant", "assistant"],
   ["/app/integrations", "integrations"],
+  ["/app/personal", "personal"],
 ];
 
 export function moduleOfPath(pathname: string): AppModule | null {
@@ -101,8 +103,8 @@ export const WORKSPACE_TYPES = ["BUSINESS", "CREATOR", "FREELANCER", "PERSONAL"]
 export type WorkspaceType = (typeof WORKSPACE_TYPES)[number];
 
 export const WORKSPACE_OFF: Record<WorkspaceType, AppModule[]> = {
-  BUSINESS: ["content", "social", "time"],
-  CREATOR: ["pipeline", "orders", "products", "inventory", "automation"],
-  FREELANCER: ["orders", "products", "inventory", "content", "social", "team", "automation"],
+  BUSINESS: ["content", "social", "time", "personal"],
+  CREATOR: ["pipeline", "orders", "products", "inventory", "automation", "personal"],
+  FREELANCER: ["orders", "products", "inventory", "content", "social", "team", "automation", "personal"],
   PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "content", "social", "reports", "team", "automation", "integrations"],
 };

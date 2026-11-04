@@ -186,7 +186,11 @@ type Spec = {
   seller: Seller;
   buyer: Party;
   locale: Locale;
+  logo?: Logo | null;
 };
+
+/** The company's picture in the head of a document. */
+export type Logo = { bytes: Uint8Array; mime: string };
 
 export type PdfInput = {
   invoice: Invoice;
@@ -196,9 +200,10 @@ export type PdfInput = {
   /** The number of the invoice a credit note corrects. */
   corrects?: string | null;
   locale: Locale;
+  logo?: Logo | null;
 };
 
-export function invoicePdf({ invoice, items, seller, buyer, corrects, locale }: PdfInput): Promise<Uint8Array> {
+export function invoicePdf({ invoice, items, seller, buyer, corrects, locale, logo }: PdfInput): Promise<Uint8Array> {
   return renderDocument({
     kind: invoice.kind,
     draft: invoice.status === "DRAFT",
@@ -216,6 +221,7 @@ export function invoicePdf({ invoice, items, seller, buyer, corrects, locale }: 
     seller,
     buyer,
     locale,
+    logo,
   });
 }
 
@@ -225,10 +231,12 @@ export type QuotePdfInput = {
   seller: Seller;
   buyer: Party;
   locale: Locale;
+  logo?: Logo | null;
 };
 
-export function quotePdf({ quote, items, seller, buyer, locale }: QuotePdfInput): Promise<Uint8Array> {
+export function quotePdf({ quote, items, seller, buyer, locale, logo }: QuotePdfInput): Promise<Uint8Array> {
   return renderDocument({
+    logo,
     kind: "QUOTE",
     draft: false,
     number: quote.number,
@@ -252,10 +260,12 @@ export type ReminderPdfInput = {
   seller: Seller;
   buyer: Party;
   locale: Locale;
+  logo?: Logo | null;
 };
 
-export function reminderPdf({ reminder, invoice, seller, buyer, locale }: ReminderPdfInput): Promise<Uint8Array> {
+export function reminderPdf({ reminder, invoice, seller, buyer, locale, logo }: ReminderPdfInput): Promise<Uint8Array> {
   return renderDocument({
+    logo,
     kind: "REMINDER",
     draft: false,
     number: null,
@@ -404,7 +414,11 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   // --- Head ---------------------------------------------------------------------------------
   let page = newPage();
   const top = sheet.height - 20 * MM;
-  text(page, seller.name, LEFT, top, 15, bold);
+  const picture = spec.logo ? await (spec.logo.mime === "image/png" ? doc.embedPng(spec.logo.bytes) : doc.embedJpg(spec.logo.bytes)).catch(() => null) : null;
+  if (picture) {
+    const size = picture.scaleToFit(55 * MM, 16 * MM);
+    page.drawImage(picture, { x: LEFT, y: top + 12 - size.height, width: size.width, height: size.height });
+  } else text(page, seller.name, LEFT, top, 15, bold);
   const sellerLines = [
     seller.street,
     cityLine(seller),

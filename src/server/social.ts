@@ -20,6 +20,7 @@ import { NotFoundError } from "./clients";
 import { postText } from "./content";
 import type { Context } from "./context";
 import { locateDocument } from "./documents";
+import { assertModule } from "./modules";
 import { today } from "./money";
 import { requirePermission } from "./permissions";
 import { botToken, youtubeKey } from "./settings";
@@ -147,6 +148,7 @@ async function checkTelegramOwner(ctx: Context, channel: string, call: TelegramC
 
 export async function addSocialAccount(ctx: Context, provider: string, value: string, fetcher: Fetch = fetch, call: TelegramCall = callTelegram) {
   requirePermission(ctx.permissions, "settings.manage");
+  assertModule(ctx, "integrations");
   if (!(READABLE as readonly string[]).includes(provider)) throw new SocialError("NOT_SUPPORTED");
   if (!value.trim()) throw new SocialError("NOT_FOUND");
   const figures = await fetchFigures(provider, normalizeExternalId(provider, value), fetcher, call);

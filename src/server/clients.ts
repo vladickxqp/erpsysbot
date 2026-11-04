@@ -5,7 +5,7 @@
  * and works inside withTenant(): the company comes from the verified
  * membership, Row Level Security does the rest. Each change is audited.
  */
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type Tx } from "@/db/tenant";
 import { clients } from "@/db/schema";
@@ -173,6 +173,8 @@ export type ClientSort = (typeof SORTS)[number];
 export type ClientQuery = {
   q?: string;
   status?: "LEAD" | "ACTIVE" | "INACTIVE";
+  /** The archive instead of the working list. */
+  archived?: boolean;
   sort?: ClientSort;
   page?: number;
   pageSize?: number;
@@ -201,6 +203,7 @@ export async function listClients(ctx: Context, query: ClientQuery = {}) {
     );
   }
   if (query.status) filters.push(eq(clients.status, query.status));
+  filters.push(query.archived ? isNotNull(clients.archivedAt) : isNull(clients.archivedAt));
   const where = filters.length ? and(...filters) : undefined;
   const order = {
     newest: [desc(clients.createdAt)],
@@ -218,6 +221,20 @@ export async function listClients(ctx: Context, query: ClientQuery = {}) {
       .offset((page - 1) * pageSize);
     const [{ total }] = await tx.select({ total: sql<number>`count(*)::int` }).from(clients).where(where);
     return { rows, total, page, pageSize };
+  });
+}
+
+/** Out of the working lists and pickers, or back; invoices and history stay. */
+export async function setClientArchived(ctx: Context, id: string, archived: boolean): Promise<void> {
+  requirePermission(ctx.permissions, "clients.update");
+  await withTenant(ctx.organization.id, async (tx) => {
+    const [row] = await tx
+      .update(clients)
+      .set({ archivedAt: archived ? new Date() : null })
+      .where(eq(clients.id, id))
+      .returning({ id: clients.id });
+    if (!row) throw new NotFoundError();
+    await audit(tx, ctx, "client.update", "client", id, { archived });
   });
 }
 
@@ -266,6 +283,7 @@ export async function clientOptions(ctx: Context): Promise<{ id: string; name: s
     tx
       .select({ id: clients.id, number: clients.number, companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName })
       .from(clients)
+      .where(isNull(clients.archivedAt))
       .orderBy(asc(sql`lower(coalesce(${clients.companyName}, ${clients.lastName}, ${clients.firstName}))`))
       .limit(2000),
   );

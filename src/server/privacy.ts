@@ -10,7 +10,7 @@ import path from "node:path";
 import { rm } from "node:fs/promises";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assistantMessages, documents, memberships, organizations, sessions, TENANT_TABLES, telegramLinks, users } from "@/db/schema";
+import { assistantMessages, documents, goals, habitChecks, habits, memberships, organizations, PRIVATE_TABLES, sessions, TENANT_TABLES, telegramLinks, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { verifyPassword } from "./auth/password";
 import { billingEnabled, isActive, subscriptionOf } from "./billing";
@@ -55,6 +55,7 @@ export async function companyExport(ctx: Context): Promise<{ filename: string; e
   ];
   // One table after the other: the embedded database has a single connection.
   for (const table of TENANT_TABLES) {
+    if (PRIVATE_TABLES.includes(table)) continue;
     const rows = rowsOf(await withTenant(org.id, (tx) => tx.execute(sql`select * from ${sql.identifier(table)}`)));
     if (rows.length) entries.push({ name: `data/${table}.json`, data: json(rows) });
   }
@@ -86,6 +87,7 @@ export async function personalExport(user: SessionUser) {
     .where(eq(sessions.userId, user.userId));
   const telegram = await db.select({ username: telegramLinks.username, createdAt: telegramLinks.createdAt }).from(telegramLinks).where(eq(telegramLinks.userId, user.userId));
   const assistant: Record<string, unknown[]> = {};
+  const personal: Record<string, unknown> = {};
   for (const c of companies) {
     assistant[c.name] = await withTenant(c.id, (tx) =>
       tx
@@ -93,6 +95,14 @@ export async function personalExport(user: SessionUser) {
         .from(assistantMessages)
         .where(eq(assistantMessages.userId, user.userId)),
     );
+    personal[c.name] = await withTenant(c.id, async (tx) => ({
+      goals: await tx.select({ title: goals.title, targetDate: goals.targetDate, progress: goals.progress }).from(goals).where(eq(goals.userId, user.userId)),
+      habits: await tx
+        .select({ title: habits.title, day: habitChecks.day })
+        .from(habits)
+        .leftJoin(habitChecks, eq(habitChecks.habitId, habits.id))
+        .where(eq(habits.userId, user.userId)),
+    }));
   }
   return {
     exportedAt: new Date().toISOString(),
@@ -101,6 +111,7 @@ export async function personalExport(user: SessionUser) {
     sessions: devices,
     telegram,
     assistantConversations: assistant,
+    goalsAndHabits: personal,
   };
 }
 

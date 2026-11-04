@@ -1,5 +1,6 @@
 import { isLocale } from "@/i18n";
 import { NotFoundError } from "@/server/clients";
+import { companyLogo } from "@/server/documents";
 import { pdfData } from "@/server/invoices";
 import { invoicePdf } from "@/server/pdf";
 import { ForbiddenError } from "@/server/permissions";
@@ -10,7 +11,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const data = await pdfData(ctx, (await params).id);
     const locale = isLocale(ctx.organization.locale) ? ctx.organization.locale : "de";
-    const pdf = await invoicePdf({ ...data, locale });
+    const pdf = await invoicePdf({ ...data, locale, logo: await companyLogo(ctx) });
     const name = (data.invoice.number ?? "entwurf").replace(/[^\w.-]+/g, "_");
     return new Response(Buffer.from(pdf), {
       headers: {

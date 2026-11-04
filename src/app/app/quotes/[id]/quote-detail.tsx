@@ -1,5 +1,6 @@
 "use client";
 
+import { ShareButton } from "@/components/app/share-button";
 import { ArrowLeft, Check, ClipboardList, Download, FileText, Pencil, Send, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -114,6 +115,7 @@ export function QuoteDetail({
               <Download className="size-4" /> PDF
             </a>
           </Button>
+          <ShareButton kind="quote" id={quote.id} />
           {can.update && open && (
             <>
               {quote.status === "DRAFT" && (

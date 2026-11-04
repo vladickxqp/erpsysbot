@@ -10,6 +10,7 @@ import { auditLog, clients, invoiceItems, invoices, memberships, orders, transac
 import { displayName } from "./clients";
 import type { Context } from "./context";
 import { today } from "./money";
+import { assertModule } from "./modules";
 import { requirePermission, type Permission } from "./permissions";
 
 export type Column = { key: string; label: string; kind: "text" | "money" | "number" | "date" | "percent" };
@@ -32,6 +33,7 @@ type Rows<T> = { rows?: T[] } | T[];
 const rowsOf = <T>(r: Rows<T>): T[] => (Array.isArray(r) ? r : (r.rows ?? []));
 
 export async function buildReport(ctx: Context, kind: ReportKind, from: string, to: string): Promise<Report> {
+  assertModule(ctx, "reports");
   requirePermission(ctx.permissions, REPORT_PERMISSION[kind]);
   const org = ctx.organization.id;
   switch (kind) {
@@ -81,7 +83,7 @@ export async function buildReport(ctx: Context, kind: ReportKind, from: string, 
             due: invoice.dueDate,
             days: Math.max(0, late),
             bucket: `reports.${bucket}`,
-            open: invoice.grossCents - invoice.paidCents,
+            open: Math.round((invoice.grossCents - invoice.paidCents) * (invoice.exchangeRate ?? 1)),
           };
         });
         const totals: Record<string, number> = { open: sum(rows, "open") };
@@ -110,8 +112,8 @@ export async function buildReport(ctx: Context, kind: ReportKind, from: string, 
             firstName: clients.firstName,
             lastName: clients.lastName,
             count: sql<number>`count(*) filter (where ${invoices.kind} = 'INVOICE')::int`,
-            net: sql<number>`coalesce(sum(${invoices.netCents}), 0)::bigint`,
-            gross: sql<number>`coalesce(sum(${invoices.grossCents}), 0)::bigint`,
+            net: sql<number>`coalesce(round(sum(${invoices.netCents} * coalesce(${invoices.exchangeRate}, 1))), 0)::bigint`,
+            gross: sql<number>`coalesce(round(sum(${invoices.grossCents} * coalesce(${invoices.exchangeRate}, 1))), 0)::bigint`,
           })
           .from(invoices)
           .innerJoin(clients, eq(clients.id, invoices.clientId))

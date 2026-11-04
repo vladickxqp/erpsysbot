@@ -11,7 +11,9 @@ import { datevOf } from "@/server/datev";
 import { financeSummary, listTransactions, monthlyFlow } from "@/server/finance";
 import { today } from "@/server/money";
 import { requirePageContext } from "@/server/request";
+import { assistantAvailable } from "@/server/assistant/run";
 import { DatevDialog } from "./datev-dialog";
+import { ReceiptButton } from "./receipt-button";
 import { Transactions } from "./transactions";
 
 export async function generateMetadata() {
@@ -62,6 +64,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                 <Landmark className="size-4" /> {t("bank.title")}
               </Link>
             </Button>
+            {ctx.permissions.has("finance.create") && ctx.permissions.has("ai.use") && assistantAvailable() && <ReceiptButton today={today(ctx.organization.timezone)} />}
             {ctx.permissions.has("finance.export") && ["DE", "AT"].includes(ctx.organization.country) && (
               <DatevDialog
                 settings={datevOf(ctx.organization.datev)}

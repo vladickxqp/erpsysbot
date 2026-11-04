@@ -40,6 +40,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         dueDate: invoice.dueDate,
         notes: invoice.notes,
         grossCents: invoice.grossCents,
+        currency: invoice.currency,
         paidCents: invoice.paidCents,
         smallBusiness: invoice.smallBusiness,
         overdue:

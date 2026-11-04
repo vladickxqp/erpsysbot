@@ -10,9 +10,11 @@
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { invoices, organizations } from "@/db/schema";
+import { documents, invoices, organizations } from "@/db/schema";
+import { withTenant } from "@/db/tenant";
 import { countryProfile, parseRate, validTaxId } from "@/lib/countries";
 import type { Context } from "./context";
+import { NotFoundError } from "./clients";
 import { requirePermission } from "./permissions";
 
 const text = (max: number) =>
@@ -121,4 +123,14 @@ export async function updateCompany(ctx: Context, raw: CompanyInput) {
     .where(eq(organizations.id, ctx.organization.id))
     .returning();
   return row;
+}
+
+/** The picture on invoices and quotes: a PNG or JPEG from the documents store, or none. */
+export async function setCompanyLogo(ctx: Context, documentId: string | null): Promise<void> {
+  requirePermission(ctx.permissions, "settings.manage");
+  if (documentId) {
+    const [doc] = await withTenant(ctx.organization.id, (tx) => tx.select({ mimeType: documents.mimeType }).from(documents).where(eq(documents.id, documentId)));
+    if (!doc || !["image/png", "image/jpeg"].includes(doc.mimeType)) throw new NotFoundError();
+  }
+  await getDb().update(organizations).set({ logoDocumentId: documentId }).where(eq(organizations.id, ctx.organization.id));
 }

@@ -29,6 +29,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
           serviceDate: invoice.serviceDate ?? "",
           dueDate: invoice.dueDate ?? "",
           notes: invoice.notes ?? "",
+          currency: invoice.currency ?? undefined,
+          exchangeRate: invoice.exchangeRate ? String(invoice.exchangeRate) : undefined,
         }}
         items={items.map((i) => ({
           productId: i.productId,
