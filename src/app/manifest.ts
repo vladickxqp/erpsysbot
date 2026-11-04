@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 /** Installable on phones and desktops (PWA): opens straight into the app. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "AI Business OS",
+    name: "NEXORA ONE",
     short_name: "Business OS",
     description: "Kunden, Aufträge, Rechnungen, Finanzen",
     start_url: "/app",

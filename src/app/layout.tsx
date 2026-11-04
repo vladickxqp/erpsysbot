@@ -11,7 +11,7 @@ import "./globals.css";
 const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-  title: { default: "AI Business OS", template: "%s · AI Business OS" },
+  title: { default: "NEXORA ONE", template: "%s · NEXORA ONE" },
   description: "One platform. Your entire business. Powered by AI.",
   appleWebApp: { capable: true, title: "Business OS", statusBarStyle: "black-translucent" },
 };

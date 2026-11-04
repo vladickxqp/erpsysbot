@@ -298,7 +298,7 @@ export async function tablePdf(input: {
   const bold = await doc.embedFont(boldBytes, { subset: true });
   doc.setTitle(input.title);
   doc.setAuthor(input.company);
-  doc.setCreator("AI Business OS");
+  doc.setCreator("NEXORA ONE");
   const sheet = input.paper === "LETTER" ? LETTER : A4;
   const W = sheet.height;
   const H = sheet.width;
@@ -382,7 +382,7 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   const title = { INVOICE: L.invoice, CREDIT_NOTE: L.creditNote, QUOTE: L.quote, REMINDER: reminderTitle }[spec.kind];
   doc.setTitle(`${title} ${spec.number ?? ""}`.trim());
   doc.setAuthor(seller.name);
-  doc.setCreator("AI Business OS");
+  doc.setCreator("NEXORA ONE");
 
   const pages: PDFPage[] = [];
   const text = (page: PDFPage, value: string, x: number, y: number, size = 9, font = regular, color = INK) =>

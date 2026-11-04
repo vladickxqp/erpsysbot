@@ -9,13 +9,14 @@ import { and, asc, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auditLog, dashboards } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import type { AppModule } from "@/lib/modules";
+import type { AppModule, WorkspaceType } from "@/lib/modules";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { moduleOn } from "./modules";
 import type { Permission } from "./permissions";
 
 export const WIDGET_TYPES = [
+  "quickActions",
   "revenue",
   "expenses",
   "profit",
@@ -41,6 +42,7 @@ export type Widget = { id: string; type: WidgetType; size: WidgetSize; collapsed
 
 /** What each widget needs: a permission and a module switched on; and how wide it starts. */
 export const WIDGETS: Record<WidgetType, { needs: Permission | null; module: AppModule | null; size: WidgetSize }> = {
+  quickActions: { needs: null, module: null, size: 4 },
   revenue: { needs: "finance.read", module: "finance", size: 1 },
   expenses: { needs: "finance.read", module: "finance", size: 1 },
   profit: { needs: "finance.read", module: "finance", size: 1 },
@@ -97,9 +99,18 @@ export function newWidget(type: WidgetType): Widget {
   return { id: randomUUID().slice(0, 8), type, size: WIDGETS[type].size, collapsed: false };
 }
 
-/** A first dashboard: every widget this person may see. */
+/** What a first dashboard shows first, by kind of workspace; the rest follows only for companies. */
+const FIRST_WIDGETS: Partial<Record<WorkspaceType, WidgetType[]>> = {
+  CREATOR: ["quickActions", "content", "social", "myTasks", "revenue", "expenses", "agenda", "recommendations"],
+  FREELANCER: ["quickActions", "myTasks", "projects", "outstanding", "revenue", "expenses", "agenda", "notifications"],
+  PERSONAL: ["quickActions", "myTasks", "agenda", "projects", "expenses", "notifications"],
+};
+
+/** A first dashboard: for a company every widget this person may see, otherwise the ones that fit. */
 export function defaultWidgets(ctx: Context): Widget[] {
-  return availableWidgets(ctx).map(newWidget);
+  const allowed = availableWidgets(ctx);
+  const first = FIRST_WIDGETS[ctx.organization.workspaceType as WorkspaceType];
+  return (first ? first.filter((w) => allowed.includes(w)) : allowed).map(newWidget);
 }
 
 export type Dashboard = { id: string; name: string; widgets: Widget[] };

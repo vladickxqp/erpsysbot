@@ -4,7 +4,9 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import { AccountError, authenticate, registerAccount } from "@/server/accounts";
-import { SESSION_COOKIE, createSession, deleteSession } from "@/server/auth/sessions";
+import { auditAccess } from "@/server/audit";
+import { sendVerificationMail } from "@/server/auth/email-verification";
+import { SESSION_COOKIE, createSession, deleteSession, readSession } from "@/server/auth/sessions";
 import { completeChallenge, createChallenge, TwoFactorError, twoFactorEnabled } from "@/server/auth/two-factor";
 import { LOCALE_COOKIE, MESSAGES, isLocale, translator } from "@/i18n";
 import { sendMail } from "@/server/mail";
@@ -71,6 +73,7 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
     );
     if (await twoFactorEnabled(userId)) return { challenge: await createChallenge(userId, organizationId) };
     await startSession(userId, organizationId);
+    await auditAccess(userId, organizationId, "auth.login");
   } catch (e) {
     if (e instanceof AccountError) return { error: e.code === "TOO_MANY_ATTEMPTS" ? "tooMany" : e.code === "REGION_BLOCKED" ? "region" : "invalid" };
     throw e;
@@ -84,6 +87,7 @@ export async function loginCodeAction(_: AuthState, form: FormData): Promise<Aut
   try {
     const { userId, organizationId } = await completeChallenge(challenge, String(form.get("code") ?? ""));
     await startSession(userId, organizationId);
+    await auditAccess(userId, organizationId, "auth.login");
   } catch (e) {
     if (e instanceof TwoFactorError) return e.code === "INVALID_CODE" ? { error: "code", challenge } : { error: "codeExpired", expired: challenge };
     throw e;
@@ -103,6 +107,7 @@ export async function registerAction(_: AuthState, form: FormData): Promise<Auth
       locale: await chosenLocale(),
     }, String(form.get("invite") ?? "") || null, await ipCountry());
     await startSession(userId, organizationId);
+    await sendVerificationMail(userId, String(form.get("email") ?? "").trim().toLowerCase(), await chosenLocale(), await publicBase());
   } catch (e) {
     if (e instanceof AccountError) {
       return { error: e.code === "REGISTRATION_CLOSED" ? "closed" : e.code === "REGION_BLOCKED" ? "region" : "taken" };
@@ -178,6 +183,8 @@ export async function resetAction(_: AuthState, form: FormData): Promise<AuthSta
 
 export async function logoutAction(): Promise<void> {
   const jar = await cookies();
+  const session = await readSession(jar.get(SESSION_COOKIE)?.value);
+  if (session) await auditAccess(session.userId, session.activeOrganizationId, "auth.logout");
   await deleteSession(jar.get(SESSION_COOKIE)?.value);
   jar.delete(SESSION_COOKIE);
   redirect("/login");

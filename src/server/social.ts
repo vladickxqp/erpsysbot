@@ -207,7 +207,10 @@ async function refreshAccounts(organizationId: string, timezone: string, account
 
 /** Once a day for every company, so the history has a point per day. */
 export async function refreshAllSocial(fetcher: Fetch = fetch): Promise<void> {
-  const rows = await getDb().select({ account: socialAccounts, timezone: sql<string>`(select timezone from organizations o where o.id = ${socialAccounts.organizationId})` }).from(socialAccounts);
+  const rows = await getDb()
+    .select({ account: socialAccounts, timezone: sql<string>`(select timezone from organizations o where o.id = ${socialAccounts.organizationId})` })
+    .from(socialAccounts)
+    .where(sql`not exists (select 1 from organizations o where o.id = ${socialAccounts.organizationId} and 'social' = any(o.disabled_modules))`);
   const byOrg = new Map<string, { timezone: string; accounts: (typeof socialAccounts.$inferSelect)[] }>();
   for (const r of rows) {
     const entry = byOrg.get(r.account.organizationId) ?? { timezone: r.timezone, accounts: [] };

@@ -221,6 +221,7 @@ async function runRules(organizationId: string, trigger: Trigger, subject: Subje
 
 /** Called after an event has been committed. Never throws into the caller. */
 export async function fireAutomations(ctx: Context, trigger: (typeof EVENT_TRIGGERS)[number], id: string): Promise<void> {
+  if (ctx.disabledModules.has("automation")) return;
   try {
     const locale: Locale = isLocale(ctx.organization.locale) ? ctx.organization.locale : "de";
     const region = regionOf(ctx.organization);
@@ -255,10 +256,11 @@ export async function runScheduledAutomations(): Promise<number> {
     .where(and(eq(automations.enabled, true), inArray(automations.trigger, [...SCHEDULED_TRIGGERS])));
   let total = 0;
   for (const { id: orgId } of orgs) {
-    type Row = { timezone: string; locale: string; country: string; currency: string };
-    const [org] = await db.execute<Row>(sql`select timezone, locale, country, currency from organizations where id = ${orgId}`).then((r) =>
+    type Row = { timezone: string; locale: string; country: string; currency: string; disabled_modules: string[] };
+    const [org] = await db.execute<Row>(sql`select timezone, locale, country, currency, disabled_modules from organizations where id = ${orgId}`).then((r) =>
       Array.isArray(r) ? r : ((r as { rows?: Row[] }).rows ?? []),
     );
+    if (org?.disabled_modules?.includes("automation")) continue;
     const tz = org?.timezone ?? "Europe/Berlin";
     const locale: Locale = isLocale(org?.locale) ? org.locale : "de";
     const region = org ? regionOf(org) : DEFAULT_REGION;

@@ -1,4 +1,4 @@
-# AI Business OS on one machine: database, app, nightly backup and — with
+# NEXORA ONE on one machine: database, app, nightly backup and — with
 # `--profile tunnel` — the Cloudflare tunnel of kleinbot.online.
 #
 #   docker compose --profile tunnel up -d --build

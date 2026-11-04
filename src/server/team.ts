@@ -21,7 +21,7 @@ import { LOCALES } from "@/i18n";
 
 const INVITE_DAYS = 7;
 const RESET_MINUTES = 60;
-export const ASSIGNABLE_ROLES = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT"] as const satisfies readonly Role[];
+export const ASSIGNABLE_ROLES = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT", "VIEWER"] as const satisfies readonly Role[];
 
 export class TeamError extends Error {
   constructor(public readonly code: "ALREADY_MEMBER" | "OWNER_ONLY" | "LAST_OWNER" | "NOT_MEMBER" | "INVALID" | "WRONG_EMAIL" | "EMAIL_TAKEN" | "OTHER_COMPANIES") {

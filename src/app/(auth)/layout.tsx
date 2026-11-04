@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
       <header className="flex items-center justify-between px-4 sm:px-8 h-16">
-        <Link href="/" aria-label="AI Business OS">
+        <Link href="/" aria-label="NEXORA ONE">
           <Logo />
         </Link>
         <div className="flex items-center gap-1">

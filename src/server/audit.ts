@@ -3,11 +3,17 @@
  * (web, telegram, ai). Written in the same transaction as the change, so a
  * change without its entry cannot exist.
  */
-import type { Tx } from "@/db/tenant";
+import { withTenant, type Tx } from "@/db/tenant";
 import { auditLog } from "@/db/schema";
 import type { Context } from "./context";
 
 export type Via = "web" | "telegram" | "ai";
+
+/** A sign-in or sign-out in the company's trail (outside any business transaction). */
+export async function auditAccess(userId: string, organizationId: string | null, action: "auth.login" | "auth.logout"): Promise<void> {
+  if (!organizationId) return;
+  await withTenant(organizationId, (tx) => tx.insert(auditLog).values({ organizationId, userId, action, entity: "user", entityId: userId }));
+}
 
 export async function audit(
   tx: Tx,

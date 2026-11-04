@@ -50,6 +50,8 @@ const FIELDS: Record<keyof ClientInput & string, string[]> = {
   lastName: ["nachname", "name", "last name", "lastname", "surname", "family name", "фамилия"],
   email: ["e-mail", "email", "mail", "e-mail-adresse", "почта", "эл. почта"],
   phone: ["telefon", "phone", "tel", "tel.", "mobil", "handy", "mobile", "телефон"],
+  website: ["website", "webseite", "homepage", "web", "сайт"],
+  industry: ["branche", "industry", "отрасль"],
   street: ["straße", "strasse", "street", "adresse", "address", "anschrift", "улица", "адрес"],
   postalCode: ["plz", "postleitzahl", "zip", "zip code", "postal code", "postcode", "индекс"],
   city: ["ort", "stadt", "city", "town", "город"],

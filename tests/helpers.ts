@@ -17,6 +17,7 @@ export async function newCompany(company = "Muster GmbH", country = "DE"): Promi
     company,
     country,
   });
+  await getDb().update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.id, userId));
   return (await contextOf(userId, organizationId))!;
 }
 

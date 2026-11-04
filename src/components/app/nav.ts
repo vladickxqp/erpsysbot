@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ScrollText, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, ScrollText, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
 
@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/app/pipeline", label: "nav.pipeline", icon: KanbanSquare, needs: "clients.read", module: "pipeline" },
   { href: "/app/calendar", label: "nav.calendar", icon: CalendarDays, needs: "calendar.read", module: "calendar" },
   { href: "/app/tasks", label: "nav.tasks", icon: ListTodo, needs: "tasks.read", module: "tasks" },
+  { href: "/app/time", label: "time.title", icon: Timer, needs: "time.read", module: "time" },
   { href: "/app/orders", label: "nav.orders", icon: ShoppingCart, needs: "orders.read", primary: true, module: "orders" },
   { href: "/app/quotes", label: "nav.quotes", icon: FileSignature, needs: "orders.read", module: "quotes" },
   { href: "/app/invoices", label: "nav.invoices", icon: FileText, needs: "invoices.read", primary: true, module: "invoices" },

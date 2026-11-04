@@ -1,10 +1,12 @@
-# AI Business OS
+# NEXORA ONE
 
-One platform. Your entire business. Powered by AI.
+ONE PLATFORM. ALL YOUR BUSINESS. ALL YOUR WORK.
 
-Business management for small and medium companies in Germany and the EU:
-clients (CRM), orders, invoices, finance, Telegram and an AI assistant — one
-backend, one database, every interface on top of it.
+One workspace for companies, creators, freelancers and individuals: CRM,
+invoices, finance, projects, time, content, social channels, automation and an
+AI assistant — one backend, one database, every interface on top of it.
+
+Current state, module map and roadmap: [docs/NEXORA_ONE_AUDIT.md](docs/NEXORA_ONE_AUDIT.md).
 
 ## Status
 
@@ -27,6 +29,8 @@ backend, one database, every interface on top of it.
 | Media library (images, videos, audio, documents, thumbnails, brand assets), social channels (YouTube, Telegram), integrations | ✅ |
 | Two-factor sign-in, device list, data export and deletion (DSGVO), change log, legal pages | ✅ |
 | Recurring invoices, bank statement import (CAMT.053/CSV) with matching, DATEV export | ✅ |
+| Workspaces by type (company, creator, freelancer, personal), module dependencies enforced on the server, quick actions | ✅ |
+| CRM contact persons and timeline, time tracking with billing, project overview, viewer role, e-mail confirmation | ✅ |
 
 ## How tenants are kept apart
 
@@ -169,6 +173,14 @@ with OAuth per company and are listed as not available.
 **Monitoring:** point an external uptime check (e.g. UptimeRobot, free) at
 `https://<your domain>/api/health` — it answers 200 only while the app and the
 database work. GitHub Actions run lint, types, tests and the build on every push.
+
+### Workspaces and modules
+
+A new workspace starts by asking what it is for; that sets the modules and the
+first dashboard (Settings → Modules changes them later). One person can own
+several workspaces, so private data never mixes with a company's. A module that
+is off is closed in the menu, on its pages, in server functions and in
+background jobs; what depends on it goes off with it.
 
 ### Accounting
 

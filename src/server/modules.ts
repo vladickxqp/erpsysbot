@@ -9,14 +9,14 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { memberships, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { cleanModules, type AppModule } from "@/lib/modules";
+import { cleanModules, withDependents, type AppModule } from "@/lib/modules";
 import { audit } from "./audit";
 import type { Context } from "./context";
 import { requirePermission } from "./permissions";
 
 export async function setCompanyModules(ctx: Context, disabled: readonly string[]): Promise<AppModule[]> {
   requirePermission(ctx.permissions, "settings.manage");
-  const modules = cleanModules(disabled);
+  const modules = withDependents(disabled);
   await getDb().update(organizations).set({ disabledModules: modules }).where(eq(organizations.id, ctx.organization.id));
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "company.modules", "organization", ctx.organization.id, { disabled: modules }));
   return modules;

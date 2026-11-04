@@ -39,10 +39,12 @@ export const PERMISSIONS = [
   "content.read",
   "content.manage",
   "content.publish",
+  "time.read",
+  "time.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
-export type Role = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "ACCOUNTANT" | "CUSTOM";
+export type Role = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "ACCOUNTANT" | "VIEWER" | "CUSTOM";
 
 const all = [...PERMISSIONS];
 const without = (...drop: Permission[]) => all.filter((p) => !drop.includes(p));
@@ -63,6 +65,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "documents.read", "documents.manage",
     "inventory.manage",
     "content.read", "content.manage", "content.publish",
+    "time.read", "time.manage",
   ],
   EMPLOYEE: [
     "clients.read", "clients.create", "clients.update",
@@ -72,6 +75,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "tasks.read", "tasks.manage",
     "documents.read", "documents.manage",
     "content.read", "content.manage",
+    "time.read", "time.manage",
   ],
   ACCOUNTANT: [
     "clients.read",
@@ -83,6 +87,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "tasks.read", "tasks.manage",
     "documents.read", "documents.manage",
   ],
+  // Sees what the company does, changes nothing. Money and people stay with those who need them.
+  VIEWER: ["clients.read", "orders.read", "calendar.read", "tasks.read", "documents.read", "content.read", "time.read"],
   CUSTOM: [],
 };
 

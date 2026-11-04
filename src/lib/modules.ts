@@ -9,6 +9,7 @@ export const APP_MODULES = [
   "pipeline",
   "calendar",
   "tasks",
+  "time",
   "orders",
   "quotes",
   "invoices",
@@ -38,6 +39,7 @@ const PATHS: [string, AppModule][] = [
   ["/app/pipeline", "pipeline"],
   ["/app/calendar", "calendar"],
   ["/app/tasks", "tasks"],
+  ["/app/time", "time"],
   ["/app/orders", "orders"],
   ["/app/quotes", "quotes"],
   ["/app/invoices", "invoices"],
@@ -69,3 +71,38 @@ export function moduleOfPath(pathname: string): AppModule | null {
 export function cleanModules(values: readonly unknown[] | null | undefined): AppModule[] {
   return APP_MODULES.filter((m) => (values ?? []).includes(m));
 }
+
+/** What a module cannot work without. Switching one off switches off what builds on it. */
+export const MODULE_REQUIRES: Partial<Record<AppModule, AppModule[]>> = {
+  pipeline: ["crm"],
+  orders: ["crm"],
+  quotes: ["crm"],
+  invoices: ["crm"],
+  inventory: ["products"],
+};
+
+/** The modules switched off, with everything that depends on them. */
+export function withDependents(off: readonly unknown[] | null | undefined): AppModule[] {
+  const result = new Set(cleanModules(off));
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [module, needs] of Object.entries(MODULE_REQUIRES) as [AppModule, AppModule[]][]) {
+      if (!result.has(module) && needs.some((n) => result.has(n))) {
+        result.add(module);
+        changed = true;
+      }
+    }
+  }
+  return APP_MODULES.filter((m) => result.has(m));
+}
+
+/** Who works here: decides the modules that start switched on and the first dashboard. */
+export const WORKSPACE_TYPES = ["BUSINESS", "CREATOR", "FREELANCER", "PERSONAL"] as const;
+export type WorkspaceType = (typeof WORKSPACE_TYPES)[number];
+
+export const WORKSPACE_OFF: Record<WorkspaceType, AppModule[]> = {
+  BUSINESS: ["content", "social", "time"],
+  CREATOR: ["pipeline", "orders", "products", "inventory", "automation"],
+  FREELANCER: ["orders", "products", "inventory", "content", "social", "team", "automation"],
+  PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "content", "social", "reports", "team", "automation", "integrations"],
+};

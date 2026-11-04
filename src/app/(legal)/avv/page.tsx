@@ -12,7 +12,7 @@ export default function AvvPage() {
       <h1>Auftragsverarbeitungsvertrag (Art. 28 DSGVO)</h1>
       <p>zwischen dem Kunden als Verantwortlichem („Auftraggeber“) und {operator} als Auftragsverarbeiter („Auftragnehmer“).</p>
       <h2>1. Gegenstand und Dauer</h2>
-      <p>Der Auftragnehmer verarbeitet personenbezogene Daten für den Auftraggeber im Rahmen des Dienstes „AI Business OS“ für die Laufzeit des Hauptvertrags.</p>
+      <p>Der Auftragnehmer verarbeitet personenbezogene Daten für den Auftraggeber im Rahmen des Dienstes „NEXORA ONE“ für die Laufzeit des Hauptvertrags.</p>
       <h2>2. Art der Daten und Betroffene</h2>
       <ul>
         <li>Daten: Kontakt- und Stammdaten, Vertrags-, Rechnungs- und Zahlungsdaten, Kommunikations- und Termindaten, Dokumente und Dateien.</li>

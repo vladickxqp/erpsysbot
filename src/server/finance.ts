@@ -43,6 +43,7 @@ export const transactionInput = z
       .max(30)
       .nullish()
       .transform((v) => v || null),
+    projectId: z.string().uuid().nullish().transform((v) => v || null),
   })
   // Only a correction may go either way; the rest are amounts, the type says the direction.
   .refine((t) => t.type === "ADJUSTMENT" || t.amountCents > 0, { message: "amount", path: ["amountCents"] });

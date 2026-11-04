@@ -17,7 +17,7 @@ function monday(iso: string): string {
   return addDays(iso, -((d.getUTCDay() + 6) % 7));
 }
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string; mine?: string }> }) {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ view?: string; date?: string; mine?: string; new?: string }> }) {
   const ctx = await requirePageContext("calendar.read");
   const sp = await searchParams;
   const tz = ctx.organization.timezone;
@@ -53,6 +53,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <CalendarView
       view={view}
+      openNew={sp.new === "1"}
       date={date}
       today={now}
       first={first}

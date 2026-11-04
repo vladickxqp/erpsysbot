@@ -40,6 +40,8 @@ export const clientInput = z
       .transform((v) => (v ? v : null))
       .refine((v) => v === null || z.string().email().safeParse(v).success, "email"),
     phone: optional(40),
+    website: optional(200),
+    industry: optional(100),
     street: optional(160),
     postalCode: optional(20),
     city: optional(100),

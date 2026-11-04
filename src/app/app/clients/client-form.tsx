@@ -28,6 +28,8 @@ export type ClientValues = {
   companyName?: string | null;
   email?: string | null;
   phone?: string | null;
+  website?: string | null;
+  industry?: string | null;
   street?: string | null;
   postalCode?: string | null;
   city?: string | null;
@@ -171,6 +173,8 @@ export function ClientDialog({
             <Field name="vatId" label={t(region.country === "DE" ? "clients.vatId" : "company.taxNumberGeneral")} defaultValue={values.vatId} />
             {region.country === "DE" && <Field name="buyerReference" label={t("clients.buyerReference")} defaultValue={values.buyerReference} />}
             <Field name="source" label={t("clients.source")} defaultValue={values.source} />
+            <Field name="website" label={t("crm.website")} defaultValue={values.website} />
+            <Field name="industry" label={t("crm.industry")} defaultValue={values.industry} />
             <Field
               name="tags"
               label={t("clients.tags")}

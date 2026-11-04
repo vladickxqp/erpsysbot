@@ -122,6 +122,14 @@ export function ClientDetail({
                   </span>
                 </Row>
               )}
+              {client.website && (
+                <Row label={t("crm.website")}>
+                  <a href={/^https?:\/\//.test(client.website) ? client.website : `https://${client.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    {client.website}
+                  </a>
+                </Row>
+              )}
+              {client.industry && <Row label={t("crm.industry")}>{client.industry}</Row>}
               {client.vatId && <Row label={t("clients.vatId")}>{client.vatId}</Row>}
               {client.source && <Row label={t("clients.source")}>{client.source}</Row>}
             </dl>

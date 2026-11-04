@@ -14,13 +14,17 @@ import {
   startSetup,
   TwoFactorError,
 } from "@/server/auth/two-factor";
-import { passwordMatches } from "@/server/accounts";
+import { withTenant } from "@/db/tenant";
+import { changePassword, PasswordChangeError, passwordMatches } from "@/server/accounts";
+import { audit } from "@/server/audit";
+import { isLocale } from "@/i18n";
+import { sendVerificationMail } from "@/server/auth/email-verification";
 import { SESSION_COOKIE } from "@/server/auth/sessions";
 import { updateCompany, type CompanyInput } from "@/server/company";
 import { deleteAccount, deleteCompany, PrivacyError } from "@/server/privacy";
 import { setCompanyModules, setMyModules } from "@/server/modules";
 import { ForbiddenError } from "@/server/permissions";
-import { requireContext } from "@/server/request";
+import { publicBase, requireContext } from "@/server/request";
 import { botUsername } from "@/server/telegram/api";
 import { createLinkToken, setNotify, unlink } from "@/server/telegram/links";
 
@@ -125,6 +129,25 @@ export async function recoveryCodesAction(code: string): Promise<SecurityResult>
   } catch (e) {
     return securityFailure(e);
   }
+}
+
+export async function changePasswordAction(current: string, next: string): Promise<SecurityResult> {
+  const ctx = await requireContext();
+  try {
+    await changePassword(ctx.user.userId, ctx.user.sessionId, current, next);
+    await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "auth.password", "user", ctx.user.userId));
+    revalidatePath("/app/settings");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof PasswordChangeError) return { error: e.code === "TOO_SHORT" ? "auth.passwordHint" : "privacy.WRONG_PASSWORD" };
+    throw e;
+  }
+}
+
+export async function resendVerificationAction(): Promise<SecurityResult> {
+  const ctx = await requireContext();
+  const sent = await sendVerificationMail(ctx.user.userId, ctx.user.email, isLocale(ctx.user.locale) ? ctx.user.locale : "de", await publicBase());
+  return sent ? { ok: true } : { error: "common.error" };
 }
 
 export async function endSessionAction(id: string): Promise<SecurityResult> {

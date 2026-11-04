@@ -11,7 +11,9 @@ import { isLocale, MESSAGES, translator, type Locale } from "@/i18n";
 import { audit } from "./audit";
 import type { Context } from "./context";
 import { clientParty, pdfData, sellerOf } from "./invoices";
+import { emailVerified } from "./auth/email-verification";
 import { mailAvailable, sendMail, takeMailBudget } from "./mail";
+import { registrationOpen } from "./settings";
 import { invoicePdf, quotePdf, reminderPdf } from "./pdf";
 import { requirePermission } from "./permissions";
 import { getQuote, setQuoteStatus } from "./quotes";
@@ -20,7 +22,7 @@ import { markReminderSent, reminderData } from "./reminders";
 export type DocumentKind = "invoice" | "quote" | "reminder";
 
 export class SendError extends Error {
-  constructor(public readonly code: "NO_MAIL" | "DRAFT" | "LIMIT") {
+  constructor(public readonly code: "NO_MAIL" | "DRAFT" | "LIMIT" | "UNVERIFIED") {
     super(code);
   }
 }
@@ -73,6 +75,7 @@ export async function sendDocument(ctx: Context, kind: DocumentKind, id: string,
   const input = sendInput.parse(raw);
   const doc = kind === "invoice" ? await renderInvoice(ctx, id) : kind === "quote" ? await renderQuote(ctx, id) : await renderReminder(ctx, id);
   if ("draft" in doc && doc.draft) throw new SendError("DRAFT");
+  if (registrationOpen() && !(await emailVerified(ctx.user.userId))) throw new SendError("UNVERIFIED");
   if (!takeMailBudget(ctx.organization.id)) throw new SendError("LIMIT");
   const t = translator(MESSAGES[docLocale(ctx)]);
   const org = ctx.organization;

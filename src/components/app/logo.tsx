@@ -7,7 +7,7 @@ export function Logo({ className, inverted }: { className?: string; inverted?: b
       <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#3b82f6] to-[#6366f1] text-white shadow-sm">
         <Sparkles className="size-4" aria-hidden />
       </span>
-      <span className={cn("text-[15px]", inverted ? "text-white" : "text-foreground")}>AI Business OS</span>
+      <span className={cn("text-[15px]", inverted ? "text-white" : "text-foreground")}>NEXORA ONE</span>
     </span>
   );
 }

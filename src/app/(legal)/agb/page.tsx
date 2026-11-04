@@ -9,7 +9,7 @@ export default function AgbPage() {
       <h1>Allgemeine Geschäftsbedingungen</h1>
       <h2>§ 1 Geltungsbereich</h2>
       <p>
-        Diese Bedingungen gelten für die Nutzung der Software „AI Business OS“ (im Folgenden „Dienst“), angeboten von {operator} („Anbieter“), durch
+        Diese Bedingungen gelten für die Nutzung der Software „NEXORA ONE“ (im Folgenden „Dienst“), angeboten von {operator} („Anbieter“), durch
         Unternehmer im Sinne des § 14 BGB („Kunde“). Abweichende Bedingungen des Kunden gelten nicht.
       </p>
       <h2>§ 2 Leistungen</h2>

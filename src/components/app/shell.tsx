@@ -1,13 +1,16 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, LogOut, MoreHorizontal, Search } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, LogOut, MoreHorizontal, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { logoutAction } from "@/app/(auth)/actions";
 import { switchCompany } from "@/app/app/actions";
+import { createWorkspaceAction } from "@/app/app/workspace-actions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,7 +51,10 @@ const initials = (name: string) =>
 function CompanySwitcher({ company, companies }: Pick<ShellProps, "company" | "companies">) {
   const { t } = useI18n();
   const [pending, start] = useTransition();
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -58,7 +64,7 @@ function CompanySwitcher({ company, companies }: Pick<ShellProps, "company" | "c
         >
           <Building2 className="size-4 shrink-0 opacity-70" />
           <span className="flex-1 truncate font-medium text-white">{company.name}</span>
-          {companies.length > 1 && <ChevronsUpDown className="size-4 opacity-60" />}
+          <ChevronsUpDown className="size-4 opacity-60" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
@@ -69,8 +75,37 @@ function CompanySwitcher({ company, companies }: Pick<ShellProps, "company" | "c
             {c.id === company.id && <Check className="size-4" />}
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setCreating(true)}>
+          <Plus className="size-4" /> {t("workspace.new")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <Dialog open={creating} onOpenChange={setCreating}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("workspace.new")}</DialogTitle>
+        </DialogHeader>
+        <form
+          className="grid gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            start(async () => {
+              const res = await createWorkspaceAction(name);
+              if (res?.error) toast.error(t(res.error));
+            });
+          }}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required autoFocus aria-label={t("workspace.name")} placeholder={t("workspace.name")} />
+          <DialogFooter>
+            <Button type="submit" disabled={pending || !name.trim()}>
+              {t("common.create")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

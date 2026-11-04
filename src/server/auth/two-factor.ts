@@ -111,7 +111,7 @@ export async function twoFactorEnabled(userId: string): Promise<boolean> {
 }
 
 /** A new secret to scan; it counts only after a code confirms it. */
-export async function startSetup(userId: string, email: string, issuer = "AI Business OS"): Promise<{ secret: string; uri: string }> {
+export async function startSetup(userId: string, email: string, issuer = "NEXORA ONE"): Promise<{ secret: string; uri: string }> {
   if (await twoFactorEnabled(userId)) throw new TwoFactorError("ALREADY_ON");
   const secret = base32Encode(randomBytes(20));
   await getDb().update(users).set({ totpPendingSecret: secret }).where(eq(users.id, userId));

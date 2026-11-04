@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, ShieldCheck } from "lucide-react";
+import { KeyRound, LogOut, MailWarning, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -13,11 +13,13 @@ import { Label } from "@/components/ui/label";
 import { intlTag } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import {
+  changePasswordAction,
   confirmTwoFactorAction,
   disableTwoFactorAction,
   endOtherSessionsAction,
   endSessionAction,
   recoveryCodesAction,
+  resendVerificationAction,
   startTwoFactorAction,
   type SecurityResult,
 } from "./actions";
@@ -34,11 +36,14 @@ function device(ua: string | null): string {
 
 type Step = { kind: "password" } | { kind: "setup"; secret: string; qr: string } | { kind: "codes"; codes: string[] } | { kind: "disable" } | { kind: "renew" } | null;
 
-export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boolean; recoveryLeft: number; sessions: Session[] }) {
+export function SecurityCard({ enabled, unverified, recoveryLeft, sessions }: { enabled: boolean; unverified: boolean; recoveryLeft: number; sessions: Session[] }) {
   const { t, locale, region } = useI18n();
   const router = useRouter();
   const [step, setStep] = useState<Step>(null);
   const [code, setCode] = useState("");
+  const [changing, setChanging] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
   const [pending, start] = useTransition();
   const when = (iso: string) => new Intl.DateTimeFormat(intlTag(locale, region), { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 
@@ -67,6 +72,20 @@ export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boo
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
+        {unverified && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-2.5">
+            <MailWarning className="size-4 text-warning" aria-hidden />
+            <span className="min-w-0 flex-1">{t("security.unverified")}</span>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(resendVerificationAction, () => toast.success(t("security.linkSent")))}>
+              {t("security.sendLink")}
+            </Button>
+          </div>
+        )}
+        <div>
+          <Button size="sm" variant="outline" onClick={() => setChanging(true)}>
+            <KeyRound className="size-3.5" /> {t("security.changePassword")}
+          </Button>
+        </div>
         <div className="grid gap-2">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">{t("security.twoFactor")}</span>
@@ -124,6 +143,43 @@ export function SecurityCard({ enabled, recoveryLeft, sessions }: { enabled: boo
           </div>
         </div>
       </CardContent>
+
+      <Dialog open={changing} onOpenChange={setChanging}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("security.changePassword")}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(
+                () => changePasswordAction(current, next),
+                () => {
+                  toast.success(t("common.saved"));
+                  setChanging(false);
+                  setCurrent("");
+                  setNext("");
+                },
+              );
+            }}
+          >
+            <div className="grid gap-1.5">
+              <Label htmlFor="pw-current">{t("security.currentPassword")}</Label>
+              <Input id="pw-current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pw-next">{t("auth.newPassword")}</Label>
+              <Input id="pw-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={10} required />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={pending}>
+                {t("common.save")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!step} onOpenChange={(v) => !v && setStep(null)}>
         <DialogContent className="sm:max-w-md">

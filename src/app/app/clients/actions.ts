@@ -10,6 +10,7 @@ import {
   updateClient,
   type ClientInput,
 } from "@/server/clients";
+import { addActivity, deleteActivity, deleteContact, saveContact, type ActivityInput, type ContactInput } from "@/server/client-history";
 import { importClients, type ImportResult } from "@/server/import";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
@@ -37,6 +38,8 @@ function fromForm(form: FormData): ClientInput {
     companyName: text("companyName"),
     email: text("email"),
     phone: text("phone"),
+    website: text("website"),
+    industry: text("industry"),
     street: text("street"),
     postalCode: text("postalCode"),
     city: text("city"),
@@ -110,4 +113,35 @@ export async function importClientsAction(text: string): Promise<ImportResult | 
     if (e instanceof ForbiddenError) return { error: "common.forbidden" };
     throw e;
   }
+}
+
+export type ClientResult = { ok?: boolean; error?: "forbidden" | "check" };
+
+async function crm(work: (ctx: Awaited<ReturnType<typeof requireContext>>) => Promise<unknown>, clientId?: string): Promise<ClientResult> {
+  const ctx = await requireContext();
+  try {
+    await work(ctx);
+    revalidatePath(clientId ? `/app/clients/${clientId}` : "/app/clients", clientId ? "page" : "layout");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "forbidden" };
+    if (e instanceof ZodError || e instanceof NotFoundError) return { error: "check" };
+    throw e;
+  }
+}
+
+export async function saveContactAction(clientId: string, id: string | null, input: ContactInput): Promise<ClientResult> {
+  return crm((ctx) => saveContact(ctx, clientId, id, input), clientId);
+}
+
+export async function deleteContactAction(id: string): Promise<ClientResult> {
+  return crm((ctx) => deleteContact(ctx, id));
+}
+
+export async function addActivityAction(clientId: string, input: ActivityInput): Promise<ClientResult> {
+  return crm((ctx) => addActivity(ctx, clientId, input), clientId);
+}
+
+export async function deleteActivityAction(id: string): Promise<ClientResult> {
+  return crm((ctx) => deleteActivity(ctx, id));
 }

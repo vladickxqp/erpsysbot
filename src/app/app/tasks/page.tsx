@@ -11,7 +11,7 @@ export async function generateMetadata() {
   return { title: t("nav.tasks") };
 }
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ view?: string; project?: string; mine?: string; q?: string }> }) {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ view?: string; project?: string; mine?: string; q?: string; new?: string; newProject?: string }> }) {
   const ctx = await requirePageContext("tasks.read");
   const sp = await searchParams;
   const mine = sp.mine === "1";
@@ -24,6 +24,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   return (
     <TasksView
       view={sp.view === "list" ? "list" : "board"}
+      openNew={sp.new === "1" ? "task" : sp.newProject === "1" ? "project" : null}
       project={sp.project ?? null}
       mine={mine}
       today={today(ctx.organization.timezone)}

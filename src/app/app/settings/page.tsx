@@ -6,7 +6,9 @@ import { currencyLocked } from "@/server/company";
 import { requireContext } from "@/server/request";
 import { botToken } from "@/server/settings";
 import { linkOfUser } from "@/server/telegram/links";
+import { emailVerified } from "@/server/auth/email-verification";
 import { listSessions, recoveryCodesLeft, twoFactorEnabled } from "@/server/auth/two-factor";
+import { mailAvailable } from "@/server/mail";
 import { CompanyForm } from "./company-form";
 import { PrivacyCard } from "./privacy-card";
 import { SecurityCard } from "./security-card";
@@ -74,6 +76,7 @@ export default async function SettingsPage() {
           </Card>
           <SecurityCard
             enabled={twoFactor}
+            unverified={mailAvailable() && !(await emailVerified(ctx.user.userId))}
             recoveryLeft={recoveryLeft}
             sessions={sessions.map((s) => ({ ...s, createdAt: s.createdAt.toISOString(), current: s.id === ctx.user.sessionId }))}
           />

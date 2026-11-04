@@ -50,6 +50,7 @@ const PRIORITY_TONE: Record<Priority, string> = {
 
 export function TasksView({
   view,
+  openNew,
   project,
   mine,
   today,
@@ -61,6 +62,8 @@ export function TasksView({
   tasks: initial,
 }: {
   view: "board" | "list";
+  /** Opened from a quick action: start with this dialog. */
+  openNew: "task" | "project" | null;
   project: string | null;
   mine: boolean;
   today: string;
@@ -98,6 +101,12 @@ export function TasksView({
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  useEffect(() => {
+    if (!canManage) return;
+    if (openNew === "task") setDraft(blank());
+    if (openNew === "project") setProjectName("");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const blank = (status: TaskStatus = "TODO"): Draft => ({
     id: null,
@@ -486,6 +495,14 @@ export function TasksView({
           )}
         </DialogContent>
       </Dialog>
+
+      {project && (
+        <div className="mt-4">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/app/tasks/projects/${project}`}>{t("projectHub.open")}</Link>
+          </Button>
+        </div>
+      )}
 
       <Dialog open={projectName !== null} onOpenChange={(o) => !o && setProjectName(null)}>
         <DialogContent className="sm:max-w-sm">

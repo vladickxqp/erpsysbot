@@ -4,6 +4,7 @@
  * what the person may see; an empty module yields an empty widget, not a
  * made-up number.
  */
+import type { AppModule } from "@/lib/modules";
 import { assistantAvailable } from "./assistant/run";
 import { dayBounds, listAppointments, localParts } from "./calendar";
 import { contentOverview } from "./content";
@@ -20,6 +21,23 @@ import { today } from "./money";
 import { socialTotals } from "./social";
 import { listProjects, listTasks } from "./tasks";
 import { memberOptions } from "./team";
+
+/** The quick actions this person can really use: permission and module. */
+function quickActions(ctx: Context): { key: string; href: string }[] {
+  const all: [string, string, Parameters<Context["permissions"]["has"]>[0], AppModule][] = [
+    ["task", "/app/tasks?new=1", "tasks.manage", "tasks"],
+    ["project", "/app/tasks?newProject=1", "tasks.manage", "tasks"],
+    ["client", "/app/clients?new=1", "clients.create", "crm"],
+    ["invoice", "/app/invoices/new", "invoices.create", "invoices"],
+    ["appointment", "/app/calendar?new=1", "calendar.manage", "calendar"],
+    ["document", "/app/documents", "documents.manage", "documents"],
+    ["content", "/app/content/new", "content.manage", "content"],
+    ["time", "/app/time", "time.manage", "time"],
+  ];
+  const actions = all.filter(([, , needs, module]) => ctx.permissions.has(needs) && moduleOn(ctx, module)).map(([key, href]) => ({ key, href }));
+  if (ctx.permissions.has("ai.use") && assistantAvailable() && moduleOn(ctx, "assistant")) actions.push({ key: "assistant", href: "/app/assistant" });
+  return actions;
+}
 
 export type Notice = { key: string; vars?: Record<string, string | number>; href: string; tone: "danger" | "warning" | "info" };
 
@@ -110,6 +128,7 @@ export async function loadWidgetData(ctx: Context, types: Set<WidgetType>) {
     notifications: types.has("notifications") ? notifications : null,
     recommendations: types.has("recommendations") ? recommendations : null,
     assistant: has(ctx, "ai.use") && assistantAvailable() && moduleOn(ctx, "assistant"),
+    quickActions: types.has("quickActions") ? quickActions(ctx) : null,
   };
 }
 

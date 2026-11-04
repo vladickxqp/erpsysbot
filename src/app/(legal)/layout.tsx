@@ -8,7 +8,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="flex h-16 items-center justify-between px-4 sm:px-8">
-        <Link href="/" aria-label="AI Business OS">
+        <Link href="/" aria-label="NEXORA ONE">
           <Logo />
         </Link>
         <ThemeToggle />

@@ -124,6 +124,7 @@ export type RunResult = { created: number; issued: number; sent: number; failed:
 /** Makes every invoice of this company that is due by `day`. Runs with the owner's rights. */
 export async function runRecurring(ctx: Context, day = today(ctx.organization.timezone)): Promise<RunResult> {
   const result: RunResult = { created: 0, issued: 0, sent: 0, failed: 0 };
+  if (ctx.disabledModules.has("invoices")) return result;
   const due = await withTenant(ctx.organization.id, (tx) =>
     tx
       .select()

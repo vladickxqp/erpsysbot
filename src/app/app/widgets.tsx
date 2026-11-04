@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Bell, CircleCheck, CircleDashed, CircleSlash, FileText, Lightbulb, Scale, ShoppingCart, Sparkles, Users } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bell, CircleCheck, CircleDashed, CircleSlash, FileText, Lightbulb, Plus, Scale, ShoppingCart, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { ContentStatusBadge, InvoiceStatusBadge } from "@/components/app/badges";
 import { FlowChart } from "@/components/app/flow-chart";
@@ -83,6 +83,20 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
   const num = (v: number | null | undefined) => (v === null || v === undefined ? "—" : nf.format(v));
 
   switch (type) {
+    case "quickActions":
+      return (
+        data.quickActions && (
+          <div className="flex flex-wrap gap-2">
+            {data.quickActions.map((a) => (
+              <Button key={a.key} asChild size="sm" variant="outline">
+                <Link href={a.href}>
+                  <Plus className="size-3.5" /> {t(`widgets.quick.${a.key}`)}
+                </Link>
+              </Button>
+            ))}
+          </div>
+        )
+      );
     case "revenue":
       return data.finance && <Figure value={money(data.finance.incomeCents)} hint={t("widgets.thisMonth")} icon={ArrowUpRight} />;
     case "expenses":

@@ -43,6 +43,7 @@ export const roleEnum = pgEnum("member_role", [
   "MANAGER",
   "EMPLOYEE",
   "ACCOUNTANT",
+  "VIEWER",
   "CUSTOM",
 ]);
 
@@ -55,6 +56,8 @@ export const users = pgTable(
     name: text("name").notNull(),
     locale: text("locale").notNull().default("de"),
     isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+    /** When the person proved the address is theirs; null: not yet. */
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     /** Two-factor sign-in (TOTP, RFC 6238): the shared secret once confirmed, base32. */
     totpSecret: text("totp_secret"),
     /** A secret being set up, until the first code confirms it. */
@@ -66,6 +69,21 @@ export const users = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_email_key").on(sql`lower(${t.email})`)],
+);
+
+/** A link that proves an address (48 hours). Only the hash is stored. */
+export const emailVerifications = pgTable(
+  "email_verifications",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("email_verifications_token_key").on(t.tokenHash)],
 );
 
 /** A password accepted, the second factor still to come (5 minutes, 5 tries). Only the hash is stored. */
@@ -140,6 +158,8 @@ export const organizations = pgTable("organizations", {
   disabledModules: text("disabled_modules").array().notNull().default(sql`'{}'::text[]`),
   /** DATEV export: { consultant, client, chart: "SKR03" | "SKR04" } (src/server/datev.ts). */
   datev: jsonb("datev"),
+  /** BUSINESS, CREATOR, FREELANCER or PERSONAL (src/lib/modules.ts); null: not chosen yet. */
+  workspaceType: text("workspace_type"),
   createdAt: createdAt(),
 });
 
@@ -326,6 +346,8 @@ export const clients = pgTable(
     companyName: text("company_name"),
     email: text("email"),
     phone: text("phone"),
+    website: text("website"),
+    industry: text("industry"),
     street: text("street"),
     postalCode: text("postal_code"),
     city: text("city"),
@@ -482,6 +504,7 @@ export const documents = pgTable(
     /** Media library: THUMBNAIL or BRAND; null for everything else. */
     collection: text("collection"),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: uuid("project_id"),
     orderId: uuid("order_id"),
     invoiceId: uuid("invoice_id"),
     archived: boolean("archived").notNull().default(false),
@@ -803,6 +826,7 @@ export const transactions = pgTable(
     category: text("category"),
     description: text("description"),
     method: text("method"),
+    projectId: uuid("project_id"),
     invoiceId: uuid("invoice_id"),
     paymentId: uuid("payment_id"),
     clientId: uuid("client_id"),
@@ -1081,6 +1105,65 @@ export const bankTransactions = pgTable(
   (t) => [uniqueIndex("bank_transactions_dedupe_key").on(t.organizationId, t.dedupeKey), index("bank_transactions_org_idx").on(t.organizationId, t.status, t.bookedOn)],
 );
 
+// --- CRM details ---------------------------------------------------------------------------------
+/** People at a client company. */
+export const clientContacts = pgTable(
+  "client_contacts",
+  {
+    id: id(),
+    organizationId: orgId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    role: text("role"),
+    email: text("email"),
+    phone: text("phone"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("client_contacts_client_idx").on(t.clientId)],
+);
+
+/** What happened with a client: a call, an e-mail, a meeting, a note. */
+export const clientActivities = pgTable(
+  "client_activities",
+  {
+    id: id(),
+    organizationId: orgId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    subject: text("subject").notNull(),
+    body: text("body"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    userId: uuid("user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("client_activities_client_idx").on(t.clientId, t.occurredAt)],
+);
+
+// --- Time tracking -------------------------------------------------------------------------------
+/** Work time of one person; `endedAt` empty: the timer is running. Billed once into an invoice. */
+export const timeEntries = pgTable(
+  "time_entries",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id").notNull(),
+    description: text("description"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    billable: boolean("billable").notNull().default(true),
+    invoiceId: uuid("invoice_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("time_entries_user_idx").on(t.organizationId, t.userId, t.startedAt), index("time_entries_project_idx").on(t.projectId)],
+);
+
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
 export const TENANT_TABLES = [
   "counters",
@@ -1117,4 +1200,7 @@ export const TENANT_TABLES = [
   "social_stats",
   "recurring_invoices",
   "bank_transactions",
+  "client_contacts",
+  "client_activities",
+  "time_entries",
 ] as const;

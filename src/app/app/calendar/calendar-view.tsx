@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -57,6 +57,7 @@ type Draft = AppointmentPayload & { id: string | null };
 
 export function CalendarView({
   view,
+  openNew,
   date,
   today,
   first,
@@ -69,6 +70,8 @@ export function CalendarView({
   items,
 }: {
   view: View;
+  /** Opened from a quick action: start with the new appointment. */
+  openNew: boolean;
   date: string;
   today: string;
   first: string;
@@ -105,6 +108,10 @@ export function CalendarView({
   const dayList = Array.from({ length: days }, (_, i) => shift(first, i));
   const weekday = (iso: string, style: "short" | "long" = "short") => new Intl.DateTimeFormat(tag, { weekday: style }).format(new Date(`${iso}T12:00:00Z`));
   const dayNumber = (iso: string) => Number(iso.slice(8));
+
+  useEffect(() => {
+    if (openNew && canManage) setDraft(blank(today));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const blank = (day: string): Draft => ({
     id: null,

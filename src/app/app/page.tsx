@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getT } from "@/i18n/server";
 import { availableWidgets, listDashboards, WIDGETS } from "@/server/dashboards";
 import { requireContext } from "@/server/request";
@@ -11,6 +12,8 @@ export async function generateMetadata() {
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
   const ctx = await requireContext();
+  // A new workspace starts with the question what it is for.
+  if (!ctx.organization.workspaceType && ctx.permissions.has("settings.manage")) redirect("/app/welcome");
   const { t } = await getT();
   const sp = await searchParams;
   const boards = await listDashboards(ctx, t("dashboard.title"));

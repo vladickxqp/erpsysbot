@@ -13,10 +13,10 @@
  * a company whose country differs from where it signed up waits for the
  * platform admin's review before anyone can work in it.
  */
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { memberships, organizations, platformInvites, suspensions, users } from "@/db/schema";
+import { memberships, organizations, platformInvites, sessions, suspensions, users } from "@/db/schema";
 import { LOCALES } from "@/i18n";
 import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "./auth/password";
@@ -184,6 +184,23 @@ export async function authenticate(rawEmail: string, password: string, client = 
 export async function passwordMatches(userId: string, password: string): Promise<boolean> {
   const [user] = await getDb().select({ hash: users.passwordHash }).from(users).where(eq(users.id, userId));
   return !!user && (await verifyPassword(password, user.hash));
+}
+
+export class PasswordChangeError extends Error {
+  constructor(public readonly code: "WRONG_PASSWORD" | "TOO_SHORT") {
+    super(code);
+  }
+}
+
+/** Changes one's own password; every other device has to sign in again. */
+export async function changePassword(userId: string, sessionId: string, current: string, next: string): Promise<void> {
+  if (next.length < MIN_PASSWORD_LENGTH || next.length > 200) throw new PasswordChangeError("TOO_SHORT");
+  if (!(await passwordMatches(userId, current))) throw new PasswordChangeError("WRONG_PASSWORD");
+  const passwordHash = await hashPassword(next);
+  await getDb().transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    await tx.delete(sessions).where(and(eq(sessions.userId, userId), ne(sessions.id, sessionId)));
+  });
 }
 
 export async function membershipOf(userId: string, organizationId: string) {

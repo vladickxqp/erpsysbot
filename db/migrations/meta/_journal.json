@@ -85,6 +85,20 @@
       "when": 1793701727193,
       "tag": "0011_recurring_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793785445647,
+      "tag": "0012_nexora_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793785535919,
+      "tag": "0013_project_costs",
+      "breakpoints": true
     }
   ]
 }

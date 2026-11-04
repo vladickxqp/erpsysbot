@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       const doc = await storeDocument(
         ctx,
         { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) },
-        { category: field("category"), collection: field("collection"), clientId: field("clientId"), orderId: field("orderId"), invoiceId: field("invoiceId") },
+        { category: field("category"), collection: field("collection"), projectId: field("projectId"), clientId: field("clientId"), orderId: field("orderId"), invoiceId: field("invoiceId") },
       );
       saved.push(doc.id);
     }

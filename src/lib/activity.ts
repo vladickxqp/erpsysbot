@@ -22,11 +22,17 @@ export const ACTIVITY_VERB: Record<string, string> = {
   publish: "published",
   receive: "received",
   import: "created",
+  login: "signedIn",
+  logout: "signedOut",
+  export: "exported",
+  password: "changed",
 };
 
 export const ACTIVITY_ENTITIES = [
   "appointment",
+  "auth",
   "automation",
+  "bank",
   "client",
   "company",
   "content",
