@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useTransition } from "react";
+import { PasswordInput } from "@/components/app/password-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,10 +67,10 @@ export function RegisterForm({ invite, countries }: { invite?: string; countries
           </div>
           <div className="grid gap-2">
             <Label htmlFor="password">{t("auth.password")}</Label>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
+              meter
               autoComplete="new-password"
               required
               minLength={10}

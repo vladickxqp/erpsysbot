@@ -1,0 +1,230 @@
+/* The public face: the landing page and the sign-in pages. Always dark, the film needs it. */
+.landing,
+.auth-shell {
+  --background: #050814;
+  --card: #0b1122;
+  --popover: #0b1122;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.14);
+  color-scheme: dark;
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100dvh;
+}
+
+html:has(.landing) {
+  scroll-behavior: smooth;
+  background: #050814;
+}
+
+.landing {
+  overflow-x: clip;
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, #fff 15%, #c7d2fe 55%, #67e8f9 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.015));
+  border: 1px solid rgb(255 255 255 / 0.09);
+  backdrop-filter: blur(14px);
+}
+
+.lift {
+  transition:
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s,
+    box-shadow 0.5s;
+}
+
+.lift:hover {
+  transform: translateY(-6px);
+  border-color: rgb(103 232 249 / 0.35);
+  box-shadow: 0 24px 70px -30px rgb(59 130 246 / 0.7);
+}
+
+.plan-featured {
+  background: linear-gradient(180deg, rgb(59 130 246 / 0.2), rgb(99 102 241 / 0.08));
+  border: 1px solid rgb(103 232 249 / 0.4);
+  box-shadow: 0 30px 90px -36px rgb(59 130 246 / 0.9);
+}
+
+.glow {
+  position: absolute;
+  width: 34rem;
+  height: 34rem;
+  max-width: 90vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(79 70 229 / 0.22), transparent 65%);
+  pointer-events: none;
+}
+
+/* Comes in when it scrolls into view. */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px) scale(0.985);
+  filter: blur(8px);
+  transition:
+    opacity 1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms),
+    transform 1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms),
+    filter 1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms);
+}
+
+.reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* Comes in as the page opens. */
+.rise {
+  animation: rise 1.1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+    filter: blur(10px);
+  }
+}
+
+.panel-in {
+  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* The opening screen leaves slowly while the page moves on. */
+.hero {
+  --progress: 0;
+}
+
+.hero-film {
+  transform: translateY(calc(var(--progress) * 22%)) scale(calc(1 + var(--progress) * 0.12));
+  opacity: calc(1 - var(--progress) * 0.75);
+  will-change: transform, opacity;
+}
+
+.hero-copy {
+  transform: translateY(calc(var(--progress) * -90px));
+  opacity: calc(1 - var(--progress) * 1.5);
+}
+
+.hero-cue {
+  animation: cue 2.4s ease-in-out infinite;
+}
+
+@keyframes cue {
+  50% {
+    transform: translateY(7px);
+  }
+}
+
+/* The drawing of the app stands up as it arrives. */
+.tilt {
+  --progress: 1;
+  perspective: 1400px;
+}
+
+.tilt > * {
+  transform: rotateX(calc((1 - var(--progress)) * 24deg)) scale(calc(0.92 + var(--progress) * 0.08));
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+
+.ticker {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker 60s linear infinite;
+}
+
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.faq {
+  interpolate-size: allow-keywords;
+}
+
+.faq::details-content {
+  transition:
+    height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    content-visibility 0.35s allow-discrete;
+  height: 0;
+  overflow: clip;
+}
+
+.faq[open]::details-content {
+  height: auto;
+}
+
+/* Sign-in pages: the forms carry no box of their own, the panel is the box. */
+.auth-panel [data-slot="card"] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  gap: 1.5rem;
+}
+
+.auth-panel [data-slot="card-header"],
+.auth-panel [data-slot="card-content"] {
+  padding: 0;
+}
+
+.auth-panel [data-slot="card-title"] {
+  font-size: 1.875rem;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.auth-panel [data-slot="input"],
+.auth-panel select {
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.04);
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.auth-panel [data-slot="input"]:focus,
+.auth-panel select:focus {
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.3);
+}
+
+.auth-panel [data-slot="button"][type="submit"] {
+  height: 2.75rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 34px -8px var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing) {
+    scroll-behavior: auto;
+  }
+
+  .reveal,
+  .rise,
+  .panel-in,
+  .hero-cue,
+  .ticker-track {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

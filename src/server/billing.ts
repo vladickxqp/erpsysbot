@@ -7,7 +7,7 @@
  * never from the browser.
  */
 import Stripe from "stripe";
-import { eq, desc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { billingEvents, memberships, organizations, plans, subscriptions, suspensions } from "@/db/schema";
 import { isBlockedCountry } from "@/lib/countries";
@@ -17,6 +17,11 @@ import { requirePermission } from "./permissions";
 export type Plan = typeof plans.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export const TRIAL_DAYS = 14;
+
+/** The price list for visitors: what can be booked, in the order of the list. */
+export async function publicPlans(): Promise<Plan[]> {
+  return getDb().select().from(plans).where(eq(plans.active, true)).orderBy(asc(plans.position));
+}
 export const MODULES = ["crm", "orders", "calendar", "invoices", "finance", "team", "telegram", "assistant", "reports", "tasks", "documents", "inventory", "automation"] as const;
 export type Module = (typeof MODULES)[number];
 
