@@ -53,7 +53,8 @@ async function aiProposals(ctx: Context): Promise<InboxItem[]> {
     at: a.createdAt.toISOString(),
     priority: 1,
     read: false,
-    actions: ["open", "approve", "reject"],
+    // Confirming happens where the proposal can be read in full.
+    actions: ["open", "reject"],
   }));
 }
 
@@ -77,7 +78,8 @@ async function absenceRequests(ctx: Context): Promise<InboxItem[]> {
 addDecider("absence", decideAbsence);
 
 addDecider("ai", async (ctx, id, approve) => {
-  await decideAction(ctx, id, approve);
+  if (approve) throw new NotFoundError();
+  await decideAction(ctx, id, false);
 });
 
 async function dueTasks(ctx: Context): Promise<InboxItem[]> {

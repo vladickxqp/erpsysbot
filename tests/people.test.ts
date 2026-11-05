@@ -117,6 +117,18 @@ describe("team chat", () => {
     expect((await listChannels(owner)).some((c) => c.id === id)).toBe(false);
   });
 
+  it("stays out of the company export, and many messages make one note", async () => {
+    const owner = await newCompany();
+    const a = await newMember(owner, "EMPLOYEE");
+    const id = await openDirect(owner, a.user.userId);
+    await sendMessage(owner, id, "Vertraulich");
+    await sendMessage(owner, id, "Noch etwas");
+    expect((await openNotifications(a)).filter((n) => n.kind === "chatDirect")).toHaveLength(1);
+    const { entries } = await companyExport(owner);
+    expect(entries.some((e) => e.name.includes("chat_"))).toBe(false);
+    expect(entries.some((e) => e.name.includes("assistant_"))).toBe(false);
+  });
+
   it("stays inside the company", async () => {
     const a = await newCompany();
     const b = await newCompany();

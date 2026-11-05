@@ -12,6 +12,7 @@ import { withTenant } from "@/db/tenant";
 import { NotFoundError } from "../clients";
 import { contextFor, type Context } from "../context";
 import { notify } from "../notifications";
+import { isSuspended } from "../platform";
 import { requirePermission } from "../permissions";
 import { AssistantError, askAssistantDetailed, assistantAvailable, assistantCreate, type CreateMessage } from "./run";
 
@@ -57,9 +58,11 @@ export async function runAgent(ctx: Context, id: string, create: CreateMessage =
   requirePermission(ctx.permissions, "ai.use");
   const [agent] = await withTenant(ctx.organization.id, (tx) => tx.select().from(aiAgents).where(and(eq(aiAgents.id, id), eq(aiAgents.userId, ctx.user.userId))));
   if (!agent) throw new NotFoundError();
-  const { answer } = await askAssistantDetailed(ctx, "web", agent.instructions, create, { readOnly: true });
+  // Noted before it runs: a run that fails waits for its next turn, it does not repeat every few minutes.
   const at = new Date();
-  await withTenant(ctx.organization.id, (tx) => tx.update(aiAgents).set({ lastRunAt: at, lastResult: answer.slice(0, 8000) }).where(eq(aiAgents.id, id)));
+  await withTenant(ctx.organization.id, (tx) => tx.update(aiAgents).set({ lastRunAt: at }).where(eq(aiAgents.id, id)));
+  const { answer } = await askAssistantDetailed(ctx, "web", agent.instructions, create, { readOnly: true });
+  await withTenant(ctx.organization.id, (tx) => tx.update(aiAgents).set({ lastResult: answer.slice(0, 8000) }).where(eq(aiAgents.id, id)));
   await notify(ctx.organization.id, [ctx.user.userId], {
     category: "update",
     kind: "agentResult",
@@ -89,7 +92,7 @@ export async function runDueAgents(at = new Date()): Promise<number> {
   let ran = 0;
   for (const { agent, user } of rows) {
     const ctx = await contextFor({ sessionId: "agent", userId: user.id, email: user.email, name: user.name, locale: user.locale, isPlatformAdmin: false, activeOrganizationId: agent.organizationId });
-    if (!ctx || ctx.organization.id !== agent.organizationId || !ctx.permissions.has("ai.use")) continue;
+    if (!ctx || ctx.organization.id !== agent.organizationId || !ctx.permissions.has("ai.use") || (await isSuspended(agent.organizationId))) continue;
     try {
       await runAgent(ctx, agent.id);
       ran++;

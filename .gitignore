@@ -44,3 +44,7 @@ next-env.d.ts
 /.data
 .env
 !.env.example
+
+# browser tests
+/test-results
+/playwright-report

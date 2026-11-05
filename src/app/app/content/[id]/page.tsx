@@ -5,7 +5,9 @@ import { NotFoundError } from "@/server/clients";
 import { getContent, listTemplates } from "@/server/content";
 import { listMedia, maxMediaBytes } from "@/server/documents";
 import { requirePageContext } from "@/server/request";
-import { publishTargets } from "@/server/social";
+import { latestContentStats, publishTargets, youtubeVideoId } from "@/server/social";
+import { assistantAvailable } from "@/server/assistant/run";
+import { ContentStats } from "./content-stats";
 import { memberOptions } from "@/server/team";
 import { ContentEditor } from "./content-editor";
 
@@ -36,7 +38,9 @@ export default async function ContentItemPage({ params, searchParams }: { params
   const when = item?.scheduledAt ? localParts(item.scheduledAt, tz) : null;
   const names = new Map(members.map((m) => [m.id, m.name]));
 
+  const figures = item ? await latestContentStats(ctx, item.id) : null;
   return (
+    <>
     <ContentEditor
       id={item?.id ?? null}
       canManage={ctx.permissions.has("content.manage")}
@@ -74,5 +78,16 @@ export default async function ContentItemPage({ params, searchParams }: { params
         at: c.createdAt.toISOString(),
       }))}
     />
+    {item && (
+      <ContentStats
+        id={item.id}
+        link={item.externalUrl}
+        figures={figures && { views: figures.views, likes: figures.likes, comments: figures.comments }}
+        video={!!youtubeVideoId(item.externalUrl)}
+        canEdit={ctx.permissions.has("content.manage")}
+        assistant={assistantAvailable() && ctx.permissions.has("ai.use")}
+      />
+    )}
+    </>
   );
 }

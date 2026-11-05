@@ -305,6 +305,7 @@ const hub = {
     refresh: "Aktualisieren",
     analyse: "Mit KI auswerten",
     noVideo: "Für Zahlen braucht der Inhalt einen YouTube-Link.",
+    link: "Link zum veröffentlichten Inhalt",
   },
   automation: {
     t_client_status_changed: "Kundenstatus geändert",

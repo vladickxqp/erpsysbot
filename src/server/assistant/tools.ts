@@ -813,17 +813,20 @@ export const TOOLS: Tool[] = [
   tool(
     {
       name: "send_payment_reminder",
-      description: "Prepare a payment reminder for an overdue invoice and send it by e-mail. The user reviews the message first.",
+      description: "Prepare a payment reminder for an overdue invoice and send it by e-mail to the address stored for the client. The user reviews the message first.",
       input_schema: {
         type: "object",
-        properties: { invoice_id: { type: "string" }, to: { type: "string", description: "E-mail address of the client" }, message: { type: "string" } },
-        required: ["invoice_id", "to", "message"],
+        properties: { invoice_id: { type: "string" }, message: { type: "string" } },
+        required: ["invoice_id", "message"],
       },
     },
-    z.object({ invoice_id: id, to: z.string().trim().email().max(200), message: z.string().trim().min(1).max(5000) }),
+    z.object({ invoice_id: id, message: z.string().trim().min(1).max(5000) }),
     async (ctx, input) => {
+      // The address comes from the client's record, never from a conversation.
+      const { client } = await getInvoice(ctx, input.invoice_id);
+      if (!client?.email) return { sent: false, error: "The client has no e-mail address." };
       const reminder = await createReminder(ctx, input.invoice_id);
-      await sendDocument(ctx, "reminder", reminder.id, { to: input.to, message: input.message });
+      await sendDocument(ctx, "reminder", reminder.id, { to: client.email, message: input.message });
       return { sent: true, id: reminder.id, link: `/app/invoices/${input.invoice_id}` };
     },
   ),
@@ -833,7 +836,7 @@ export const TOOLS: Tool[] = [
 const RISK: Record<string, "low" | "confirm"> = {
   create_task: "low",
   create_appointment: "low",
-  remember: "low",
+  remember: "confirm",
   create_client: "confirm",
   create_order: "confirm",
   create_invoice_draft: "confirm",

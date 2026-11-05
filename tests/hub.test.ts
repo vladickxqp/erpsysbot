@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db/client";
-import { auditLog, automationRuns, clients, memberships, notifications } from "@/db/schema";
+import { auditLog, automationRuns, clients, memberships } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { auditExport } from "@/server/audit";
 import { saveAutomation } from "@/server/automations";
@@ -11,7 +11,7 @@ import { markRead, notify, openNotifications } from "@/server/notifications";
 import { ForbiddenError } from "@/server/permissions";
 import { cleanPreferences, inQuietTime, myPreferences, savePreferences } from "@/server/preferences";
 import { saveProject } from "@/server/tasks";
-import { assignCustomRole, listCustomRoles, saveCustomRole, TeamError } from "@/server/team";
+import { assignCustomRole, deleteCustomRole, listCustomRoles, saveCustomRole, TeamError } from "@/server/team";
 import { newCompany, newMember } from "./helpers";
 
 const fresh = async (ctx: Context) => (await contextFor(ctx.user))!;
@@ -39,6 +39,17 @@ describe("named roles", () => {
     await saveCustomRole(owner, null, { name: "Alles", permissions: ["billing.manage"] });
     const full = (await listCustomRoles(owner)).find((r) => r.name === "Alles")!;
     await expect(assignCustomRole(admin, viewer.user.userId, full.id)).rejects.toBeInstanceOf(TeamError);
+  });
+
+  it("are not changed or removed by someone who holds less", async () => {
+    const owner = await newCompany();
+    const admin = await newMember(owner, "ADMIN");
+    await saveCustomRole(owner, null, { name: "Abrechnung", permissions: ["billing.manage"] });
+    const [role] = await listCustomRoles(owner);
+    await expect(saveCustomRole(admin, role.id, { name: "Weniger", permissions: [] })).rejects.toBeInstanceOf(TeamError);
+    await expect(deleteCustomRole(admin, role.id)).rejects.toBeInstanceOf(TeamError);
+    await deleteCustomRole(owner, role.id);
+    expect(await listCustomRoles(owner)).toEqual([]);
   });
 
   it("cannot be read from another company", async () => {
@@ -82,6 +93,12 @@ describe("inbox notes", () => {
     expect((await openNotifications(member))[0].readAt).toBeNull();
     await markRead(member, mine.id);
     expect((await openNotifications(member))[0].readAt).not.toBeNull();
+  });
+
+  it("reach only people of the company", async () => {
+    const owner = await newCompany();
+    const stranger = await newCompany();
+    expect(await notify(owner.organization.id, [stranger.user.userId], { category: "update", kind: "automation", dedupeKey: "fremd" })).toBe(0);
   });
 
   it("stay away when the person muted the kind", async () => {

@@ -73,6 +73,8 @@ async function youtube(id: string, fetcher: Fetch): Promise<Figures> {
   };
 }
 
+const STATS_INTERVAL = 3_600_000;
+
 /** The id of a YouTube video from its address, whatever form it has. */
 export function youtubeVideoId(url: string | null | undefined): string | null {
   return /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/))([\w-]{11})/.exec(url ?? "")?.[1] ?? null;
@@ -80,13 +82,15 @@ export function youtubeVideoId(url: string | null | undefined): string | null {
 
 /** Fetches the figures of a published video from YouTube and keeps them; nothing is estimated. */
 export async function refreshContentStats(ctx: Context, contentId: string, fetcher: Fetch = fetch): Promise<{ views: number | null; likes: number | null; comments: number | null } | null> {
-  requirePermission(ctx.permissions, "content.read");
+  requirePermission(ctx.permissions, "content.manage");
   const key = youtubeKey();
   if (!key) throw new SocialError("NOT_CONFIGURED");
   const [item] = await withTenant(ctx.organization.id, (tx) => tx.select({ url: contentItems.externalUrl }).from(contentItems).where(eq(contentItems.id, contentId)));
   if (!item) throw new NotFoundError();
   const video = youtubeVideoId(item.url);
   if (!video) return null;
+  const last = await latestContentStats(ctx, contentId);
+  if (last && Date.now() - last.fetchedAt.getTime() < STATS_INTERVAL) return last;
   const res = await fetcher(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${video}&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new SocialError("NOT_FOUND");
   const body = (await res.json()) as { items?: { statistics?: { viewCount?: string; likeCount?: string; commentCount?: string } }[] };
@@ -96,6 +100,17 @@ export async function refreshContentStats(ctx: Context, contentId: string, fetch
   const figures = { views: num(stats.viewCount), likes: num(stats.likeCount), comments: num(stats.commentCount) };
   await withTenant(ctx.organization.id, (tx) => tx.insert(contentStats).values({ organizationId: ctx.organization.id, contentId, ...figures }));
   return figures;
+}
+
+/** Where a piece went out, for pieces published outside the app. Only web addresses. */
+export async function setContentLink(ctx: Context, contentId: string, raw: string): Promise<void> {
+  requirePermission(ctx.permissions, "content.manage");
+  const url = raw.trim();
+  if (url && !/^https:\/\/[^\s]+$/i.test(url)) throw new SocialError("NOT_FOUND");
+  await withTenant(ctx.organization.id, async (tx) => {
+    const [row] = await tx.update(contentItems).set({ externalUrl: url.slice(0, 500) || null }).where(eq(contentItems.id, contentId)).returning({ id: contentItems.id });
+    if (!row) throw new NotFoundError();
+  });
 }
 
 export async function latestContentStats(ctx: Context, contentId: string) {

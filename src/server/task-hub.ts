@@ -56,7 +56,7 @@ const commentInput = z.string().trim().min(1).max(4000);
 
 /** A comment; whoever it names with @ and whoever owns the task hear about it. */
 export async function addComment(ctx: Context, taskId: string, raw: string): Promise<void> {
-  requirePermission(ctx.permissions, "tasks.read");
+  requirePermission(ctx.permissions, "tasks.manage");
   const body = commentInput.parse(raw);
   const task = await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx.select().from(tasks).where(eq(tasks.id, taskId));
@@ -67,9 +67,10 @@ export async function addComment(ctx: Context, taskId: string, raw: string): Pro
   const mentioned = mentionedUsers(body, await memberOptions(ctx)).filter((id) => id !== ctx.user.userId);
   const href = `/app/tasks/${taskId}`;
   const vars = { who: ctx.user.name, title: task.title };
-  await notify(ctx.organization.id, mentioned, { category: "mention", kind: "mentionTask", vars, href, entity: "task", entityId: taskId, priority: 2, dedupeKey: `mention:${taskId}:${Date.now()}` });
+  const minute = Math.floor(Date.now() / 60_000);
+  await notify(ctx.organization.id, mentioned, { category: "mention", kind: "mentionTask", vars, href, entity: "task", entityId: taskId, dedupeKey: `mention:${taskId}:${ctx.user.userId}:${minute}` });
   if (task.assignedUserId && task.assignedUserId !== ctx.user.userId && !mentioned.includes(task.assignedUserId)) {
-    await notify(ctx.organization.id, [task.assignedUserId], { category: "update", kind: "taskComment", vars, href, entity: "task", entityId: taskId, dedupeKey: `comment:${taskId}:${Date.now()}` });
+    await notify(ctx.organization.id, [task.assignedUserId], { category: "update", kind: "taskComment", vars, href, entity: "task", entityId: taskId, dedupeKey: `comment:${taskId}:${ctx.user.userId}:${minute}` });
   }
 }
 

@@ -17,6 +17,7 @@ import { memberOptions } from "./team";
 export type Channel = typeof chatChannels.$inferSelect;
 
 const GENERAL = "general";
+const MAX_CHANNELS = 200;
 const channelName = z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N} _-]+$/u);
 const messageBody = z.string().trim().min(1).max(4000);
 
@@ -42,7 +43,8 @@ export async function listChannels(ctx: Context) {
       .from(chatChannels)
       .leftJoin(chatMembers, and(eq(chatMembers.channelId, chatChannels.id), eq(chatMembers.userId, me)))
       .where(or(eq(chatChannels.kind, "CHANNEL"), sql`${chatChannels.directKey} like ${`%${me}%`}`))
-      .orderBy(asc(chatChannels.kind), asc(chatChannels.name));
+      .orderBy(asc(chatChannels.kind), asc(chatChannels.name))
+      .limit(MAX_CHANNELS + 100);
     return list;
   });
   const names = new Map((await memberOptions(ctx)).map((m) => [m.id, m.name]));
@@ -56,6 +58,8 @@ export async function createChannel(ctx: Context, raw: string): Promise<string> 
   assertModule(ctx, "chat");
   const name = channelName.parse(raw);
   return withTenant(ctx.organization.id, async (tx) => {
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(chatChannels).where(eq(chatChannels.kind, "CHANNEL"));
+    if (Number(n) >= MAX_CHANNELS) throw new NotFoundError();
     const [created] = await tx.insert(chatChannels).values({ organizationId: ctx.organization.id, name, kind: "CHANNEL", createdBy: ctx.user.userId }).onConflictDoNothing().returning({ id: chatChannels.id });
     if (created) return created.id;
     const [existing] = await tx.select({ id: chatChannels.id }).from(chatChannels).where(eq(chatChannels.name, name));
@@ -114,6 +118,6 @@ export async function sendMessage(ctx: Context, channelId: string, raw: string):
     href: `/app/chat?c=${channelId}`,
     entity: "chat",
     entityId: channelId,
-    dedupeKey: `chat:${row.id}`,
+    dedupeKey: `chat:${channelId}:${ctx.user.userId}:${Math.floor(row.createdAt.getTime() / 60_000)}`,
   });
 }

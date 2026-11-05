@@ -152,18 +152,20 @@ export function TaskView(p: Props) {
                   <p className="mt-1 whitespace-pre-wrap">{c.body}</p>
                 </div>
               ))}
-              <form
-                className="flex items-end gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (comment.trim()) run(() => addCommentAction(p.task.id, comment), () => setComment(""));
-                }}
-              >
-                <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={4000} placeholder={t("hub.tasks.commentHint")} aria-label={t("hub.tasks.comments")} />
-                <Button type="submit" size="icon" disabled={pending || !comment.trim()} aria-label={t("assistant.send")}>
-                  <Send className="size-4" />
-                </Button>
-              </form>
+              {p.canManage && (
+                <form
+                  className="flex items-end gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (comment.trim()) run(() => addCommentAction(p.task.id, comment), () => setComment(""));
+                  }}
+                >
+                  <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={4000} placeholder={t("hub.tasks.commentHint")} aria-label={t("hub.tasks.comments")} />
+                  <Button type="submit" size="icon" disabled={pending || !comment.trim()} aria-label={t("assistant.send")}>
+                    <Send className="size-4" />
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>

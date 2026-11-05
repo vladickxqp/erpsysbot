@@ -179,6 +179,11 @@ export async function setMemberPermissions(ctx: Context, userId: string, wanted:
 
 const roleInput = z.object({ name: z.string().trim().min(1).max(60), permissions: z.array(z.string()).max(PERMISSIONS.length) });
 
+/** Nobody changes or removes a role that holds more than they do. */
+function guardCustomRole(ctx: Context, held: readonly string[]): void {
+  if (ctx.role !== "OWNER" && held.some((p) => !ctx.permissions.has(p as (typeof PERMISSIONS)[number]))) throw new TeamError("OWNER_ONLY");
+}
+
 export async function listCustomRoles(ctx: Context) {
   requirePermission(ctx.permissions, "employees.read");
   return withTenant(ctx.organization.id, (tx) => tx.select().from(customRoles).orderBy(asc(customRoles.name)));
@@ -193,9 +198,8 @@ export async function saveCustomRole(ctx: Context, id: string | null, raw: z.inp
     if (id) {
       const [current] = await tx.select().from(customRoles).where(eq(customRoles.id, id));
       if (!current) throw new TeamError("INVALID");
-      // Rights one does not hold stay as they are: an edit neither adds nor removes them.
-      const kept = current.permissions.filter((p) => !ctx.permissions.has(p as (typeof PERMISSIONS)[number]));
-      await tx.update(customRoles).set({ name: input.name, permissions: [...new Set([...permissions, ...kept])] }).where(eq(customRoles.id, id));
+      guardCustomRole(ctx, current.permissions);
+      await tx.update(customRoles).set({ name: input.name, permissions }).where(eq(customRoles.id, id));
     } else {
       await tx.insert(customRoles).values({ organizationId: ctx.organization.id, name: input.name, permissions }).onConflictDoNothing();
     }
@@ -205,6 +209,9 @@ export async function saveCustomRole(ctx: Context, id: string | null, raw: z.inp
 
 export async function deleteCustomRole(ctx: Context, id: string): Promise<void> {
   requirePermission(ctx.permissions, "employees.manage");
+  const [role] = await withTenant(ctx.organization.id, (tx) => tx.select().from(customRoles).where(eq(customRoles.id, id)));
+  if (!role) throw new TeamError("INVALID");
+  guardCustomRole(ctx, role.permissions);
   // Whoever held it keeps no rights from it: nothing stays behind unnoticed.
   await getDb().update(memberships).set({ customRoleId: null }).where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.customRoleId, id)));
   await withTenant(ctx.organization.id, async (tx) => {

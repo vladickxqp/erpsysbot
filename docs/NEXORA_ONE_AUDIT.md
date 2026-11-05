@@ -1,131 +1,88 @@
 # NEXORA ONE — PROJECT AUDIT
 
-Stand: Commit `fe47aca` (Branch `main`, Arbeitsbaum sauber), 2026-11-04. Geprüft am Code, nicht an Annahmen.
-Belege: 114 automatische Tests, GitHub Actions grün (Lint, Typen, Tests, Build), Browser-Prüfung auf Testdaten,
-eine unabhängige Sicherheitsprüfung (9 Befunde, alle behoben). **Mit echten Schlüsseln noch nie gelaufen:** KI, Telegram,
-SMTP, Stripe, YouTube — diese Teile sind nur gegen Attrappen getestet.
+Stand: 2026-11-05. Geprüft am Code, nicht an Annahmen.
+Belege: automatische Tests (Vitest gegen echtes PostgreSQL), Browser-Durchlauf mit Playwright, GitHub Actions (Lint, Typen, Tests, Build, Browser),
+drei unabhängige Sicherheitsprüfungen. **Mit echten Schlüsseln noch nie gelaufen:** KI, Telegram, SMTP, Stripe, YouTube — diese Teile sind nur gegen Attrappen getestet.
 
 ## 1. Architektur
 
-| Bereich | Zustand | Probleme | Nächster Schritt |
-|---|---|---|---|
-| Frontend | Next.js 15 (App Router), React 19, Tailwind 4, shadcn; 6 Sprachen | Viele große Client-Komponenten; keine E2E-Tests | Playwright für Kernabläufe |
-| Backend | Server Actions + wenige Route Handler; Geschäftslogik in `src/server/*` | Keine öffentliche API | API-Schlüssel und REST nach Bedarf |
-| Datenbank | Postgres 17, Drizzle, 12 Migrationen, PGlite für Tests | Kein Fremdschlüssel `organization_id → organizations` auf Tenant-Tabellen | Fremdschlüssel nachziehen |
-| Authentifizierung | Eigene Sitzungen (Hash in DB), scrypt, Drosselung, 2FA | Keine Passwortänderung, keine E-Mail-Bestätigung | Ergänzen |
-| Autorisierung | Rollen + Rechte serverseitig, RLS je Firma | Rollen ohne Viewer; CUSTOM ohne Oberfläche | Viewer, Rechte-Editor |
-| Dashboard | Persönlich, Widgets, Ziehen, mehrere Dashboards | Keine Schnellaktionen, keine Vorlagen je Nutzertyp | Ergänzen |
-| Benutzerverwaltung | Einladungen, Rollen, Mehrfach-Firmen, Firmenwechsel | Keine Abteilungen | Roadmap |
-| AI | Assistent mit Werkzeugen, Inhaltsgenerator, Limits | Ohne echten Schlüssel ungetestet; keine Agenten | Echttest, dann Agenten |
-| Integrationen | Telegram, SMTP, Stripe, YouTube, Bank-Import, DATEV | Instagram, TikTok, Facebook, LinkedIn, X fehlen (OAuth-Apps nötig) | Nach Entwickler-Apps |
-| Sicherheit | RLS, Audit-Trail, Rate Limit, CSP für Dateien, HSTS | Keine globale CSP; Login/Logout nicht im Protokoll | Ergänzen |
-| Deployment | Docker Compose + Cloudflare-Tunnel auf einem Laptop | **Ein Rechner, kein Failover; Seite war am 03.11. nicht erreichbar**; Backups nur lokal | Server, Backups außerhalb |
+| Bereich | Zustand | Offene Punkte |
+|---|---|---|
+| Frontend | Next.js 15 (App Router), React 19, Tailwind 4, shadcn; 6 Sprachen; Befehlspalette (Strg+K) | Große Client-Komponenten in Kalender und Dashboard |
+| Backend | Server Actions + Route Handler; Geschäftslogik in `src/server/*`; öffentliche API `/api/v1` mit Schlüsseln | Zeitgesteuerte Arbeit läuft im App-Prozess |
+| Datenbank | Postgres 17, Drizzle, 18 Migrationen, PGlite für Tests, RLS je Firma, Fremdschlüssel `organization_id` | Bestehende Zeilen sind `NOT VALID` markiert (neue werden geprüft) |
+| Authentifizierung | Eigene Sitzungen, scrypt, Drosselung, 2FA, E-Mail-Bestätigung | — |
+| Autorisierung | Rollen, benannte eigene Rollen, Rechte je Person, serverseitig; Sperre je Modul und Tarif | — |
+| Sicherheit | CSP mit Nonce, HSTS, Protokoll inkl. Anmeldungen und Exporten | Drosselung im Speicher (je Instanz) |
+| KI | Assistent mit Vorschau und Bestätigung, Verlauf, Gedächtnis, Agenten, Abläufe | Kein Echttest |
+| Integrationen | Telegram, SMTP, Stripe (Abos), YouTube, Bank-Import, DATEV | Instagram, TikTok, Facebook, LinkedIn, X, Online-Zahlung, ESF, Ukraine: siehe Abschnitt 6 |
+| Betrieb | Docker Compose + Cloudflare-Tunnel auf einem Laptop | **Ein Rechner, kein Failover, Backups nur lokal** |
 
 ## 2. Module (Module Discovery)
 
-| Modul | Zweck | Abhängig von | Tabellen | Rechte | Status |
-|---|---|---|---|---|---|
-| Core | Nutzer, Firmen, Rollen, Sitzungen, Protokoll | — | users, sessions, organizations, memberships, invitations, audit_log | settings.manage, employees.* | COMPLETE |
-| crm | Kunden, Import/Export, Suche | Core | clients | clients.* | PARTIALLY (Kontaktpersonen, Timeline fehlen) |
-| pipeline | Verkaufschancen | crm | deals | clients.read | COMPLETE |
-| calendar | Termine, Serien, Überschneidung | Core | appointments | calendar.* | COMPLETE |
-| tasks | Aufgaben, Projekte, Board | Core | tasks, projects | tasks.* | PARTIALLY (keine Projektseite, keine Zeiterfassung) |
-| orders / quotes / invoices | Aufträge, Angebote, Rechnungen, Mahnungen, PDF, XRechnung, wiederkehrend | crm | orders, quotes, invoices, payments, payment_reminders, recurring_invoices | orders.*, invoices.* | COMPLETE |
-| finance | Buchungen, Bank, DATEV | invoices (für Abgleich) | transactions, bank_transactions | finance.* | COMPLETE für Einnahmen/Ausgaben; keine Budgets |
-| products / inventory | Produkte, Lager, Einkauf | orders | products, stock_movements, suppliers, purchase_orders | products.manage, inventory.manage | COMPLETE |
-| documents / media | Dateien, Medienbibliothek | Core | documents | documents.* | COMPLETE |
-| content | Creator Studio, Generator | Core; KI optional | content_items, content_comments, content_templates, content_generations | content.* | PARTIALLY (Sponsoring fehlt) |
-| social | Kanäle, Zahlen | content.read | social_accounts, social_stats | content.read, settings.manage | PARTIALLY (nur YouTube, Telegram) |
-| reports | Berichte CSV/PDF | je Bericht | — | je Bericht | COMPLETE |
-| team | Mitglieder, Einladungen | Core | memberships, invitations | employees.* | PARTIALLY (keine Abteilungen, keine Personaldaten) |
-| automation | Regeln | Core | automations, automation_runs | automation.manage | COMPLETE |
-| assistant | KI-Assistent | Core | assistant_messages | ai.use | NEEDS VERIFICATION (kein Echttest) |
-| integrations | Übersicht | Core | — | settings.manage | COMPLETE |
-| billing / admin | Tarife, Stripe, Plattform | Core | plans, subscriptions, suspensions | billing.manage | NEEDS VERIFICATION (kein Echttest) |
+| Modul | Zweck | Abhängig von | Tabellen | Rechte | Oberfläche | API / Integration | Status |
+|---|---|---|---|---|---|---|---|
+| Core | Nutzer, Firmen, Rollen, Sitzungen, Protokoll, Einstellungen | — | users, sessions, organizations, memberships, invitations, custom_roles, user_preferences, audit_log | settings.manage, employees.* | /app/settings, /app/audit | — | COMPLETE |
+| Inbox | Was jemanden betrifft, Hinweise, Freigaben | Core | notifications, insight_dismissals | je Quelle | /app/inbox, Glocke | Telegram, E-Mail | COMPLETE |
+| Mein Tag | Tagesplan, Fristen, Vorschlag aus freier Zeit | tasks, calendar | tasks.planned_for | tasks.*, calendar.read | /app/today | — | COMPLETE |
+| crm | Kunden, Kontakte, Verlauf, Archiv | Core | clients, client_contacts, client_activities | clients.* | /app/clients | /api/v1/clients | COMPLETE |
+| pipeline | Verkaufschancen | crm | deals | clients.* | /app/pipeline | — | COMPLETE |
+| calendar | Termine, Serien, alles mit Datum | Core | appointments | calendar.* | /app/calendar | ICS-Link | COMPLETE |
+| tasks | Aufgaben, Abhängigkeiten, Projekte, Team, Budget | Core | tasks, task_dependencies, task_comments, projects, project_members | tasks.* | /app/tasks, /app/tasks/[id], /app/tasks/projects/[id], /app/tasks/plan | /api/v1/tasks | COMPLETE |
+| time | Zeiterfassung, Abrechnung | Core | time_entries | time.* | /app/time | — | COMPLETE |
+| orders, quotes, invoices | Aufträge, Angebote, Rechnungen, Mahnungen | crm | orders, quotes, invoices, payments, payment_reminders, recurring_invoices | orders.*, invoices.* | /app/orders, /app/quotes, /app/invoices | /api/v1/invoices, XRechnung, Kundenlinks | COMPLETE |
+| finance | Buchungen, Bank, DATEV, Belege | invoices | transactions, bank_transactions | finance.* | /app/finance | CAMT/CSV, DATEV | COMPLETE für Einnahmen/Ausgaben |
+| products, inventory | Produkte, Lager, Einkauf | orders | products, stock_movements, suppliers, purchase_orders | products.manage, inventory.manage | /app/products, /app/purchasing | — | COMPLETE |
+| documents, media | Dateien, Medien | Core | documents | documents.* | /app/documents, /app/media | — | COMPLETE |
+| content | Creator Studio, Sponsoring, Zahlen je Video | Core | content_items, content_stats, sponsorships | content.* | /app/content | YouTube, Telegram | COMPLETE |
+| social | Kanäle | content.read | social_accounts, social_stats | content.read | /app/social | YouTube, Telegram | PARTIALLY (Abschnitt 6) |
+| reports | Berichte | je Bericht | — | je Bericht | /app/reports | CSV, PDF | COMPLETE |
+| team | Mitglieder, Abteilungen, Geschäftsbereiche | Core | departments, business_units | employees.* | /app/team | — | COMPLETE |
+| hr | Abwesenheiten, Urlaubskonto, Personalakte | Core | absences, employee_profiles | hr.* | /app/hr | — | COMPLETE (Feiertage nicht abgezogen) |
+| chat | Kanäle, Direktnachrichten | Core | chat_channels, chat_members, chat_messages | Mitglied | /app/chat | — | COMPLETE (Abfrage alle 4 s, kein WebSocket) |
+| automation | Regeln | Core | automations, automation_runs | automation.manage | /app/automations | Telegram | COMPLETE |
+| assistant | KI, Gespräche, Gedächtnis, Agenten | Core | assistant_*, ai_agents, daily_summaries | ai.use, ai.admin | /app/assistant | Anthropic | NEEDS VERIFICATION (kein Echttest) |
+| personal | Ziele, Gewohnheiten, private Finanzen | Core | goals, habits, personal_transactions | eigene Daten | /app/personal | — | COMPLETE |
+| integrations, billing, admin | Übersicht, Tarife, Plattform | Core | plans, subscriptions, suspensions | settings.manage, billing.manage | /app/integrations, /app/billing, /app/admin | Stripe | NEEDS VERIFICATION (kein Echttest) |
 
-## 3. Funktionsinventur
-
-Geprüft nach: Oberfläche, Backend, Speichern, Laden, Validierung, Rechte, Fehler, Mandant, Test.
-
-| Funktion | Kategorie | Anmerkung |
-|---|---|---|
-| Registrierung, Login, Logout, Passwort-Reset | COMPLETE | Tests + Browser |
-| Passwort ändern im Konto | MISSING | |
-| E-Mail-Bestätigung | MISSING | |
-| 2FA, Geräteliste | COMPLETE | Tests + Browser; TOTP selbst auf `node:crypto` (RFC-6238-Testvektoren grün) — siehe Abschnitt 6 |
-| Rollen | PARTIALLY IMPLEMENTED | Kein Viewer; CUSTOM nur im Datenmodell |
-| Audit-Log | PARTIALLY IMPLEMENTED | Geschäftsvorgänge ja; Login/Logout, Exporte nein |
-| Mandantentrennung | COMPLETE | RLS, Tests |
-| Firmenwechsel | COMPLETE | |
-| Modulverwaltung | PARTIALLY IMPLEMENTED | Menü, Seiten, Widgets ja; Serveraktionen nur teilweise; keine Abhängigkeiten; Hintergrundjobs laufen weiter |
-| Dashboard/Widgets | COMPLETE | Schnellaktionen und Vorlagen fehlen |
-| Benachrichtigungen | PARTIALLY IMPLEMENTED | Widget und Telegram; keine Glocke |
-| CRM Kunden | PARTIALLY IMPLEMENTED | Website, Branche, Kontaktpersonen, Timeline, Archiv fehlen; Tags/Besitzer im Modell |
-| CRM-Automatisierung | PARTIALLY IMPLEMENTED | Regeln vorhanden; neue Kunden zuweisen prüfen |
-| Angebote, Aufträge, Rechnungen, Mahnungen | COMPLETE | |
-| Einnahmen/Ausgaben, Bank, DATEV | COMPLETE | Budgets, Belege mit KI fehlen |
-| Zeiterfassung | MISSING | Für Freelancer gefordert |
-| Projektseite (Aufgaben, Kosten, Rechnungen zusammen) | MISSING | Abschnitt 4 des Prompts |
-| Creator: Ideen, Skripte, Kalender | COMPLETE | Skripte über Generator; KI ungetestet |
-| Creator: Sponsoring, Kooperationen | MISSING | |
-| Privatnutzer: Ziele, Gewohnheiten, persönliche Finanzen | MISSING | |
-| Abteilungen | MISSING | |
-
-## 4. Kritische Punkte
+## 3. Kritische Punkte
 
 1. **Betrieb:** alles auf einem Laptop; Backups nur dort. Ein Defekt löscht alle Kundendaten.
 2. **Repository ist öffentlich:** der ganze Code ist für jeden sichtbar. Keine Geheimnisse enthalten.
 3. **Keine Echttests:** KI, Telegram, SMTP, Stripe, YouTube.
 4. **Rechtstexte** sind Vorlagen; ohne Anwalt nicht für zahlende Kunden.
 
-## 5. Skalierung und technische Schulden
+## 4. Skalierung und technische Schulden
 
 - Drosselung und Mail-Limit liegen im Speicher: mit mehreren App-Instanzen gelten sie je Instanz → Redis oder Datenbank.
-- Zeitgesteuerte Aufgaben laufen im App-Prozess; Rechnungen sind durch Claiming sicher, der Rest läuft je Instanz → Job-Warteschlange.
+- Zeitgesteuerte Aufgaben (Rechnungen, Tageslauf, Agenten) laufen im App-Prozess → Job-Warteschlange. Der Tageslauf rechnet je Person; bei vielen Firmen auslagern.
 - Dateien liegen auf dem lokalen Volume → S3-kompatibler Speicher.
 - Uploads werden ganz in den Speicher gelesen (bis 100 MB).
-- Listen mit festen Grenzen (500–1000 Zeilen) statt Seiten: Inhalte, Medien, Bank.
-- Mehrere Firmen-Kennzahlen je Seitenaufruf nacheinander → bei Wachstum zusammenfassen oder cachen.
+- Suche über `ILIKE`; Trigramm-Indizes entstehen, wo der Server `pg_trgm` hat.
+- Team-Chat fragt alle 4 Sekunden nach; ab vielen Nutzern WebSocket oder Server-Sent Events.
 
-## 6. Bewusste Abweichungen vom Prompt
+## 5. Bewusste Abweichungen vom Prompt
 
-- **„Keine eigene Kryptografie“:** TOTP nutzt `node:crypto` (HMAC) und ist gegen die RFC-Vektoren getestet, die Hash-Funktionen sind die der Plattform; eigene Verfahren gibt es nicht. Ein Austausch gegen eine Bibliothek ist möglich, aber kein Sicherheitsgewinn.
+- **„Keine eigene Kryptografie“:** TOTP nutzt `node:crypto` (HMAC) und ist gegen die RFC-Vektoren getestet; eigene Verfahren gibt es nicht.
 - **Automatische Veröffentlichung:** nur Telegram, nur per Knopf. Andere Plattformen brauchen freigegebene Entwickler-Apps; keine erfundenen Integrationen.
+- **Keine erfundenen Konfidenzwerte:** die KI nennt Unsicherheit in Worten.
+- **Tagesplan:** ohne eingetragene Arbeitszeit gibt es keinen Zeitvorschlag, statt Bürozeiten anzunehmen.
+- **Dauer „nicht jetzt“ bei Hinweisen:** 7 Tage oder bis sich die Daten ändern.
 
-## 7. Roadmap (Priorität)
-
-1. Produktname NEXORA ONE, Passwort ändern, E-Mail-Bestätigung, Login im Protokoll, Rolle Viewer.
-2. Module durchgängig: Abhängigkeiten, Sperre in Serverfunktionen und Hintergrundjobs.
-3. Arbeitsbereich je Nutzertyp, Schnellaktionen.
-4. CRM: Kontaktpersonen, Timeline, Archiv, Website, Branche.
-5. Zeiterfassung, Projektseite als Verbindung der Module.
-6. Creator: Sponsoring. Privatbereich: Ziele, Gewohnheiten.
-7. Glocke für Benachrichtigungen, Abteilungen, Rechte-Editor.
-8. Betrieb: Server, Backups außerhalb, Monitoring, Echttests aller Schlüssel.
-9. Der Master-Prompt endet in der vorliegenden Datei bei Abschnitt 11.1; alles danach ist noch nicht bewertet.
-
-## 8. Umgesetzt nach diesem Audit
-
-Roadmap-Punkte 1–5 sind umgesetzt und getestet: Produktname, Passwort ändern, E-Mail-Bestätigung, Anmeldungen im
-Protokoll, Rolle Viewer; Modul-Abhängigkeiten und Sperre in Serverfunktionen und Hintergrundjobs; Arbeitsbereiche je
-Nutzertyp, Schnellaktionen, mehrere eigene Arbeitsbereiche; CRM-Kontaktpersonen, Timeline, Website, Branche;
-Zeiterfassung mit Abrechnung; Projektseite mit Aufgaben, Zeit, Dateien, Kosten und Rechnungen.
-
-Danach auch Punkte 6 und 7: Sponsoring, Ziele und Gewohnheiten, Glocke, Abteilungen, Rechte je Person, Kundenarchiv,
-Sperre von `pipeline`, `reports`, `team`, `integrations` auf dem Server. Zusätzlich: Suche über alle Module, Rechnungen in
-Fremdwährung, Logo auf Dokumenten, Kundenlinks mit Annahme von Angeboten, Kalender-Link, öffentliche API mit Schlüsseln,
-Belege per KI lesen, Steuersätze der US-Bundesstaaten als Vorschlag.
-
-Eine zweite unabhängige Sicherheitsprüfung fand 9 Befunde (3 hoch, 2 mittel, 4 niedrig), keine Leckage zwischen Firmen; alle behoben und mit Tests belegt: Rechte nur bis zur eigenen Höhe vergeben, Rechte beim Rollenwechsel zurücksetzen, Ziele und Gewohnheiten aus dem Firmenexport heraus, Kundenlinks nur für Berechtigte und widerrufbar, Arbeitsbereiche ohne neue Testphase, Drosselung von Mails und Passwortversuchen.
-
-## 9. Bewusst nicht gebaut
+## 6. Bewusst nicht gebaut
 
 | Punkt | Warum |
 |---|---|
-| ZUGFeRD | Verlangt PDF/A-3 mit ICC-Profil und XML im CII-Format. Ohne amtlichen Validator ist nicht prüfbar, ob eine Datei gültig ist; eine ungeprüfte Datei „ZUGFeRD“ zu nennen wäre falsch. XRechnung deckt die Pflicht in Deutschland. |
+| ZUGFeRD | Verlangt PDF/A-3 mit ICC-Profil und XML im CII-Format. Ohne amtlichen Validator ist nicht prüfbar, ob eine Datei gültig ist. XRechnung deckt die Pflicht in Deutschland. |
 | ESF Kasachstan, E-Rechnung Ukraine | Brauchen staatliche Zugänge und Zertifikate des Unternehmens. |
 | Instagram, TikTok, Facebook, LinkedIn, X | Brauchen freigegebene Entwickler-Apps des Betreibers. |
 | Online-Zahlung durch Kunden | Braucht Stripe Connect mit dem Konto jeder Firma. |
 | Import aus lexoffice, sevDesk | Kunden gehen über CSV; Belege brauchen deren API-Zugänge. |
 | E-Commerce, Support | Abschnitte des Prompts liegen nicht vor. |
-| Bedienung im Browser automatisch testen (Playwright) | Noch offen; Prüfung bisher von Hand und über Servertests. |
+
+## 7. Stand der Prompts
+
+Teil 1 brach bei Abschnitt 11.1 ab, Teil 2 bei Abschnitt 15.1 (leerer Listenpunkt). Beide Dateien enden bei genau 20.000 Zeichen; was danach kam, ist nicht bewertet.
+
+Aus Teil 2 umgesetzt: Abschnitte 5 (Arbeitsbereich, Personalisierung, Trennung privat/geschäftlich), 6 (KI-Zentrale), 7 (Hinweise), 8 (Aufgaben), 9 (Assistent),
+10 (Abläufe A bis E), 11 (Posteingang), 12 (Befehlspalette), 13 (Suche), 14 (Dashboard), 15 (Kalender).

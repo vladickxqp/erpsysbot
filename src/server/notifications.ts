@@ -32,8 +32,13 @@ export type Notification = typeof notifications.$inferSelect;
 
 /** Writes the note for each person who wants this kind; returns how many got it. */
 export async function notify(organizationId: string, userIds: readonly string[], note: Note): Promise<number> {
+  if (!userIds.length) return 0;
+  const members = await getDb()
+    .select({ userId: memberships.userId })
+    .from(memberships)
+    .where(and(eq(memberships.organizationId, organizationId), inArray(memberships.userId, [...new Set(userIds)])));
   let written = 0;
-  for (const userId of new Set(userIds)) {
+  for (const { userId } of members) {
     const prefs = await preferencesOf(organizationId, userId);
     if (prefs.notifications.muted.includes(note.category)) continue;
     const [row] = await withTenant(organizationId, (tx) =>

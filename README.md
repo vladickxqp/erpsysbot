@@ -33,6 +33,12 @@ Current state, module map and roadmap: [docs/NEXORA_ONE_AUDIT.md](docs/NEXORA_ON
 | CRM contact persons and timeline, time tracking with billing, project overview, viewer role, e-mail confirmation | ✅ |
 | Sponsoring, goals and habits, notifications bell, departments, rights per person, client archive, search across modules | ✅ |
 | Invoices in another currency, logo on documents, client links, calendar link, public API, reading receipts with AI | ✅ |
+| Inbox with priorities, insights from real records, notification settings with quiet hours | ✅ |
+| My day: plan, deadlines, schedule from free time; task pages with dependencies, comments and links; quick task from a sentence | ✅ |
+| Command palette (Ctrl+K), favourites, search across modules with sentences as filters | ✅ |
+| AI command center: proposals with confirmation, action history, conversations, memory, agents, workflows | ✅ |
+| HR: absences with approval, vacation balance, staff files; team chat; business units; custom roles; private finances | ✅ |
+| Dashboards by role, unified calendar, figures per video, strict content security policy | ✅ |
 
 ## How tenants are kept apart
 
@@ -224,6 +230,7 @@ one's appointments, due tasks and planned content into a phone calendar.
 npm ci
 npm run dev          # PGlite database in ./.data, no Docker needed
 npm test             # Vitest against real PostgreSQL (PGlite, in memory)
+npm run test:e2e     # the main ways through the app in a browser (after a build)
 npm run db:generate  # a migration after changing src/db/schema.ts
 ```
 

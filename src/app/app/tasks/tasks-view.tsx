@@ -196,6 +196,11 @@ export function TasksView({
           <Link href={href({ mine: !mine })}>{t("calendar.mine")}</Link>
         </Button>
         {canManage && (
+          <Button variant="outline" asChild>
+            <Link href="/app/tasks/plan">{t("hub.plan.title")}</Link>
+          </Button>
+        )}
+        {canManage && (
           <Button onClick={() => setDraft(blank())}>
             <Plus className="size-4" /> {t("tasks.new")}
           </Button>

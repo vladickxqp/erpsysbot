@@ -25,7 +25,7 @@ import { generateContent, type GenerationInput, type Suggestion } from "@/server
 import { addDays, parseMoney, today } from "@/server/money";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
-import { publishToTelegram, SocialError } from "@/server/social";
+import { publishToTelegram, refreshContentStats, setContentLink, SocialError } from "@/server/social";
 import { deleteSponsorship, invoiceSponsorship, saveSponsorship, SponsorError, type SponsorInput } from "@/server/sponsorships";
 
 export type ContentResult = { ok?: boolean; id?: string; url?: string | null; error?: string };
@@ -177,6 +177,29 @@ export async function invoiceSponsorAction(id: string): Promise<ContentResult> {
     revalidatePath("/app/invoices");
     return { ok: true, id: invoice.id };
   } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function refreshStatsAction(id: string): Promise<ContentResult> {
+  const ctx = await requireContext();
+  try {
+    await refreshContentStats(ctx, id);
+    revalidatePath(`/app/content/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export async function saveContentLinkAction(id: string, url: string): Promise<ContentResult> {
+  const ctx = await requireContext();
+  try {
+    await setContentLink(ctx, id, url);
+    revalidatePath(`/app/content/${id}`);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof SocialError) return { error: "auth.check" };
     return failure(e);
   }
 }

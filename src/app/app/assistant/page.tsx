@@ -29,7 +29,8 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
   const conversations = await listConversations(ctx, { q: sp.q, archived });
   const current = sp.c ? await getConversation(ctx, sp.c).catch((e) => (e instanceof NotFoundError ? null : Promise.reject(e))) : null;
   const messages = current ? await conversationMessages(ctx, current.id) : [];
-  const proposals = current ? await pendingActions(ctx, current.id) : [];
+  // Without a conversation: everything that still waits, also what came through Telegram.
+  const proposals = await pendingActions(ctx, current?.id);
   const context = readContext(sp.context);
   return (
     <Chat

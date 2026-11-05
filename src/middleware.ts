@@ -25,6 +25,7 @@ function contentSecurity(nonce: string): string {
     "media-src 'self' blob:",
     "font-src 'self' data:",
     `connect-src 'self'${dev ? " ws:" : ""}`,
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -44,7 +45,7 @@ export function middleware(request: NextRequest) {
   const forwarded = new Headers(request.headers);
   forwarded.set("x-pathname", request.nextUrl.pathname);
   // Uploaded files bring their own, stricter policy (src/app/app/documents/[id]/file).
-  if (request.nextUrl.pathname.endsWith("/file")) return NextResponse.next({ request: { headers: forwarded } });
+  if (/^\/app\/documents\/[^/]+\/file$/.test(request.nextUrl.pathname)) return NextResponse.next({ request: { headers: forwarded } });
   // Only scripts that carry this request's nonce run: an injected script has none.
   const nonce = btoa(crypto.randomUUID());
   const policy = contentSecurity(nonce);

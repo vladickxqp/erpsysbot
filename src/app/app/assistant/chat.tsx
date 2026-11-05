@@ -46,15 +46,22 @@ function Linked({ text }: { text: string }) {
 
 const shown = (value: unknown): string => (typeof value === "string" ? value : Array.isArray(value) ? value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ") : JSON.stringify(value));
 
+type Row = Record<string, unknown>;
+/** One line of a proposal, with everything it holds. */
+const rowText = (row: Row) =>
+  Object.entries(row)
+    .filter(([key, value]) => key !== "title" && key !== "description" && value !== undefined && value !== "")
+    .map(([key, value]) => `${key.replaceAll("_", " ")}: ${shown(value)}`)
+    .join(" · ");
+
 /** What the assistant prepared, marked as a proposal, with the person's yes or no. */
 export function ProposalCard({ proposal: initial }: { proposal: Proposal }) {
   const { t } = useI18n();
   const router = useRouter();
   const [proposal, setProposal] = useState(initial);
   const [pending, start] = useTransition();
-  const tasks = Array.isArray(proposal.input.tasks) ? (proposal.input.tasks as { title: string; due_date?: string }[]) : null;
-  const items = Array.isArray(proposal.input.items) ? (proposal.input.items as { title: string; date?: string }[]) : null;
-  const fields = Object.entries(proposal.input).filter(([key, value]) => key !== "tasks" && key !== "items" && key !== "lines" && value !== undefined && value !== "");
+  const rows = [proposal.input.tasks, proposal.input.items].find(Array.isArray) as Row[] | undefined;
+  const fields = Object.entries(proposal.input).filter(([key, value]) => key !== "tasks" && key !== "items" && value !== undefined && value !== "");
   const link = typeof proposal.result?.link === "string" ? proposal.result.link : null;
   const decide = (approve: boolean) =>
     start(async () => {
@@ -74,17 +81,17 @@ export function ProposalCard({ proposal: initial }: { proposal: Proposal }) {
         {fields.map(([key, value]) => (
           <div key={key} className="flex gap-2">
             <dt className="shrink-0 text-muted-foreground">{key.replaceAll("_", " ")}:</dt>
-            <dd className="min-w-0 break-words whitespace-pre-wrap">{shown(value).slice(0, 600)}</dd>
+            <dd className="max-h-60 min-w-0 overflow-y-auto break-words whitespace-pre-wrap">{shown(value)}</dd>
           </div>
         ))}
       </dl>
-      {(tasks ?? items) && (
-        <ol className="mt-2 grid list-decimal gap-0.5 pl-5 text-xs">
-          {(tasks ?? items ?? []).map((row, i) => (
+      {rows && (
+        <ol className="mt-2 grid max-h-72 list-decimal gap-1 overflow-y-auto pl-5 text-xs">
+          {rows.map((row, i) => (
             <li key={i}>
-              {row.title}
-              {"due_date" in row && row.due_date ? ` · ${row.due_date}` : ""}
-              {"date" in row && row.date ? ` · ${row.date}` : ""}
+              <span className="font-medium">{shown(row.title ?? row.description ?? "")}</span>
+              {row.title !== undefined && row.description !== undefined && <span className="block whitespace-pre-wrap text-muted-foreground">{shown(row.description)}</span>}
+              {rowText(row) && <span className="block whitespace-pre-wrap text-muted-foreground">{rowText(row)}</span>}
             </li>
           ))}
         </ol>
@@ -168,13 +175,13 @@ export function Chat({
     });
   };
 
-  // A question passed in the link (the dashboard's analysis, the palette) is asked once, then dropped from the address.
+  // A question passed in a link waits in the box: only the person sends it, so no link can speak for them.
   useEffect(() => {
     if (!ask || asked.current) return;
     asked.current = true;
     window.history.replaceState(null, "", "/app/assistant");
-    send(ask);
-  }, [ask]); // eslint-disable-line react-hooks/exhaustive-deps
+    setDraft(ask);
+  }, [ask]);
 
   const act = (work: () => Promise<{ error?: string }>, then?: () => void) =>
     start(async () => {
@@ -258,7 +265,7 @@ export function Chat({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border bg-card p-4">
-          {messages.length === 0 ? (
+          {messages.length === 0 && pendingProposals.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
               <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Sparkles className="size-6" />

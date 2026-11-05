@@ -12,6 +12,7 @@ import { contextFor } from "./context";
 import { computeInsights } from "./insights";
 import { today } from "./money";
 import { companyLeads, notify } from "./notifications";
+import { isSuspended } from "./platform";
 
 const HOUR = 8;
 const done = new Map<string, string>();
@@ -30,8 +31,18 @@ export async function followUpInvoices(organizationId: string, day: string): Pro
   );
   let written = 0;
   const leads = await companyLeads(organizationId);
+  const allowed = new Map<string, boolean>();
+  const mayRead = async (userId: string) => {
+    if (!allowed.has(userId)) {
+      const [user] = await getDb().select().from(users).where(eq(users.id, userId));
+      const ctx = user ? await contextFor({ sessionId: "daily", userId: user.id, email: user.email, name: user.name, locale: user.locale, isPlatformAdmin: false, activeOrganizationId: organizationId }) : null;
+      allowed.set(userId, !!ctx && ctx.organization.id === organizationId && ctx.permissions.has("invoices.read"));
+    }
+    return allowed.get(userId)!;
+  };
   for (const { invoice, client } of rows) {
-    written += await notify(organizationId, client.assignedUserId ? [client.assignedUserId] : leads, {
+    const responsible = client.assignedUserId && (await mayRead(client.assignedUserId)) ? [client.assignedUserId] : leads;
+    written += await notify(organizationId, responsible, {
       category: "assigned",
       kind: "invoiceFollowUp",
       vars: { number: invoice.number ?? "—", client: displayName(client) },
@@ -77,6 +88,7 @@ export async function runDailyJobs(at = new Date()): Promise<void> {
     const day = today(org.timezone, at);
     if (done.get(org.id) === day || localHour(org.timezone, at) < HOUR) continue;
     done.set(org.id, day);
+    if (await isSuspended(org.id)) continue;
     await followUpInvoices(org.id, day);
     await pushInsights(org.id);
   }

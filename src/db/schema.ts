@@ -1681,7 +1681,12 @@ export const PRIVATE_TABLES: readonly string[] = [
   "assistant_conversations",
   "assistant_memories",
   "daily_summaries",
+  "assistant_messages",
+  "assistant_actions",
+  "ai_agents",
+  "chat_channels",
   "chat_members",
+  "chat_messages",
 ];
 
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */

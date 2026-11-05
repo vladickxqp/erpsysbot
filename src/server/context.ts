@@ -71,6 +71,7 @@ export async function contextFor(user: SessionUser): Promise<Context | null> {
   // What the plan does not include (or everything, once the subscription ended) is not allowed —
   // in every action and route, not only on the pages. Billing and settings stay reachable.
   const ent = await entitlementsOf(active.organization.id);
+  if (!ent.unlimited && !ent.active) for (const m of ["chat", "hr", "personal"] as const) disabledModules.add(m);
   if (!ent.unlimited) {
     for (const p of [...permissions]) {
       if (p === "billing.manage" || p === "settings.manage") continue;
