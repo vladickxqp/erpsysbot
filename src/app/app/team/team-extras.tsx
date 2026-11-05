@@ -10,9 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/client";
-import { deleteCustomRoleAction, deleteDepartmentAction, permissionsAction, saveCustomRoleAction, saveDepartmentAction } from "./actions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { assignUnitAction, deleteCustomRoleAction, deleteDepartmentAction, deleteUnitAction, permissionsAction, saveCustomRoleAction, saveDepartmentAction, saveUnitAction } from "./actions";
 
-export type Department = { id: string; name: string };
+export type Department = { id: string; name: string; unitId: string | null };
 export type CustomRole = { id: string; name: string; permissions: string[] };
 
 export function DepartmentsCard({ departments, members }: { departments: Department[]; members: { departmentId: string | null }[] }) {
@@ -61,6 +62,70 @@ export function DepartmentsCard({ departments, members }: { departments: Departm
           }}
         >
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("departments.new")} aria-label={t("departments.new")} required maxLength={120} />
+          <Button type="submit" size="icon" variant="outline" disabled={pending} aria-label={t("crm.add")}>
+            <Plus className="size-4" />
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Parts of a larger company: each groups departments. */
+export function UnitsCard({ units, departments }: { units: { id: string; name: string }[]; departments: Department[] }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [pending, start] = useTransition();
+  const run = (work: () => Promise<{ error?: string }>, then?: () => void) =>
+    start(async () => {
+      const res = await work();
+      if (res.error) toast.error(t(res.error));
+      else then?.();
+      router.refresh();
+    });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("hub.team.units")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-2 text-sm">
+        {units.map((u) => (
+          <div key={u.id} className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+            <span className="min-w-0 flex-1 truncate">{u.name}</span>
+            <span className="text-xs tabular-nums text-muted-foreground">{departments.filter((d) => d.unitId === u.id).length}</span>
+            <Button size="icon" variant="ghost" className="size-7" disabled={pending} aria-label={t("common.delete")} onClick={() => run(() => deleteUnitAction(u.id))}>
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+        {units.length > 0 &&
+          departments.map((d) => (
+            <div key={d.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{d.name}</span>
+              <Select value={d.unitId ?? "-"} onValueChange={(v) => run(() => assignUnitAction(d.id, v === "-" ? null : v))}>
+                <SelectTrigger className="w-44" aria-label={t("hub.team.units")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-">—</SelectItem>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => saveUnitAction(name), () => setName(""));
+          }}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("hub.team.newUnit")} aria-label={t("hub.team.newUnit")} required maxLength={120} />
           <Button type="submit" size="icon" variant="outline" disabled={pending} aria-label={t("crm.add")}>
             <Plus className="size-4" />
           </Button>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { NotFoundError } from "@/server/clients";
-import { addHabit, deleteGoal, deleteHabit, saveGoal, toggleHabit } from "@/server/personal";
+import { addHabit, addPersonalMoney, deleteGoal, deleteHabit, deletePersonalMoney, saveGoal, toggleHabit } from "@/server/personal";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 
@@ -37,4 +37,21 @@ export async function deleteHabitAction(id: string) {
 }
 export async function toggleHabitAction(id: string, day: string) {
   return guarded((ctx) => toggleHabit(ctx, id, day));
+}
+
+export async function addMoneyAction(input: { kind: "IN" | "OUT"; amountCents: number; bookedOn: string; description: string }): Promise<{ ok?: boolean; error?: string }> {
+  const ctx = await requireContext();
+  try {
+    await addPersonalMoney(ctx, input);
+    revalidatePath("/app/personal");
+    return { ok: true };
+  } catch {
+    return { error: "auth.check" };
+  }
+}
+
+export async function deleteMoneyAction(id: string): Promise<void> {
+  const ctx = await requireContext();
+  await deletePersonalMoney(ctx, id);
+  revalidatePath("/app/personal");
 }

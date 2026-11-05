@@ -11,9 +11,9 @@
  * Instagram, TikTok, Facebook, LinkedIn and X need an approved developer app
  * with OAuth per company; they are listed as not available until that exists.
  */
-import { and, asc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { contentItems, documents, socialAccounts, socialStats, telegramLinks } from "@/db/schema";
+import { contentItems, contentStats, documents, socialAccounts, socialStats, telegramLinks } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
 import { NotFoundError } from "./clients";
@@ -71,6 +71,37 @@ async function youtube(id: string, fetcher: Fetch): Promise<Figures> {
     views: num(channel.statistics?.viewCount),
     posts: num(channel.statistics?.videoCount),
   };
+}
+
+/** The id of a YouTube video from its address, whatever form it has. */
+export function youtubeVideoId(url: string | null | undefined): string | null {
+  return /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/))([\w-]{11})/.exec(url ?? "")?.[1] ?? null;
+}
+
+/** Fetches the figures of a published video from YouTube and keeps them; nothing is estimated. */
+export async function refreshContentStats(ctx: Context, contentId: string, fetcher: Fetch = fetch): Promise<{ views: number | null; likes: number | null; comments: number | null } | null> {
+  requirePermission(ctx.permissions, "content.read");
+  const key = youtubeKey();
+  if (!key) throw new SocialError("NOT_CONFIGURED");
+  const [item] = await withTenant(ctx.organization.id, (tx) => tx.select({ url: contentItems.externalUrl }).from(contentItems).where(eq(contentItems.id, contentId)));
+  if (!item) throw new NotFoundError();
+  const video = youtubeVideoId(item.url);
+  if (!video) return null;
+  const res = await fetcher(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${video}&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new SocialError("NOT_FOUND");
+  const body = (await res.json()) as { items?: { statistics?: { viewCount?: string; likeCount?: string; commentCount?: string } }[] };
+  const stats = body.items?.[0]?.statistics;
+  if (!stats) throw new SocialError("NOT_FOUND");
+  const num = (v?: string) => (v === undefined ? null : Number(v));
+  const figures = { views: num(stats.viewCount), likes: num(stats.likeCount), comments: num(stats.commentCount) };
+  await withTenant(ctx.organization.id, (tx) => tx.insert(contentStats).values({ organizationId: ctx.organization.id, contentId, ...figures }));
+  return figures;
+}
+
+export async function latestContentStats(ctx: Context, contentId: string) {
+  requirePermission(ctx.permissions, "content.read");
+  const [row] = await withTenant(ctx.organization.id, (tx) => tx.select().from(contentStats).where(eq(contentStats.contentId, contentId)).orderBy(desc(contentStats.fetchedAt)).limit(1));
+  return row ?? null;
 }
 
 type TelegramCall = <T>(method: string, payload: Record<string, unknown>) => Promise<T>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, GripVertical, LayoutGrid, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, GripVertical, LayoutGrid, Lightbulb, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import type { Widget, WidgetSize, WidgetType } from "@/server/dashboards";
 import type { WidgetData } from "@/server/widget-data";
 import { createDashboardAction, deleteDashboardAction, saveDashboardAction } from "./dashboard-actions";
-import { WIDGET_LINK, WidgetBody } from "./widgets";
+import { declineWidgetAction, resetDashboardAction } from "./dashboard-actions";
+import { widgetTitle, WIDGET_LINK, WidgetBody } from "./widgets";
 
 /** Width on the 4-column grid (2 columns on tablets, 1 on phones). */
 const SPAN: Record<WidgetSize, string> = {
@@ -31,13 +32,14 @@ export function DashboardView({
   company,
   boards,
   active,
-  available,
+  available, offer,
   data,
 }: {
   company: string;
   boards: { id: string; name: string }[];
   active: { id: string; name: string; widgets: Widget[] };
   available: { type: WidgetType; size: WidgetSize }[];
+  offer: { type: WidgetType; size: WidgetSize; reason: string } | null;
   data: WidgetData;
 }) {
   const { t } = useI18n();
@@ -129,6 +131,18 @@ export function DashboardView({
               >
                 <Pencil className="size-3.5" /> {t("widgets.rename")}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  start(async () => {
+                    await resetDashboardAction(active.id);
+                    router.refresh();
+                  })
+                }
+              >
+                <RotateCcw className="size-3.5" /> {t("hub.widget.reset")}
+              </Button>
               {boards.length > 1 && (
                 <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>
                   <Trash2 className="size-3.5" /> {t("common.delete")}
@@ -146,6 +160,28 @@ export function DashboardView({
               </Button>
             </>
           )}
+        </div>
+      )}
+
+      {offer && !editing && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 text-sm">
+          <Lightbulb className="size-4 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">{t(`hub.widget.offer_${offer.reason}`)}</span>
+          <Button size="sm" onClick={() => add(offer.type, offer.size)}>
+            {t("widgets.add")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              start(async () => {
+                await declineWidgetAction(offer.type);
+                router.refresh();
+              })
+            }
+          >
+            {t("hub.widget.noThanks")}
+          </Button>
         </div>
       )}
 
@@ -200,10 +236,10 @@ export function DashboardView({
                   <CardTitle className="min-w-[7rem] flex-1 truncate text-sm font-medium">
                     {link && !editing ? (
                       <Link href={link} className="hover:text-primary">
-                        {t(`widgets.${w.type}`)}
+                        {widgetTitle(t, w.type)}
                       </Link>
                     ) : (
-                      t(`widgets.${w.type}`)
+                      widgetTitle(t, w.type)
                     )}
                   </CardTitle>
                   {editing && (
@@ -259,7 +295,7 @@ export function DashboardView({
                   onClick={() => add(a.type, a.size)}
                   className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted/50"
                 >
-                  <span>{t(`widgets.${a.type}`)}</span>
+                  <span>{widgetTitle(t, a.type)}</span>
                   {placed ? <span className="text-xs text-muted-foreground">✓</span> : <Plus className="size-4 text-muted-foreground" />}
                 </button>
               );

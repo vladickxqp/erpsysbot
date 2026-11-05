@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { NotFoundError } from "@/server/clients";
-import { createDashboard, deleteDashboard, saveDashboard } from "@/server/dashboards";
+import { createDashboard, deleteDashboard, resetDashboard, saveDashboard } from "@/server/dashboards";
+import { myPreferences, savePreferences } from "@/server/preferences";
 import { requireContext } from "@/server/request";
 
 export type DashboardResult = { ok?: boolean; id?: string; error?: string };
@@ -34,6 +35,26 @@ export async function createDashboardAction(name: string, template: "empty" | "d
   } catch (e) {
     return failure(e);
   }
+}
+
+export async function resetDashboardAction(id: string): Promise<DashboardResult> {
+  const ctx = await requireContext();
+  try {
+    await resetDashboard(ctx, id);
+    revalidatePath("/app");
+    return { ok: true };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+/** "No thanks" to a widget: it is not offered again. */
+export async function declineWidgetAction(type: string): Promise<DashboardResult> {
+  const ctx = await requireContext();
+  const prefs = await myPreferences(ctx);
+  await savePreferences(ctx, { dismissedWidgets: [...prefs.dismissedWidgets, type].slice(-40) });
+  revalidatePath("/app");
+  return { ok: true };
 }
 
 export async function deleteDashboardAction(id: string): Promise<DashboardResult> {

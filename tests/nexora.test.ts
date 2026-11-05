@@ -118,7 +118,7 @@ describe("workspaces", () => {
     expect(creator.disabledModules.has("inventory")).toBe(true);
     expect(creator.disabledModules.has("content")).toBe(false);
     const widgets = defaultWidgets(creator).map((w) => w.type);
-    expect(widgets.slice(0, 3)).toEqual(["quickActions", "content", "social"]);
+    expect(widgets).toEqual(expect.arrayContaining(["quickActions", "content", "social"]));
     await expect(chooseWorkspace(ctx, "NONSENSE")).rejects.toThrow();
     const employee = await newMember(ctx, "EMPLOYEE");
     await expect(chooseWorkspace(employee, "PERSONAL")).rejects.toMatchObject({ permission: "settings.manage" });

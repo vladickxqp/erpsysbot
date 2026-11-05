@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/app/page";
-import { listDepartments } from "@/server/departments";
+import { listDepartments, listUnits } from "@/server/departments";
 import { PERMISSIONS } from "@/server/permissions";
 import { getT } from "@/i18n/server";
 import { requirePageContext } from "@/server/request";
@@ -17,6 +17,7 @@ export default async function TeamPage() {
   const { members, pending } = await listTeam(ctx);
   const departments = await listDepartments(ctx);
   const customRoles = await listCustomRoles(ctx);
+  const units = await listUnits(ctx);
   return (
     <>
       <PageHeader title={t("team.title")} />
@@ -24,7 +25,8 @@ export default async function TeamPage() {
         me={ctx.user.userId}
         myRole={ctx.role}
         canManage={ctx.permissions.has("employees.manage")}
-        departments={departments.map((d) => ({ id: d.id, name: d.name }))}
+        departments={departments.map((d) => ({ id: d.id, name: d.name, unitId: d.unitId }))}
+        units={units.map((u) => ({ id: u.id, name: u.name }))}
         allPermissions={PERMISSIONS}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions }))}
         myPermissions={[...ctx.permissions]}

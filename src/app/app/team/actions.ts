@@ -10,7 +10,7 @@ import { mailAvailable, sendMail, takeMailBudget } from "@/server/mail";
 import { registrationOpen } from "@/server/settings";
 import { ForbiddenError, type Role } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
-import { assignDepartment, deleteDepartment, saveDepartment } from "@/server/departments";
+import { assignDepartment, assignUnit, deleteDepartment, deleteUnit, saveDepartment, saveUnit } from "@/server/departments";
 import { TeamError, assignCustomRole, changeRole, deleteCustomRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation, saveCustomRole, setMemberPermissions } from "@/server/team";
 
 export type TeamResult = { ok?: boolean; url?: string; mailed?: boolean; error?: string };
@@ -58,6 +58,30 @@ export async function assignCustomRoleAction(userId: string, roleId: string | nu
   const ctx = await requireContext();
   return guarded(async () => {
     await assignCustomRole(ctx, userId, roleId);
+    return { ok: true };
+  });
+}
+
+export async function saveUnitAction(name: string): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await saveUnit(ctx, name);
+    return { ok: true };
+  });
+}
+
+export async function deleteUnitAction(id: string): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await deleteUnit(ctx, id);
+    return { ok: true };
+  });
+}
+
+export async function assignUnitAction(departmentId: string, unitId: string | null): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await assignUnit(ctx, departmentId, unitId);
     return { ok: true };
   });
 }

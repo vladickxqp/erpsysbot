@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Inbox, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
 
@@ -34,6 +34,8 @@ export const NAV: NavItem[] = [
   { href: "/app/documents", label: "documents.title", icon: FolderOpen, needs: "documents.read", module: "documents" },
   { href: "/app/reports", label: "reports.title", icon: BarChart3, needs: "clients.read", module: "reports" },
   { href: "/app/team", label: "nav.team", icon: UsersRound, needs: "employees.read", module: "team" },
+  { href: "/app/hr", label: "hub.hr.title", icon: Palmtree, module: "hr" },
+  { href: "/app/chat", label: "hub.chat.title", icon: MessagesSquare, module: "chat" },
   { href: "/app/automations", label: "automation.title", icon: Workflow, needs: "automation.manage", module: "automation" },
   { href: "/app/integrations", label: "integrations.title", icon: Plug, needs: "settings.manage", module: "integrations" },
   { href: "/app/audit", label: "audit.title", icon: ScrollText, needs: "settings.manage" },

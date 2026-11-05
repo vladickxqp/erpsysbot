@@ -9,6 +9,7 @@ import { contentItems, tasks } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { decideAction, pendingActions } from "./assistant/actions";
 import { getContent, updateContent } from "./content";
+import { decideAbsence, pendingAbsences } from "./hr";
 import type { Context } from "./context";
 import { NotFoundError } from "./clients";
 import { myInsights, type Insight } from "./insights";
@@ -55,6 +56,25 @@ async function aiProposals(ctx: Context): Promise<InboxItem[]> {
     actions: ["open", "approve", "reject"],
   }));
 }
+
+async function absenceRequests(ctx: Context): Promise<InboxItem[]> {
+  if (!ctx.permissions.has("hr.manage") || !moduleOn(ctx, "hr")) return [];
+  return (await pendingAbsences(ctx))
+    .filter((a) => a.userId !== ctx.user.userId || ctx.role === "OWNER")
+    .map((a) => ({
+      id: `absence:${a.id}`,
+      category: "approval",
+      kind: "absenceRequest",
+      vars: { who: a.name, from: a.startDate, to: a.endDate },
+      href: "/app/hr",
+      at: a.createdAt.toISOString(),
+      priority: 1,
+      read: false,
+      actions: ["open", "approve", "reject"],
+    }));
+}
+
+addDecider("absence", decideAbsence);
 
 addDecider("ai", async (ctx, id, approve) => {
   await decideAction(ctx, id, approve);
@@ -125,14 +145,14 @@ export async function inbox(ctx: Context): Promise<InboxItem[]> {
   const notes = await openNotifications(ctx);
   const due = await dueTasks(ctx);
   const reviews = await contentReviews(ctx);
-  const extra: InboxItem[] = await aiProposals(ctx);
+  const extra: InboxItem[] = [...(await aiProposals(ctx)), ...(await absenceRequests(ctx))];
   const insights = await myInsights(ctx);
 
-  // A task already listed as due needs no second line for having been assigned.
-  const listed = new Set(due.map((t) => t.id.slice("task:".length)));
+  // A task already listed as due needs no second line for having been assigned, nor a request a second one.
+  const listed = new Set([...due.map((t) => t.id.slice("task:".length)), ...extra.map((x) => x.id.split(":")[1])]);
   const items: InboxItem[] = [
     ...notes
-      .filter((n) => !(n.entity === "task" && n.entityId && listed.has(n.entityId) && n.kind === "taskAssigned"))
+      .filter((n) => !(n.entityId && listed.has(n.entityId) && (n.kind === "taskAssigned" || n.kind === "absenceRequest")))
       .map(
         (n): InboxItem => ({
           id: `note:${n.id}`,

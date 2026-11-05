@@ -10,7 +10,7 @@ import path from "node:path";
 import { rm } from "node:fs/promises";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assistantMessages, documents, goals, habitChecks, habits, memberships, organizations, PRIVATE_TABLES, sessions, TENANT_TABLES, telegramLinks, users } from "@/db/schema";
+import { absences, assistantMemories, assistantMessages, documents, employeeProfiles, goals, habitChecks, habits, memberships, organizations, personalTransactions, PRIVATE_TABLES, sessions, TENANT_TABLES, telegramLinks, userPreferences, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { verifyPassword } from "./auth/password";
 import { billingEnabled, isActive, subscriptionOf } from "./billing";
@@ -102,6 +102,11 @@ export async function personalExport(user: SessionUser) {
         .from(habits)
         .leftJoin(habitChecks, eq(habitChecks.habitId, habits.id))
         .where(eq(habits.userId, user.userId)),
+      money: await tx.select().from(personalTransactions).where(eq(personalTransactions.userId, user.userId)),
+      assistantMemory: await tx.select({ content: assistantMemories.content, createdAt: assistantMemories.createdAt }).from(assistantMemories).where(eq(assistantMemories.userId, user.userId)),
+      preferences: await tx.select({ data: userPreferences.data }).from(userPreferences).where(eq(userPreferences.userId, user.userId)),
+      absences: await tx.select().from(absences).where(eq(absences.userId, user.userId)),
+      staffFile: await tx.select().from(employeeProfiles).where(eq(employeeProfiles.userId, user.userId)),
     }));
   }
   return {

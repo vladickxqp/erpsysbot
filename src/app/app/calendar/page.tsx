@@ -1,5 +1,7 @@
 import { getT } from "@/i18n/server";
 import { dayBounds, listAppointments, localParts } from "@/server/calendar";
+import { calendarEvents } from "@/server/calendar-hub";
+import { myPreferences } from "@/server/preferences";
 import { clientOptions } from "@/server/clients";
 import { addDays, today } from "@/server/money";
 import { requirePageContext } from "@/server/request";
@@ -23,7 +25,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const tz = ctx.organization.timezone;
   const now = today(tz);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : now;
-  const view: View = sp.view === "day" || sp.view === "week" ? sp.view : "month";
+  const prefs = await myPreferences(ctx);
+  const wanted = sp.view ?? prefs.defaultViews.calendar;
+  const view: View = wanted === "day" || wanted === "week" || wanted === "agenda" ? wanted : "month";
   const mine = sp.mine === "1";
 
   let first: string;
@@ -34,6 +38,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   } else if (view === "week") {
     first = monday(date);
     days = 7;
+  } else if (view === "agenda") {
+    first = date;
+    days = 30;
   } else {
     const monthStart = `${date.slice(0, 7)}-01`;
     first = monday(monthStart);
@@ -44,6 +51,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   }
   const range = { from: dayBounds(first, tz).from, to: dayBounds(addDays(first, days - 1), tz).to };
   const canManage = ctx.permissions.has("calendar.manage");
+  const events = await calendarEvents(ctx, first, addDays(first, days - 1), { mine });
   const [items, clients, members] = await Promise.all([
     listAppointments(ctx, { ...range, userId: mine ? ctx.user.userId : undefined }),
     canManage && ctx.permissions.has("clients.read") ? clientOptions(ctx) : Promise.resolve([]),
@@ -62,6 +70,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       timeZone={tz}
       me={ctx.user.userId}
       canManage={canManage}
+      events={events}
       clients={clients}
       members={members}
       items={items.map((a) => ({

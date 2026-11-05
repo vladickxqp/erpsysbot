@@ -18,7 +18,7 @@ import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import type { Role } from "@/server/permissions";
 import { assignCustomRoleAction, assignDepartmentAction, inviteAction, passwordLinkAction, removeAction, revokeAction, roleAction, type TeamResult } from "./actions";
-import { CustomRolesCard, DepartmentsCard, PermissionsDialog, type CustomRole, type Department } from "./team-extras";
+import { CustomRolesCard, DepartmentsCard, PermissionsDialog, UnitsCard, type CustomRole, type Department } from "./team-extras";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT", "VIEWER"];
 
@@ -53,8 +53,10 @@ export function TeamView({
   allPermissions,
   myPermissions,
   customRoles,
+  units,
 }: {
   customRoles: CustomRole[];
+  units: { id: string; name: string }[];
   me: string;
   myRole: string;
   canManage: boolean;
@@ -197,6 +199,7 @@ export function TeamView({
       </div>
 
       {canManage && <DepartmentsCard departments={departments} members={members} />}
+      {canManage && <UnitsCard units={units} departments={departments} />}
       {canManage && <CustomRolesCard roles={customRoles} members={members} all={allPermissions} mine={myPermissions} />}
       {rights && <PermissionsDialog member={rights} all={allPermissions} mine={myPermissions} onClose={() => setRights(null)} />}
 

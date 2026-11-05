@@ -17,7 +17,18 @@ import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { deleteAppointmentAction, saveAppointmentAction, type AppointmentPayload } from "./actions";
 
-export type View = "month" | "week" | "day";
+import { EVENT_KINDS } from "@/lib/calendar-events";
+import type { CalendarEvent, EventKind } from "@/lib/calendar-events";
+
+export type View = "month" | "week" | "day" | "agenda";
+
+const EVENT_TONE: Record<EventKind, string> = {
+  task: "bg-primary/10 text-primary",
+  project: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+  content: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300",
+  invoice: "bg-warning/15 text-amber-700 dark:text-amber-300",
+  absence: "bg-muted text-muted-foreground",
+};
 type Status = AppointmentPayload["status"];
 export type Item = {
   id: string;
@@ -68,7 +79,9 @@ export function CalendarView({
   clients,
   members,
   items,
+  events,
 }: {
+  events: CalendarEvent[];
   view: View;
   /** Opened from a quick action: start with the new appointment. */
   openNew: boolean;
@@ -89,6 +102,14 @@ export function CalendarView({
   const tag = intlTag(locale, region);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, start] = useTransition();
+  const [hidden, setHidden] = useState<EventKind[]>([]);
+  const shownEvents = events.filter((e) => !hidden.includes(e.kind));
+  const present = EVENT_KINDS.filter((k) => events.some((e) => e.kind === k));
+  const eventChip = (e: CalendarEvent) => (
+    <Link key={e.id} href={e.href} className={cn("block truncate rounded px-1 text-xs", EVENT_TONE[e.kind])} title={`${t(`hub.calendar.${e.kind}`)}: ${e.title}`}>
+      {e.title}
+    </Link>
+  );
 
   const href = (p: { view?: View; date?: string; mine?: boolean }) => {
     const q = new URLSearchParams({ view: p.view ?? view, date: p.date ?? date });
@@ -170,13 +191,13 @@ export function CalendarView({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-2xl font-semibold tracking-tight first-letter:uppercase">{title}</h1>
         <div className="flex rounded-lg border bg-card p-0.5">
-          {(["month", "week", "day"] as const).map((v) => (
+          {(["month", "week", "day", "agenda"] as const).map((v) => (
             <Link
               key={v}
               href={href({ view: v })}
               className={cn("rounded-md px-3 py-1.5 text-sm", v === view ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
             >
-              {t(`calendar.${v}`)}
+              {t(v === "agenda" ? "hub.calendar.agenda" : `calendar.${v}`)}
             </Link>
           ))}
         </div>
@@ -205,6 +226,41 @@ export function CalendarView({
         )}
       </div>
 
+      {present.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label={t("hub.calendar.show")}>
+          {present.map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={!hidden.includes(k)}
+              onClick={() => setHidden((list) => (list.includes(k) ? list.filter((x) => x !== k) : [...list, k]))}
+              className={cn("rounded-full px-2.5 py-0.5 text-xs", hidden.includes(k) ? "bg-muted text-muted-foreground line-through" : EVENT_TONE[k])}
+            >
+              {t(`hub.calendar.${k}`)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "agenda" && (
+        <div className="grid gap-2">
+          {dayList
+            .filter((d) => (byDay.get(d) ?? []).length || shownEvents.some((e) => e.day === d))
+            .map((d) => (
+              <div key={d} className="rounded-xl border bg-card p-3">
+                <Link href={href({ view: "day", date: d })} className={cn("mb-1.5 block text-sm font-medium", d === today && "text-primary")}>
+                  {weekday(d, "long")} {dayNumber(d)}.
+                </Link>
+                <div className="grid gap-1">
+                  {(byDay.get(d) ?? []).map((i) => chip(i))}
+                  {shownEvents.filter((e) => e.day === d).map(eventChip)}
+                </div>
+              </div>
+            ))}
+          {!items.length && !shownEvents.length && <p className="py-8 text-center text-sm text-muted-foreground">{t("hub.calendar.nothing")}</p>}
+        </div>
+      )}
+
       {view === "month" && (
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="grid grid-cols-7 border-b text-center text-xs font-medium text-muted-foreground">
@@ -231,9 +287,10 @@ export function CalendarView({
                   </Link>
                   <div className="hidden gap-0.5 sm:grid">
                     {list.slice(0, 3).map((i) => chip(i, true))}
-                    {list.length > 3 && (
+                    {shownEvents.filter((e) => e.day === d).slice(0, 2).map(eventChip)}
+                    {list.length + shownEvents.filter((e) => e.day === d).length > 5 && (
                       <Link href={href({ view: "day", date: d })} className="px-1 text-xs text-muted-foreground hover:underline">
-                        +{list.length - 3}
+                        +{list.length + shownEvents.filter((e) => e.day === d).length - 5}
                       </Link>
                     )}
                   </div>
@@ -251,7 +308,7 @@ export function CalendarView({
         </div>
       )}
 
-      {view !== "month" && (
+      {(view === "week" || view === "day") && (
         <div className={cn("grid gap-3", view === "week" && "md:grid-cols-7")}>
           {dayList.map((d) => {
             const list = byDay.get(d) ?? [];
@@ -268,7 +325,8 @@ export function CalendarView({
                   )}
                 </div>
                 <div className="grid gap-1">
-                  {list.length === 0 && <div className="py-2 text-center text-xs text-muted-foreground">—</div>}
+                  {shownEvents.filter((e) => e.day === d).map(eventChip)}
+                  {list.length === 0 && !shownEvents.some((e) => e.day === d) && <div className="py-2 text-center text-xs text-muted-foreground">—</div>}
                   {list.map((i) =>
                     view === "day" ? (
                       <button

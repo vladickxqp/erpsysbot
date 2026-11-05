@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { getT } from "@/i18n/server";
-import { availableWidgets, listDashboards, WIDGETS } from "@/server/dashboards";
+import { availableWidgets, listDashboards, suggestedWidget, WIDGETS } from "@/server/dashboards";
+import { myInsights } from "@/server/insights";
+import { today, addDays } from "@/server/money";
+import { moduleOn } from "@/server/modules";
+import { myPreferences } from "@/server/preferences";
+import { deadlineCount } from "@/server/task-hub";
+import { listEntries } from "@/server/time";
 import { requireContext } from "@/server/request";
 import { loadWidgetData } from "@/server/widget-data";
 import { DashboardView } from "./dashboard-view";
@@ -21,11 +27,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const allowed = availableWidgets(ctx);
   const widgets = active.widgets.filter((w) => allowed.includes(w.type));
   const data = await loadWidgetData(ctx, new Set(widgets.map((w) => w.type)));
+  const prefs = await myPreferences(ctx);
+  const now = today(ctx.organization.timezone);
+  const offer = suggestedWidget(ctx, widgets, prefs.dismissedWidgets, {
+    deadlines: ctx.permissions.has("tasks.read") && moduleOn(ctx, "tasks") ? await deadlineCount(ctx, now, addDays(now, 7)) : 0,
+    insights: (await myInsights(ctx)).length,
+    timeEntries: ctx.permissions.has("time.read") && moduleOn(ctx, "time") ? (await listEntries(ctx, { from: new Date(Date.now() - 7 * 86_400_000) })).length : 0,
+  });
   return (
     <DashboardView
       company={ctx.organization.name}
       boards={boards.map((b) => ({ id: b.id, name: b.name }))}
       active={{ id: active.id, name: active.name, widgets }}
+      offer={offer ? { ...offer, size: WIDGETS[offer.type].size } : null}
       available={allowed.map((type) => ({ type, size: WIDGETS[type].size }))}
       data={data}
     />

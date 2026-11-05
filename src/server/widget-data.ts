@@ -6,6 +6,14 @@
  */
 import type { AppModule } from "@/lib/modules";
 import { assistantAvailable } from "./assistant/run";
+import { storedSummary } from "./assistant/workflows";
+import { inbox } from "./inbox";
+import { myInsights } from "./insights";
+import { myPreferences } from "./preferences";
+import { listEntries, minutesOf } from "./time";
+import { withTenant } from "@/db/tenant";
+import { tasks as tasksTable } from "@/db/schema";
+import { and, isNotNull, ne, sql } from "drizzle-orm";
 import { dayBounds, listAppointments, localParts } from "./calendar";
 import { contentOverview } from "./content";
 import type { Context } from "./context";
@@ -17,13 +25,13 @@ import { integrationStates } from "./integrations";
 import { lowStock } from "./inventory";
 import { listInvoices } from "./invoices";
 import { moduleOn } from "./modules";
-import { today } from "./money";
+import { addDays, today } from "./money";
 import { socialTotals } from "./social";
 import { listProjects, listTasks } from "./tasks";
 import { memberOptions } from "./team";
 
 /** The quick actions this person can really use: permission and module. */
-function quickActions(ctx: Context): { key: string; href: string }[] {
+export function quickActions(ctx: Context): { key: string; href: string }[] {
   const all: [string, string, Parameters<Context["permissions"]["has"]>[0], AppModule][] = [
     ["task", "/app/tasks?new=1", "tasks.manage", "tasks"],
     ["project", "/app/tasks?newProject=1", "tasks.manage", "tasks"],
@@ -69,6 +77,24 @@ export async function loadWidgetData(ctx: Context, types: Set<WidgetType>) {
   const invoices = want("recentInvoices") && has(ctx, "invoices.read") ? await listInvoices(ctx, { pageSize: 6 }) : null;
   const followUps = signals && has(ctx, "clients.read") && moduleOn(ctx, "pipeline") ? await dueFollowUps(ctx, ctx.user.userId) : null;
   const stock = signals && has(ctx, "orders.read") && moduleOn(ctx, "inventory") ? await lowStock(ctx) : null;
+  const prefs = want("quickActions") ? await myPreferences(ctx) : null;
+  const insights = want("insights") ? await myInsights(ctx) : null;
+  const inboxItems = want("inbox", "approvals") ? await inbox(ctx) : null;
+  const deadlines = want("deadlines") && has(ctx, "tasks.read") ? (await listTasks(ctx, { assignedUserId: ctx.user.userId, open: true })).filter((t) => t.dueDate && t.dueDate <= addDays(now, 14)).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!)).slice(0, 8) : null;
+  const workload =
+    want("teamWorkload") && has(ctx, "tasks.read")
+      ? await withTenant(ctx.organization.id, (tx) =>
+          tx
+            .select({ userId: tasksTable.assignedUserId, open: sql<number>`count(*)::int`, late: sql<number>`count(*) filter (where ${tasksTable.dueDate} < ${now})::int` })
+            .from(tasksTable)
+            .where(and(ne(tasksTable.status, "DONE"), isNotNull(tasksTable.assignedUserId)))
+            .groupBy(tasksTable.assignedUserId),
+        )
+      : null;
+  const people = workload?.length ? new Map((await memberOptions(ctx)).map((m) => [m.id, m.name])) : null;
+  const weekStart = new Date(`${addDays(now, -((new Date(`${now}T12:00:00Z`).getUTCDay() + 6) % 7))}T00:00:00Z`);
+  const time = want("timeWeek") && has(ctx, "time.read") ? (await listEntries(ctx, { from: weekStart })).filter((e) => e.endedAt).reduce((sum, e) => sum + minutesOf(e), 0) : null;
+  const daySummary = want("daySummary") ? await storedSummary(ctx) : null;
 
   const overdueTasks = tasks?.filter((t) => t.dueDate && t.dueDate < now) ?? [];
   const dueToday = tasks?.filter((t) => t.dueDate === now) ?? [];
@@ -128,7 +154,14 @@ export async function loadWidgetData(ctx: Context, types: Set<WidgetType>) {
     notifications: types.has("notifications") ? notifications : null,
     recommendations: types.has("recommendations") ? recommendations : null,
     assistant: has(ctx, "ai.use") && assistantAvailable() && moduleOn(ctx, "assistant"),
-    quickActions: types.has("quickActions") ? quickActions(ctx) : null,
+    quickActions: types.has("quickActions") ? quickActions(ctx).filter((a) => !prefs?.quickActions.length || prefs.quickActions.includes(a.key)) : null,
+    insights,
+    inbox: types.has("inbox") ? (inboxItems?.filter((i) => !i.read && !i.insight).slice(0, 6) ?? []) : null,
+    approvals: types.has("approvals") ? (inboxItems?.filter((i) => i.category === "approval").slice(0, 6) ?? []) : null,
+    deadlines: deadlines?.map((t) => ({ id: t.id, title: t.title, dueDate: t.dueDate!, overdue: t.dueDate! < now })),
+    teamWorkload: workload?.map((w) => ({ name: people?.get(w.userId!) ?? "—", open: Number(w.open), late: Number(w.late) })).sort((a, b) => b.open - a.open),
+    timeWeek: time,
+    daySummary,
   };
 }
 

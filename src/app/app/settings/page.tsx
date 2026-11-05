@@ -10,6 +10,7 @@ import { emailVerified } from "@/server/auth/email-verification";
 import { listSessions, recoveryCodesLeft, twoFactorEnabled } from "@/server/auth/two-factor";
 import { mailAvailable } from "@/server/mail";
 import { myPreferences } from "@/server/preferences";
+import { quickActions } from "@/server/widget-data";
 import { CompanyForm } from "./company-form";
 import { PreferencesCard } from "./preferences-card";
 import { PrivacyCard } from "./privacy-card";
@@ -62,7 +63,7 @@ export default async function SettingsPage() {
               invoiceFooter: o.invoiceFooter ?? "",
             }}
           />
-          <PreferencesCard initial={await myPreferences(ctx)} hasTelegram={!!telegram} hasMail={mailAvailable()} />
+          <PreferencesCard initial={await myPreferences(ctx)} hasTelegram={!!telegram} hasMail={mailAvailable()} quickKeys={quickActions(ctx).map((a) => a.key)} />
           <ModulesCard companyOff={[...ctx.disabledModules]} myOff={[...ctx.hiddenModules]} canManage={ctx.permissions.has("settings.manage")} />
         </div>
         <div className="grid h-fit gap-4">

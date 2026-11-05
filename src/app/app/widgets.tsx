@@ -12,8 +12,14 @@ import { ACTIVITY_VERB } from "@/lib/activity";
 import { CONTENT_STATUSES } from "@/lib/content";
 import { cn } from "@/lib/utils";
 import type { WidgetType } from "@/server/dashboards";
+import { InsightCard } from "@/components/app/insight-card";
 import type { Notice, WidgetData } from "@/server/widget-data";
 import { Delta } from "./social/social-view";
+
+const NEW_WIDGETS = ["insights", "inbox", "approvals", "deadlines", "teamWorkload", "timeWeek", "daySummary"];
+
+/** A widget's name in the person's language. */
+export const widgetTitle = (t: (key: string) => string, type: string) => t(NEW_WIDGETS.includes(type) ? `hub.widget.${type}` : `widgets.${type}`);
 
 /** Where a widget's title leads. */
 export const WIDGET_LINK: Partial<Record<WidgetType, string>> = {
@@ -27,6 +33,12 @@ export const WIDGET_LINK: Partial<Record<WidgetType, string>> = {
   cashFlow: "/app/finance",
   myTasks: "/app/tasks?mine=1",
   projects: "/app/tasks",
+  insights: "/app/inbox",
+  inbox: "/app/inbox",
+  approvals: "/app/inbox",
+  deadlines: "/app/today",
+  timeWeek: "/app/time",
+  daySummary: "/app/today",
   agenda: "/app/calendar?view=day",
   content: "/app/content",
   social: "/app/social",
@@ -83,6 +95,78 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
   const num = (v: number | null | undefined) => (v === null || v === undefined ? "—" : nf.format(v));
 
   switch (type) {
+    case "insights":
+      return (
+        data.insights &&
+        (data.insights.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("widgets.allClear")}</p>
+        ) : (
+          <div className="grid gap-2">
+            {data.insights.slice(0, 4).map((insight) => (
+              <InsightCard key={insight.key} insight={insight} compact />
+            ))}
+          </div>
+        ))
+      );
+    case "inbox":
+    case "approvals": {
+      const list = type === "inbox" ? data.inbox : data.approvals;
+      return (
+        list &&
+        (list.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("widgets.allClear")}</p>
+        ) : (
+          <div className="grid divide-y">
+            {list.map((item) => (
+              <Link key={item.id} href={item.href ?? "/app/inbox"} className="truncate py-2 text-sm hover:text-primary">
+                {t(`hub.n.${item.kind}`, item.vars)}
+              </Link>
+            ))}
+          </div>
+        ))
+      );
+    }
+    case "deadlines":
+      return (
+        data.deadlines &&
+        (data.deadlines.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("widgets.allClear")}</p>
+        ) : (
+          <div className="grid divide-y">
+            {data.deadlines.map((task) => (
+              <Link key={task.id} href={`/app/tasks/${task.id}`} className="flex items-center gap-2 py-2 text-sm hover:text-primary">
+                <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                <span className={cn("text-xs tabular-nums text-muted-foreground", task.overdue && "text-destructive")}>{formatDate(task.dueDate, locale, region)}</span>
+              </Link>
+            ))}
+          </div>
+        ))
+      );
+    case "teamWorkload":
+      return (
+        data.teamWorkload && (
+          <div className="grid gap-2 text-sm">
+            {data.teamWorkload.length === 0 && <p className="text-muted-foreground">{t("widgets.allClear")}</p>}
+            {data.teamWorkload.map((w) => (
+              <div key={w.name} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                <span className="tabular-nums">{w.open}</span>
+                {w.late > 0 && <span className="text-xs tabular-nums text-destructive">{t("hub.widget.late", { count: w.late })}</span>}
+              </div>
+            ))}
+          </div>
+        )
+      );
+    case "timeWeek":
+      return <p className="text-2xl font-semibold tabular-nums">{Math.round((data.timeWeek ?? 0) / 6) / 10} h</p>;
+    case "daySummary":
+      return data.daySummary ? (
+        <p className="whitespace-pre-wrap text-sm">{data.daySummary}</p>
+      ) : (
+        <Link href="/app/today" className="text-sm font-medium text-primary hover:underline">
+          {t("hub.ai.writeSummary")}
+        </Link>
+      );
     case "quickActions":
       return (
         data.quickActions && (
@@ -141,7 +225,7 @@ export function WidgetBody({ type, data }: { type: WidgetType; data: WidgetData 
         ) : (
           <div className="grid divide-y">
             {data.myTasks.map((task) => (
-              <Link key={task.id} href="/app/tasks?mine=1" className="flex items-center gap-2 py-2 text-sm hover:text-primary">
+              <Link key={task.id} href={`/app/tasks/${task.id}`} className="flex items-center gap-2 py-2 text-sm hover:text-primary">
                 <span className={cn("size-2 shrink-0 rounded-full", task.priority === "HIGH" ? "bg-destructive" : task.priority === "MEDIUM" ? "bg-warning" : "bg-muted-foreground/40")} />
                 <span className="min-w-0 flex-1 truncate">{task.title}</span>
                 {task.dueDate && <span className={cn("text-xs tabular-nums text-muted-foreground", task.overdue && "text-destructive")}>{formatDate(task.dueDate, locale, region)}</span>}

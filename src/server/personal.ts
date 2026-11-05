@@ -3,9 +3,9 @@
  * Every query names the person — not even the owner of the workspace sees
  * someone else's.
  */
-import { and, asc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
-import { goals, habitChecks, habits } from "@/db/schema";
+import { goals, habitChecks, habits, personalTransactions } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
@@ -14,6 +14,43 @@ import { assertModule } from "./modules";
 
 const title = z.string().trim().min(1).max(200);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const moneyInput = z.object({
+  kind: z.enum(["IN", "OUT"]),
+  amountCents: z.coerce.number().int().min(1).max(1_000_000_000),
+  bookedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  category: z.string().trim().max(60).nullish(),
+  description: z.string().trim().max(200).nullish(),
+});
+
+/** One's own income or spending: it never touches the company's figures. */
+export async function addPersonalMoney(ctx: Context, raw: z.input<typeof moneyInput>): Promise<void> {
+  assertModule(ctx, "personal");
+  const input = moneyInput.parse(raw);
+  await withTenant(ctx.organization.id, (tx) => tx.insert(personalTransactions).values({ ...input, organizationId: ctx.organization.id, userId: ctx.user.userId }));
+}
+
+export async function deletePersonalMoney(ctx: Context, id: string): Promise<void> {
+  await withTenant(ctx.organization.id, (tx) => tx.delete(personalTransactions).where(and(eq(personalTransactions.id, id), eq(personalTransactions.userId, ctx.user.userId))));
+}
+
+/** The month so far, only for the person themselves. */
+export async function personalMoney(ctx: Context, month: string) {
+  assertModule(ctx, "personal");
+  const first = new Date(`${month}-01T12:00:00Z`);
+  first.setUTCMonth(first.getUTCMonth() + 1);
+  const next = first.toISOString().slice(0, 10);
+  const rows = await withTenant(ctx.organization.id, (tx) =>
+    tx
+      .select()
+      .from(personalTransactions)
+      .where(and(eq(personalTransactions.userId, ctx.user.userId), gte(personalTransactions.bookedOn, `${month}-01`), lt(personalTransactions.bookedOn, next)))
+      .orderBy(desc(personalTransactions.bookedOn))
+      .limit(200),
+  );
+  const sum = (kind: string) => rows.filter((r) => r.kind === kind).reduce((total, r) => total + r.amountCents, 0);
+  return { rows, inCents: sum("IN"), outCents: sum("OUT") };
+}
 
 export const goalInput = z.object({
   title,

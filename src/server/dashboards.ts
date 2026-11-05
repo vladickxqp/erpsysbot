@@ -13,7 +13,7 @@ import type { AppModule, WorkspaceType } from "@/lib/modules";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { moduleOn } from "./modules";
-import type { Permission } from "./permissions";
+import type { Permission, Role } from "./permissions";
 
 export const WIDGET_TYPES = [
   "quickActions",
@@ -35,6 +35,13 @@ export const WIDGET_TYPES = [
   "services",
   "activity",
   "recentInvoices",
+  "insights",
+  "inbox",
+  "approvals",
+  "deadlines",
+  "teamWorkload",
+  "timeWeek",
+  "daySummary",
 ] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 export type WidgetSize = 1 | 2 | 3 | 4;
@@ -61,6 +68,13 @@ export const WIDGETS: Record<WidgetType, { needs: Permission | null; module: App
   services: { needs: "settings.manage", module: "integrations", size: 2 },
   activity: { needs: "settings.manage", module: null, size: 2 },
   recentInvoices: { needs: "invoices.read", module: "invoices", size: 4 },
+  insights: { needs: null, module: null, size: 2 },
+  inbox: { needs: null, module: null, size: 2 },
+  approvals: { needs: null, module: null, size: 2 },
+  deadlines: { needs: "tasks.read", module: "tasks", size: 2 },
+  teamWorkload: { needs: "employees.read", module: "tasks", size: 2 },
+  timeWeek: { needs: "time.read", module: "time", size: 1 },
+  daySummary: { needs: "ai.use", module: "assistant", size: 2 },
 };
 
 /** The widgets this person may place, in catalogue order. */
@@ -99,18 +113,49 @@ export function newWidget(type: WidgetType): Widget {
   return { id: randomUUID().slice(0, 8), type, size: WIDGETS[type].size, collapsed: false };
 }
 
-/** What a first dashboard shows first, by kind of workspace; the rest follows only for companies. */
+/** What a first dashboard shows, by kind of workspace. */
 const FIRST_WIDGETS: Partial<Record<WorkspaceType, WidgetType[]>> = {
-  CREATOR: ["quickActions", "content", "social", "myTasks", "revenue", "expenses", "agenda", "recommendations"],
-  FREELANCER: ["quickActions", "myTasks", "projects", "outstanding", "revenue", "expenses", "agenda", "notifications"],
-  PERSONAL: ["quickActions", "myTasks", "agenda", "projects", "expenses", "notifications"],
+  CREATOR: ["quickActions", "insights", "content", "social", "myTasks", "deadlines", "revenue", "expenses", "agenda"],
+  FREELANCER: ["quickActions", "insights", "myTasks", "projects", "timeWeek", "outstanding", "revenue", "expenses", "agenda"],
+  PERSONAL: ["quickActions", "myTasks", "agenda", "projects", "expenses", "inbox"],
 };
 
-/** A first dashboard: for a company every widget this person may see, otherwise the ones that fit. */
+/** In a company it depends on the person's work: what an employee and a manager look at differs. */
+const ROLE_WIDGETS: Partial<Record<Role, WidgetType[]>> = {
+  MANAGER: ["quickActions", "insights", "teamWorkload", "projects", "approvals", "deadlines", "agenda", "inbox"],
+  EMPLOYEE: ["quickActions", "myTasks", "deadlines", "agenda", "inbox", "timeWeek"],
+  ACCOUNTANT: ["quickActions", "insights", "outstanding", "revenue", "expenses", "profit", "cashFlow", "recentInvoices"],
+  VIEWER: ["myTasks", "agenda", "projects", "inbox"],
+  CUSTOM: ["quickActions", "myTasks", "deadlines", "agenda", "inbox"],
+};
+
+const OWNER_WIDGETS: WidgetType[] = ["quickActions", "insights", "revenue", "expenses", "profit", "outstanding", "projects", "myTasks", "approvals", "clients", "agenda", "recentInvoices", "activity"];
+
+/** A first dashboard, made of what this person may see. */
 export function defaultWidgets(ctx: Context): Widget[] {
   const allowed = availableWidgets(ctx);
-  const first = FIRST_WIDGETS[ctx.organization.workspaceType as WorkspaceType];
-  return (first ? first.filter((w) => allowed.includes(w)) : allowed).map(newWidget);
+  const kind = ctx.organization.workspaceType as WorkspaceType;
+  const wanted = FIRST_WIDGETS[kind] ?? ROLE_WIDGETS[ctx.role] ?? OWNER_WIDGETS;
+  return wanted.filter((w) => allowed.includes(w)).map(newWidget);
+}
+
+/** Back to the start: the layout a new person of this kind gets. */
+export async function resetDashboard(ctx: Context, id: string): Promise<void> {
+  await saveDashboard(ctx, id, { widgets: defaultWidgets(ctx) });
+}
+
+/** One widget worth offering, with the reason; the person decides, nothing is moved for them. */
+export function suggestedWidget(ctx: Context, placed: readonly Widget[], declined: readonly string[], facts: { deadlines: number; insights: number; timeEntries: number }): { type: WidgetType; reason: string } | null {
+  const allowed = new Set(availableWidgets(ctx));
+  const offers: [WidgetType, boolean, string][] = [
+    ["insights", facts.insights > 0, "insights"],
+    ["deadlines", facts.deadlines >= 3, "deadlines"],
+    ["timeWeek", facts.timeEntries > 0, "time"],
+  ];
+  for (const [type, fits, reason] of offers) {
+    if (fits && allowed.has(type) && !placed.some((w) => w.type === type) && !declined.includes(type)) return { type, reason };
+  }
+  return null;
 }
 
 export type Dashboard = { id: string; name: string; widgets: Widget[] };

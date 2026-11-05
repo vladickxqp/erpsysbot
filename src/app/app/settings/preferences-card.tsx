@@ -16,7 +16,7 @@ import { NOTIFICATION_CATEGORIES, type Preferences } from "@/lib/preferences";
 const DAYS = [1, 2, 3, 4, 5, 6, 7];
 
 /** What reaches this person, when, and how their day and views start. */
-export function PreferencesCard({ initial, hasTelegram, hasMail }: { initial: Preferences; hasTelegram: boolean; hasMail: boolean }) {
+export function PreferencesCard({ initial, hasTelegram, hasMail, quickKeys }: { initial: Preferences; hasTelegram: boolean; hasMail: boolean; quickKeys: string[] }) {
   const { t } = useI18n();
   const router = useRouter();
   const [prefs, setPrefs] = useState(initial);
@@ -138,12 +138,31 @@ export function PreferencesCard({ initial, hasTelegram, hasMail }: { initial: Pr
           </div>
         </section>
 
+        <section className="grid gap-2">
+          <h3 className="font-medium">{t("hub.prefs.quick")}</h3>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {quickKeys.map((key) => (
+              <label key={key} className="flex items-center gap-2">
+                <Checkbox
+                  checked={!prefs.quickActions.length || prefs.quickActions.includes(key)}
+                  onCheckedChange={(v) => {
+                    const all = prefs.quickActions.length ? prefs.quickActions : quickKeys;
+                    const next = v === true ? [...all, key] : all.filter((k) => k !== key);
+                    setPrefs({ ...prefs, quickActions: next.length === quickKeys.length ? [] : next });
+                  }}
+                />
+                {t(`widgets.quick.${key}`)}
+              </label>
+            ))}
+          </div>
+        </section>
+
         <Button
           className="w-fit"
           disabled={pending}
           onClick={() =>
             start(async () => {
-              const result = await savePreferencesAction({ notifications: prefs.notifications, workHours: prefs.workHours, defaultViews: prefs.defaultViews });
+              const result = await savePreferencesAction({ notifications: prefs.notifications, workHours: prefs.workHours, defaultViews: prefs.defaultViews, quickActions: prefs.quickActions });
               if (result.error) toast.error(t(result.error));
               else toast.success(t("common.saved"));
               router.refresh();
