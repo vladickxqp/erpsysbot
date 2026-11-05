@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, Inbox, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
 
@@ -14,6 +14,7 @@ export type NavItem = { href: string; label: string; icon: LucideIcon; needs?: P
 export const NAV: NavItem[] = [
   { href: "/app", label: "nav.dashboard", icon: LayoutDashboard, primary: true },
   { href: "/app/today", label: "hub.today.title", icon: Sun },
+  { href: "/app/inbox", label: "hub.inbox.title", icon: Inbox },
   { href: "/app/assistant", label: "nav.ai", icon: Sparkles, needs: "ai.use", feature: "assistant", module: "assistant" },
   { href: "/app/clients", label: "nav.clients", icon: Users, needs: "clients.read", primary: true, module: "crm" },
   { href: "/app/pipeline", label: "nav.pipeline", icon: KanbanSquare, needs: "clients.read", module: "pipeline" },

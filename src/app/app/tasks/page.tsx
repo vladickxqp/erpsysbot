@@ -1,6 +1,7 @@
 import { getT } from "@/i18n/server";
 import { clientOptions } from "@/server/clients";
 import { today } from "@/server/money";
+import { myPreferences } from "@/server/preferences";
 import { requirePageContext } from "@/server/request";
 import { listProjects, listTasks } from "@/server/tasks";
 import { memberOptions } from "@/server/team";
@@ -15,6 +16,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const ctx = await requirePageContext("tasks.read");
   const sp = await searchParams;
   const mine = sp.mine === "1";
+  const prefs = await myPreferences(ctx);
   const [tasks, projects, members, clients] = await Promise.all([
     listTasks(ctx, { projectId: sp.project, assignedUserId: mine ? ctx.user.userId : undefined, q: sp.q }),
     listProjects(ctx),
@@ -23,7 +25,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   ]);
   return (
     <TasksView
-      view={sp.view === "list" ? "list" : "board"}
+      view={sp.view === "list" || sp.view === "board" ? sp.view : (prefs.defaultViews.tasks ?? "board")}
       openNew={sp.new === "1" ? "task" : sp.newProject === "1" ? "project" : null}
       project={sp.project ?? null}
       mine={mine}

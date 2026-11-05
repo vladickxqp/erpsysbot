@@ -269,8 +269,8 @@ export async function listProjects(ctx: Context, includeClosed = false) {
     const rows = await tx
       .select({
         project: projects,
-        open: sql<number>`(select count(*)::int from tasks t where t.project_id = ${projects.id} and t.status <> 'DONE')`,
-        done: sql<number>`(select count(*)::int from tasks t where t.project_id = ${projects.id} and t.status = 'DONE')`,
+        open: sql<number>`(select count(*)::int from tasks t where t.project_id = projects.id and t.status <> 'DONE')`,
+        done: sql<number>`(select count(*)::int from tasks t where t.project_id = projects.id and t.status = 'DONE')`,
       })
       .from(projects)
       .where(includeClosed ? undefined : inArray(projects.status, ["ACTIVE"]))

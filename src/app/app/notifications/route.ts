@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
+import { inbox, unreadCount } from "@/server/inbox";
 import { activeContext } from "@/server/request";
-import { loadWidgetData } from "@/server/widget-data";
 
 export const runtime = "nodejs";
 
-/** What needs attention now, for the bell. Worked out from the modules, nothing stored. */
+/** What needs attention now, for the bell: the first lines of the inbox. */
 export async function GET() {
   const ctx = await activeContext();
   if (!ctx) return NextResponse.json({ error: "auth" }, { status: 401 });
-  const { notifications } = await loadWidgetData(ctx, new Set(["notifications"]));
-  return NextResponse.json({ items: notifications ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  const items = await inbox(ctx);
+  return NextResponse.json(
+    { count: unreadCount(items), items: items.filter((i) => !i.read).slice(0, 6).map(({ id, kind, vars, href, insight }) => ({ id, kind, vars, href, insightKey: insight?.key })) },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }

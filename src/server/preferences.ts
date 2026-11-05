@@ -8,12 +8,12 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { userPreferences } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { NOTIFICATION_CATEGORIES } from "@/lib/preferences";
 import type { Context } from "./context";
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
-export const NOTIFICATION_CATEGORIES = ["assigned", "mention", "approval", "update", "insight", "failure"] as const;
-export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+export { NOTIFICATION_CATEGORIES, type NotificationCategory } from "@/lib/preferences";
 
 const preferencesSchema = z.object({
   /** Addresses inside the app, first the most wanted. */

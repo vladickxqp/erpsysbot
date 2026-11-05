@@ -88,7 +88,7 @@ export function TasksView({
 
   const href = (p: { view?: string; project?: string | null; mine?: boolean }) => {
     const q = new URLSearchParams();
-    if ((p.view ?? view) === "list") q.set("view", "list");
+    q.set("view", p.view ?? view);
     const proj = p.project === undefined ? project : p.project;
     if (proj) q.set("project", proj);
     if (p.mine ?? mine) q.set("mine", "1");
