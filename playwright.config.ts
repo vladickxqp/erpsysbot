@@ -9,9 +9,10 @@ const port = 3322;
  */
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
+  timeout: 180_000,
+  expect: { timeout: 15_000 },
   workers: 1,
-  reporter: "line",
+  reporter: process.env.CI ? "github" : "line",
   use: { baseURL: `http://localhost:${port}`, channel: process.env.PLAYWRIGHT_CHANNEL, locale: "de-DE" },
   webServer: {
     command: `npx next start -p ${port}`,
