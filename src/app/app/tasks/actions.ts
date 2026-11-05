@@ -5,14 +5,15 @@ import { ZodError } from "zod";
 import { NotFoundError } from "@/server/clients";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
-import { createTask, deleteTask, getTask, moveTask, saveProject, updateTask, type TaskInput, type TaskStatus } from "@/server/tasks";
+import { createTask, deleteTask, getTask, moveTask, saveProject, TaskError, updateTask, type TaskInput, type TaskStatus } from "@/server/tasks";
 
-export type TaskResult = { ok?: boolean; id?: string; error?: string };
+export type TaskResult = { ok?: boolean; id?: string; error?: string; vars?: Record<string, string> };
 
 function failure(e: unknown): TaskResult {
   if (e instanceof ForbiddenError) return { error: "common.forbidden" };
   if (e instanceof NotFoundError) return { error: "common.error" };
   if (e instanceof ZodError) return { error: "auth.check" };
+  if (e instanceof TaskError) return { error: `hub.tasks.${e.code}`, vars: { names: e.blockers.join(", ") } };
   throw e;
 }
 

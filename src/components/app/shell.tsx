@@ -26,6 +26,7 @@ import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
 import { NAV, isActive, type Feature, type NavItem } from "./nav";
 import { NotificationBell } from "./notification-bell";
+import { openQuickTask, QuickTaskDialog } from "./quick-task";
 import { ThemeToggle } from "./theme-toggle";
 
 export type ShellProps = {
@@ -211,6 +212,11 @@ export function Shell({ user, company, companies, permissions, features, offModu
           </Link>
           <GlobalSearch />
           <div className="ml-auto flex items-center gap-1">
+            {permissions.includes("tasks.manage") && !offModules.includes("tasks") && (
+              <Button variant="ghost" size="icon" aria-label={t("hub.tasks.quick")} onClick={() => openQuickTask()}>
+                <Plus className="size-4" />
+              </Button>
+            )}
             <NotificationBell />
             <LocaleSwitch />
             <ThemeToggle />
@@ -222,6 +228,7 @@ export function Shell({ user, company, companies, permissions, features, offModu
 
       {/* Mobile: bottom navigation */}
       <MobileNav items={items} pathname={pathname} />
+      <QuickTaskDialog />
     </div>
   );
 }

@@ -3,15 +3,22 @@
  * a client or an order, and may have subtasks (one level). Moving a card on
  * the board sets status and position in one step.
  */
-import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, ilike, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { withTenant } from "@/db/tenant";
-import { clients, orders, projects, tasks } from "@/db/schema";
+import { withTenant, type Tx } from "@/db/tenant";
+import { clients, orders, projects, taskDependencies, tasks } from "@/db/schema";
 import { audit, type Via } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { today } from "./money";
+import { notify } from "./notifications";
 import { requirePermission } from "./permissions";
+
+export class TaskError extends Error {
+  constructor(public readonly code: "BLOCKED" | "CYCLE", public readonly blockers: string[] = []) {
+    super(code);
+  }
+}
 
 export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
@@ -44,13 +51,46 @@ export const taskInput = z.object({
   clientId: optionalId,
   orderId: optionalId,
   assignedUserId: optionalId,
+  estimateMinutes: z.coerce.number().int().min(1).max(10_000).nullish().transform((v) => v ?? null),
 });
 export type TaskInput = z.input<typeof taskInput>;
+
+/** What still has to be finished before a task can move on. */
+async function openBlockers(tx: Tx, id: string): Promise<string[]> {
+  const blocker = aliasedTable(tasks, "blocker");
+  const rows = await tx
+    .select({ title: blocker.title })
+    .from(taskDependencies)
+    .innerJoin(blocker, eq(blocker.id, taskDependencies.dependsOnId))
+    .where(and(eq(taskDependencies.taskId, id), ne(blocker.status, "DONE")));
+  return rows.map((r) => r.title);
+}
+
+/** A task waiting for another stays in "to do" until that one is finished. */
+async function assertUnblocked(tx: Tx, id: string, status: TaskStatus): Promise<void> {
+  if (status === "TODO") return;
+  const blockers = await openBlockers(tx, id);
+  if (blockers.length) throw new TaskError("BLOCKED", blockers);
+}
+
+async function tellAssignee(ctx: Context, task: Task): Promise<void> {
+  if (!task.assignedUserId || task.assignedUserId === ctx.user.userId) return;
+  await notify(ctx.organization.id, [task.assignedUserId], {
+    category: "assigned",
+    kind: "taskAssigned",
+    vars: { title: task.title, who: ctx.user.name },
+    href: `/app/tasks/${task.id}`,
+    entity: "task",
+    entityId: task.id,
+    priority: task.priority === "HIGH" ? 2 : 1,
+    dedupeKey: `task-assigned:${task.id}:${task.assignedUserId}`,
+  });
+}
 
 export async function createTask(ctx: Context, raw: TaskInput, via: Via = "web"): Promise<Task> {
   requirePermission(ctx.permissions, "tasks.manage");
   const input = taskInput.parse(raw);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const created = await withTenant(ctx.organization.id, async (tx) => {
     // Links must point into this company (RLS hides others, so "not found" is enough).
     if (input.projectId && !(await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, input.projectId))).length) throw new NotFoundError();
     if (input.clientId && !(await tx.select({ id: clients.id }).from(clients).where(eq(clients.id, input.clientId))).length) throw new NotFoundError();
@@ -73,14 +113,17 @@ export async function createTask(ctx: Context, raw: TaskInput, via: Via = "web")
     await audit(tx, ctx, "task.create", "task", row.id, { title: row.title }, via);
     return row;
   });
+  await tellAssignee(ctx, created);
+  return created;
 }
 
 export async function updateTask(ctx: Context, id: string, raw: TaskInput, via: Via = "web"): Promise<Task> {
   requirePermission(ctx.permissions, "tasks.manage");
   const input = taskInput.parse(raw);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const { row, reassigned } = await withTenant(ctx.organization.id, async (tx) => {
     const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1);
     if (!current) throw new NotFoundError();
+    if (current.status !== input.status) await assertUnblocked(tx, id, input.status);
     const [row] = await tx
       .update(tasks)
       .set({
@@ -92,8 +135,10 @@ export async function updateTask(ctx: Context, id: string, raw: TaskInput, via: 
       .where(eq(tasks.id, id))
       .returning();
     await audit(tx, ctx, "task.update", "task", id, { status: input.status }, via);
-    return row;
+    return { row, reassigned: row.assignedUserId !== current.assignedUserId };
   });
+  if (reassigned) await tellAssignee(ctx, row);
+  return row;
 }
 
 /** A card dropped on the board: new status, placed before `beforeId` (or at the end). */
@@ -102,6 +147,7 @@ export async function moveTask(ctx: Context, id: string, status: TaskStatus, bef
   await withTenant(ctx.organization.id, async (tx) => {
     const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1);
     if (!current) throw new NotFoundError();
+    if (current.status !== status) await assertUnblocked(tx, id, status);
     const column = await tx
       .select({ id: tasks.id })
       .from(tasks)
@@ -159,6 +205,7 @@ export async function listTasks(ctx: Context, query: TaskQuery = {}) {
         client: { companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName },
         subtasks: sql<number>`(select count(*)::int from tasks s where s.parent_id = ${tasks.id})`,
         subtasksDone: sql<number>`(select count(*)::int from tasks s where s.parent_id = ${tasks.id} and s.status = 'DONE')`,
+        blockers: sql<number>`(select count(*)::int from task_dependencies d join tasks b on b.id = d.depends_on_id where d.task_id = ${tasks.id} and b.status <> 'DONE')`,
       })
       .from(tasks)
       .leftJoin(projects, eq(projects.id, tasks.projectId))
@@ -172,6 +219,7 @@ export async function listTasks(ctx: Context, query: TaskQuery = {}) {
       clientName: r.client ? displayName(r.client) : null,
       subtasks: Number(r.subtasks),
       subtasksDone: Number(r.subtasksDone),
+      blockers: Number(r.blockers),
     }));
   });
 }

@@ -11,7 +11,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { and, desc, eq, ilike, like, notLike, type SQL } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
-import { clients, documents, projects } from "@/db/schema";
+import { clients, documents, projects, tasks } from "@/db/schema";
 import { audit } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
@@ -94,7 +94,7 @@ export function sniffType(bytes: Uint8Array, name: string): string | null {
   return null;
 }
 
-export type UploadMeta = { category?: string | null; collection?: string | null; projectId?: string | null; clientId?: string | null; orderId?: string | null; invoiceId?: string | null };
+export type UploadMeta = { category?: string | null; collection?: string | null; projectId?: string | null; clientId?: string | null; orderId?: string | null; invoiceId?: string | null; taskId?: string | null };
 
 export async function storeDocument(ctx: Context, file: { name: string; bytes: Uint8Array }, meta: UploadMeta = {}): Promise<Document> {
   requirePermission(ctx.permissions, "documents.manage");
@@ -110,6 +110,10 @@ export async function storeDocument(ctx: Context, file: { name: string; bytes: U
     if (meta.clientId) {
       const [client] = await tx.select({ id: clients.id }).from(clients).where(eq(clients.id, meta.clientId));
       if (!client) throw new NotFoundError();
+    }
+    if (meta.taskId) {
+      const [task] = await tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, meta.taskId));
+      if (!task) throw new NotFoundError();
     }
     if (meta.projectId) {
       const [project] = await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, meta.projectId));
@@ -130,6 +134,7 @@ export async function storeDocument(ctx: Context, file: { name: string; bytes: U
         collection: isCollection(meta.collection) ? meta.collection : null,
         clientId: meta.clientId ?? null,
         projectId: meta.projectId ?? null,
+        taskId: meta.taskId ?? null,
         orderId: meta.orderId ?? null,
         invoiceId: meta.invoiceId ?? null,
         uploadedBy: ctx.user.userId,

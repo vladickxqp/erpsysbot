@@ -5,6 +5,9 @@ import { NotFoundError } from "@/server/clients";
 import { maxMediaBytes } from "@/server/documents";
 import { today } from "@/server/money";
 import { projectHub } from "@/server/project-hub";
+import { projectTeam } from "@/server/task-hub";
+import { memberOptions } from "@/server/team";
+import { assistantAvailable } from "@/server/assistant/run";
 import { requirePageContext } from "@/server/request";
 import { ProjectView } from "./project-view";
 
@@ -22,10 +25,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     if (e instanceof NotFoundError) notFound();
     throw e;
   });
+  const [team, members] = await Promise.all([projectTeam(ctx, id), memberOptions(ctx)]);
   return (
     <ProjectView
       id={id}
       name={hub.project.name}
+      rawDueDate={hub.project.dueDate}
+      status={hub.project.status}
+      description={hub.project.description}
+      budgetCents={hub.project.budgetCents}
+      overBudget={hub.overBudget}
+      team={team}
+      members={members}
+      canManage={ctx.permissions.has("tasks.manage")}
+      assistant={assistantAvailable() && ctx.permissions.has("ai.use")}
       clientName={hub.clientName}
       clientId={hub.project.clientId}
       dueDate={hub.project.dueDate ? formatDate(hub.project.dueDate, locale, region) : null}

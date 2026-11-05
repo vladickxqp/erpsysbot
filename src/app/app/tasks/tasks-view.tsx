@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CheckSquare, FolderPlus, LayoutGrid, List, Plus, Square, Trash2 } from "lucide-react";
+import { Ban, CalendarDays, CheckSquare, ExternalLink, FolderPlus, LayoutGrid, List, Plus, Square, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -38,9 +38,10 @@ export type TaskCard = {
   assignedUserId: string | null;
   subtasks: number;
   subtasksDone: number;
+  blockers: number;
 };
 
-type Draft = Omit<TaskCard, "id" | "projectName" | "clientName" | "subtasks" | "subtasksDone"> & { id: string | null };
+type Draft = Omit<TaskCard, "id" | "projectName" | "clientName" | "subtasks" | "subtasksDone" | "blockers"> & { id: string | null };
 
 const PRIORITY_TONE: Record<Priority, string> = {
   LOW: "text-muted-foreground",
@@ -143,7 +144,7 @@ export function TasksView({
       if (result.ok) {
         setDraft(null);
         router.refresh();
-      } else toast.error(t(result.error ?? "common.error"));
+      } else toast.error(t(result.error ?? "common.error", result.vars));
     });
 
   const drop = (status: TaskStatus, beforeId: string | null) => {
@@ -160,10 +161,17 @@ export function TasksView({
     });
     start(async () => {
       const result = await moveTaskAction(id, status, beforeId);
-      if (!result.ok) toast.error(t(result.error ?? "common.error"));
+      if (!result.ok) toast.error(t(result.error ?? "common.error", result.vars));
       router.refresh();
     });
   };
+
+  const blockedMark = (task: TaskCard) =>
+    task.blockers > 0 && (
+      <span className="flex items-center gap-1 text-warning" title={t("hub.tasks.blockedTitle")}>
+        <Ban className="size-3" aria-hidden /> {task.blockers}
+      </span>
+    );
 
   const due = (task: TaskCard) =>
     task.dueDate && (
@@ -265,6 +273,7 @@ export function TasksView({
                         </Badge>
                       )}
                       {due(task)}
+                      {blockedMark(task)}
                       {task.subtasks > 0 && (
                         <span className="flex items-center gap-1">
                           <CheckSquare className="size-3" /> {task.subtasksDone}/{task.subtasks}
@@ -460,6 +469,13 @@ export function TasksView({
                 </div>
               )}
 
+              {draft.id && (
+                <Button asChild variant="ghost" size="sm" className="w-fit">
+                  <Link href={`/app/tasks/${draft.id}`}>
+                    <ExternalLink className="size-4" /> {t("hub.tasks.open")}
+                  </Link>
+                </Button>
+              )}
               {canManage && (
                 <DialogFooter className="gap-2 sm:justify-between">
                   {draft.id ? (

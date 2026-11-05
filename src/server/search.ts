@@ -48,7 +48,7 @@ export async function searchAll(ctx: Context, query: string): Promise<SearchHit[
     }
     if (can("tasks.read")) {
       const found = await tx.select().from(tasks).where(ilike(tasks.title, like)).orderBy(desc(tasks.createdAt)).limit(LIMIT);
-      for (const t of found) hits.push({ kind: "task", id: t.id, title: t.title, hint: null, href: t.projectId ? `/app/tasks/projects/${t.projectId}` : "/app/tasks" });
+      for (const t of found) hits.push({ kind: "task", id: t.id, title: t.title, hint: null, href: `/app/tasks/${t.id}` });
       const list = await tx.select().from(projects).where(ilike(projects.name, like)).limit(LIMIT);
       for (const p of list) hits.push({ kind: "project", id: p.id, title: p.name, hint: null, href: `/app/tasks/projects/${p.id}` });
     }

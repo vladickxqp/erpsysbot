@@ -42,6 +42,7 @@ export async function projectHub(ctx: Context, id: string) {
       costCents: costs.reduce((sum, c) => sum + c.amountCents, 0),
       invoices: billed,
       revenueCents: billed.reduce((sum, i) => sum + i.grossCents, 0),
+      overBudget: row.project.budgetCents !== null && costs.reduce((sum, c) => sum + c.amountCents, 0) > row.project.budgetCents,
       shows: { time: can("time.read"), files: can("documents.read"), costs: can("finance.read"), invoices: can("invoices.read") },
     };
   });

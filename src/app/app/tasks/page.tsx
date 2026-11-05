@@ -48,6 +48,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         assignedUserId: task.assignedUserId,
         subtasks: task.subtasks,
         subtasksDone: task.subtasksDone,
+        blockers: task.blockers,
       }))}
     />
   );
