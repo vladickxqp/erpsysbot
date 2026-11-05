@@ -1393,7 +1393,7 @@ const uk: Messages = {
   },
   searchPage: {
     nothing: "Нічого не знайдено",
-    kind: { client: "Клієнти", invoice: "Рахунки", order: "Замовлення", quote: "Пропозиції", task: "Завдання", project: "Проєкти", content: "Контент", document: "Документи" },
+    kind: { person: "Люди", client: "Клієнти", invoice: "Рахунки", order: "Замовлення", quote: "Пропозиції", task: "Завдання", project: "Проєкти", content: "Контент", document: "Документи" },
   },
   departments: {
     title: "Відділи",

@@ -1393,7 +1393,7 @@ const kk: Messages = {
   },
   searchPage: {
     nothing: "Ештеңе табылмады",
-    kind: { client: "Клиенттер", invoice: "Шоттар", order: "Тапсырыстар", quote: "Ұсыныстар", task: "Тапсырмалар", project: "Жобалар", content: "Контент", document: "Құжаттар" },
+    kind: { person: "Адамдар", client: "Клиенттер", invoice: "Шоттар", order: "Тапсырыстар", quote: "Ұсыныстар", task: "Тапсырмалар", project: "Жобалар", content: "Контент", document: "Құжаттар" },
   },
   departments: {
     title: "Бөлімдер",

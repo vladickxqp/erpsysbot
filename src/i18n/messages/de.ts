@@ -1392,7 +1392,7 @@ const de = {
   },
   searchPage: {
     nothing: "Nichts gefunden",
-    kind: { client: "Kunden", invoice: "Rechnungen", order: "Aufträge", quote: "Angebote", task: "Aufgaben", project: "Projekte", content: "Inhalte", document: "Dokumente" },
+    kind: { person: "Personen", client: "Kunden", invoice: "Rechnungen", order: "Aufträge", quote: "Angebote", task: "Aufgaben", project: "Projekte", content: "Inhalte", document: "Dokumente" },
   },
   departments: {
     title: "Abteilungen",

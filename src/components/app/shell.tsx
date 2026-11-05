@@ -1,8 +1,8 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, LogOut, MoreHorizontal, Plus, Search } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, LogOut, MoreHorizontal, Plus, Search, Star } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { logoutAction } from "@/app/(auth)/actions";
@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
+import { CommandPalette, openPalette } from "./command-palette";
 import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
 import { NAV, isActive, type Feature, type NavItem } from "./nav";
@@ -31,7 +32,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 export type ShellProps = {
   user: { name: string; email: string };
-  company: { id: string; name: string };
+  company: { id: string; name: string; workspaceType: string | null };
   companies: { id: string; name: string; role: string }[];
   /** The permissions of the current membership, for showing menu entries. */
   permissions: string[];
@@ -39,6 +40,7 @@ export type ShellProps = {
   features: Feature[];
   /** Modules switched off for the company or hidden by this person. */
   offModules: string[];
+  favorites: string[];
   children: React.ReactNode;
 };
 
@@ -65,7 +67,10 @@ function CompanySwitcher({ company, companies }: Pick<ShellProps, "company" | "c
           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           <Building2 className="size-4 shrink-0 opacity-70" />
-          <span className="flex-1 truncate font-medium text-white">{company.name}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium text-white">{company.name}</span>
+            <span className="block truncate text-xs opacity-70">{t(`hub.workspace.${company.workspaceType ?? "BUSINESS"}`)}</span>
+          </span>
           <ChevronsUpDown className="size-4 opacity-60" />
         </button>
       </DropdownMenuTrigger>
@@ -111,28 +116,24 @@ function CompanySwitcher({ company, companies }: Pick<ShellProps, "company" | "c
   );
 }
 
+/** Opens the command palette; on a phone a plain icon. */
 function GlobalSearch() {
   const { t } = useI18n();
-  const router = useRouter();
-  const [q, setQ] = useState("");
   return (
-    <form
-      role="search"
-      className="relative hidden md:block w-full max-w-sm"
-      onSubmit={(e) => {
-        e.preventDefault();
-        router.push(`/app/search?q=${encodeURIComponent(q.trim())}`);
-      }}
-    >
-      <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-      <Input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={t("common.search")}
-        aria-label={t("common.search")}
-        className="pl-8 bg-background"
-      />
-    </form>
+    <>
+      <button
+        type="button"
+        onClick={openPalette}
+        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-md border bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground md:flex"
+      >
+        <Search className="size-4" aria-hidden />
+        <span className="flex-1 text-left">{t("hub.palette.placeholder")}</span>
+        <kbd className="rounded border px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
+      </button>
+      <Button variant="ghost" size="icon" className="md:hidden" aria-label={t("common.search")} onClick={openPalette}>
+        <Search className="size-4" />
+      </Button>
+    </>
   );
 }
 
@@ -166,7 +167,7 @@ function UserMenu({ user }: Pick<ShellProps, "user">) {
   );
 }
 
-export function Shell({ user, company, companies, permissions, features, offModules, children }: ShellProps) {
+export function Shell({ user, company, companies, permissions, features, offModules, favorites, children }: ShellProps) {
   const { t } = useI18n();
   const pathname = usePathname();
   const items = NAV.filter(
@@ -188,6 +189,19 @@ export function Shell({ user, company, companies, permissions, features, offModu
           <CompanySwitcher company={company} companies={companies} />
         </div>
         <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4" aria-label="Main">
+          {favorites.length > 0 && (
+            <div className="mb-2 space-y-1 border-b border-sidebar-border pb-2">
+              {favorites
+                .map((href) => items.find((i) => i.href === href))
+                .filter((i): i is NavItem => !!i)
+                .map(({ href, label }) => (
+                  <Link key={href} href={href} className={cn("flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white", isActive(pathname, href) && "bg-sidebar-accent text-white")}>
+                    <Star className="size-3.5 text-warning" fill="currentColor" aria-hidden />
+                    {t(label)}
+                  </Link>
+                ))}
+            </div>
+          )}
           {items.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -229,6 +243,7 @@ export function Shell({ user, company, companies, permissions, features, offModu
       {/* Mobile: bottom navigation */}
       <MobileNav items={items} pathname={pathname} />
       <QuickTaskDialog />
+      <CommandPalette items={items} permissions={permissions} offModules={offModules} favorites={favorites} assistant={features.includes("assistant") && permissions.includes("ai.use") && !offModules.includes("assistant")} />
     </div>
   );
 }

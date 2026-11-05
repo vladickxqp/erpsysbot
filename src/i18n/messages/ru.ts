@@ -1393,7 +1393,7 @@ const ru: Messages = {
   },
   searchPage: {
     nothing: "Ничего не найдено",
-    kind: { client: "Клиенты", invoice: "Счета", order: "Заказы", quote: "Предложения", task: "Задачи", project: "Проекты", content: "Контент", document: "Документы" },
+    kind: { person: "Люди", client: "Клиенты", invoice: "Счета", order: "Заказы", quote: "Предложения", task: "Задачи", project: "Проекты", content: "Контент", document: "Документы" },
   },
   departments: {
     title: "Отделы",

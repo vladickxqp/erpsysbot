@@ -126,11 +126,11 @@ describe("archive and search", () => {
     await createInvoiceDraft(ctx, { clientId: client.id, items: [line()] });
     const { createTask } = await import("@/server/tasks");
     await createTask(ctx, { title: "Sonnenschein anrufen" });
-    expect((await searchAll(ctx, "Sonnen")).map((h) => h.kind).sort()).toEqual(["client", "invoice", "task"]);
+    expect((await searchAll(ctx, "Sonnen")).hits.map((h) => h.kind).sort()).toEqual(["client", "invoice", "task"]);
     expect(await searchAll(ctx, "x")).toEqual([]);
     expect(await searchAll(await newCompany("Andere GmbH"), "Sonnen")).toEqual([]);
     const viewer = await newMember(ctx, "VIEWER");
-    expect((await searchAll(viewer, "Sonnen")).map((h) => h.kind).sort()).toEqual(["client", "task"]);
+    expect((await searchAll(viewer, "Sonnen")).hits.map((h) => h.kind).sort()).toEqual(["client", "task"]);
 
     await setClientArchived(ctx, client.id, true);
     expect((await listClients(ctx)).rows).toEqual([]);

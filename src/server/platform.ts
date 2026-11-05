@@ -74,7 +74,7 @@ export async function listCompanies(user: SessionUser) {
       createdAt: organizations.createdAt,
       country: organizations.country,
       signupIpCountry: organizations.signupIpCountry,
-      members: sql<number>`(select count(*)::int from ${memberships} m where m.organization_id = ${organizations.id})`,
+      members: sql<number>`(select count(*)::int from ${memberships} m where m.organization_id = organizations.id)`,
       lastActivity: sql<string | null>`(select max(a.created_at)::text from ${auditLog} a where a.organization_id = ${organizations.id})`,
       planId: subscriptions.planId,
       status: subscriptions.status,

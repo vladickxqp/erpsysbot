@@ -126,6 +126,27 @@ const hub = {
   calendar: {
     agenda: "Liste",
   },
+  palette: {
+    title: "Befehle und Suche",
+    placeholder: "Suchen oder Befehl eingeben",
+    actions: "Aktionen",
+    favorites: "Favoriten",
+    recent: "Zuletzt geöffnet",
+    navigate: "Gehe zu",
+    results: "Suchergebnisse",
+    ai: "KI",
+    ask: "KI fragen: {q}",
+    allResults: "Alle Ergebnisse für „{q}“",
+    favorite: "Favorit",
+    understood: "Verstanden als Filter: {kind}",
+    more: "Mehr anzeigen",
+  },
+  workspace: {
+    BUSINESS: "Firma",
+    CREATOR: "Creator",
+    FREELANCER: "Freelancer",
+    PERSONAL: "Privat",
+  },
   automation: {
     t_client_status_changed: "Kundenstatus geändert",
     t_deal_stage_changed: "Verkaufschance in neuer Phase",

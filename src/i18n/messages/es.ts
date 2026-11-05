@@ -1393,7 +1393,7 @@ const es: Messages = {
   },
   searchPage: {
     nothing: "No se encontró nada",
-    kind: { client: "Clientes", invoice: "Facturas", order: "Pedidos", quote: "Cotizaciones", task: "Tareas", project: "Proyectos", content: "Contenido", document: "Documentos" },
+    kind: { person: "Personas", client: "Clientes", invoice: "Facturas", order: "Pedidos", quote: "Cotizaciones", task: "Tareas", project: "Proyectos", content: "Contenido", document: "Documentos" },
   },
   departments: {
     title: "Departamentos",
