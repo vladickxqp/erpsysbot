@@ -29,5 +29,7 @@ jobs:
       - run: npx tsc --noEmit -p .
       - run: npx vitest run
       - run: npx next build
-      - run: npx playwright install --with-deps chromium
+      # The runner brings Chrome along; no browser download needed.
       - run: npx playwright test
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
