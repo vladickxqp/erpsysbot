@@ -29,4 +29,4 @@ export function middleware(request: NextRequest) {
   return NextResponse.next({ request: { headers: forwarded } });
 }
 
-export const config = { matcher: ["/((?!api/telegram|api/stripe|api/health|_next/static|_next/image|favicon.ico).*)"] };
+export const config = { matcher: ["/((?!api/telegram|api/stripe|api/health|landing/|_next/static|_next/image|favicon.ico).*)"] };

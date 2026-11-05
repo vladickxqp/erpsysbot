@@ -14,7 +14,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   return (
     <div className="auth-shell dark relative grid lg:grid-cols-[1.15fr_1fr]">
       <aside className="relative hidden overflow-hidden lg:sticky lg:top-0 lg:block lg:h-dvh">
-        <BackdropVideo />
+        <BackdropVideo priority />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#050814]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050814]/80 via-transparent to-[#050814]/40" />
         <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">

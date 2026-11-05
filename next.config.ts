@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=15552000; includeSubDomains" },
         ],
       },
+      // The film: a new one gets a new folder, so these never change and the CDN can keep them.
+      { source: "/landing/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };

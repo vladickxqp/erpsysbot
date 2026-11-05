@@ -86,7 +86,7 @@ export default async function Home() {
 
       <HeroScroll className="relative flex min-h-dvh flex-col overflow-hidden">
         <div className="hero-film absolute inset-0">
-          <BackdropVideo />
+          <BackdropVideo priority />
         </div>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,8,20,0.55),transparent_70%)]" />
         <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-[#050814] to-transparent" />
