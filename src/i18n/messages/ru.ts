@@ -1,6 +1,8 @@
 import type { Messages } from "./de";
+import hub from "./hub/ru";
 
 const ru: Messages = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Весь ваш бизнес. Вся ваша работа." },
   common: {
     save: "Сохранить",
@@ -1164,7 +1166,7 @@ const ru: Messages = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Финансы", report: "Отчёт",
       apikey: "API-ключ",
       sponsor: "Спонсорство",
       auth: "Аккаунт",
@@ -1402,6 +1404,7 @@ const ru: Messages = {
     title: "Права: {name}",
     edit: "Настроить права",
     area: {
+      hr: "Кадры",
       clients: "Клиенты",
       orders: "Заказы и предложения",
       products: "Товары",
@@ -1419,7 +1422,7 @@ const ru: Messages = {
       content: "Контент",
       time: "Учёт времени",
     },
-    action: { read: "Просмотр", create: "Создание", update: "Изменение", delete: "Удаление", manage: "Управление", issue: "Выставление", cancel: "Сторнирование", export: "Экспорт", use: "Использование", publish: "Публикация" },
+    action: { admin: "Администрирование", read: "Просмотр", create: "Создание", update: "Изменение", delete: "Удаление", manage: "Управление", issue: "Выставление", cancel: "Сторнирование", export: "Экспорт", use: "Использование", publish: "Публикация" },
   },
   share: {
     revoke: "Отозвать ссылку",

@@ -18,8 +18,12 @@ import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { deleteAutomationAction, saveAutomationAction } from "./actions";
 
-const TRIGGERS = ["client.created", "order.created", "order.completed", "invoice.overdue", "task.overdue", "stock.low"] as const;
-const ACTIONS = ["task.create", "telegram.notify"] as const;
+const TRIGGERS = ["client.created", "client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "order.created", "order.completed", "invoice.overdue", "task.overdue", "stock.low"] as const;
+const ACTIONS = ["task.create", "inbox.notify", "telegram.notify", "client.assign"] as const;
+const NEW_LABELS = ["client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "inbox.notify", "client.assign"];
+const CLIENT_STATUSES = ["LEAD", "ACTIVE", "INACTIVE"];
+const DEAL_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"];
+const labelOf = (kind: "t" | "a", key: string) => `${NEW_LABELS.includes(key) ? "hub.automation" : "automation"}.${kind}_${key.replace(".", "_")}`;
 type Trigger = (typeof TRIGGERS)[number];
 type Action = (typeof ACTIONS)[number];
 
@@ -32,6 +36,7 @@ type Draft = {
   minAmount: string;
   minDays: string;
   clientStatus: string;
+  toStatus: string;
   title: string;
   message: string;
   dueInDays: string;
@@ -41,6 +46,11 @@ type Draft = {
 
 const VARS: Record<Trigger, string> = {
   "client.created": "{client} {number}",
+  "client.status_changed": "{client} {status}",
+  "deal.stage_changed": "{title} {client} {stage} {amount}",
+  "appointment.completed": "{title}",
+  "project.created": "{title}",
+  "project.completed": "{title}",
   "order.created": "{client} {number} {amount} {title}",
   "order.completed": "{client} {number} {amount} {title}",
   "invoice.overdue": "{client} {number} {amount} {days}",
@@ -62,7 +72,7 @@ export function AutomationsView({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, start] = useTransition();
 
-  const blank: Draft = { id: null, name: "", trigger: "invoice.overdue", action: "task.create", minAmount: "", minDays: "7", clientStatus: "", title: "", message: "", dueInDays: "1", to: "owner", enabled: true };
+  const blank: Draft = { id: null, name: "", trigger: "invoice.overdue", action: "task.create", minAmount: "", minDays: "7", clientStatus: "", toStatus: "", title: "", message: "", dueInDays: "1", to: "owner", enabled: true };
   const open = (r: Rule) =>
     setDraft({
       id: r.id,
@@ -72,6 +82,7 @@ export function AutomationsView({
       minAmount: r.conditions.minAmountCents != null ? String(Number(r.conditions.minAmountCents) / 100) : "",
       minDays: r.conditions.minDaysOverdue != null ? String(r.conditions.minDaysOverdue) : "",
       clientStatus: String(r.conditions.clientStatus ?? ""),
+      toStatus: String(r.conditions.toStatus ?? ""),
       title: String(r.params.title ?? ""),
       message: String(r.params.message ?? ""),
       dueInDays: String(r.params.dueInDays ?? "1"),
@@ -88,6 +99,7 @@ export function AutomationsView({
       ...(d.minAmount.trim() ? { minAmountCents: Math.round(Number(d.minAmount.replace(",", ".")) * 100) } : {}),
       ...(d.trigger === "invoice.overdue" && d.minDays.trim() ? { minDaysOverdue: Number(d.minDays) } : {}),
       ...(d.trigger === "client.created" && d.clientStatus ? { clientStatus: d.clientStatus as "LEAD" } : {}),
+      ...((d.trigger === "client.status_changed" || d.trigger === "deal.stage_changed") && d.toStatus ? { toStatus: d.toStatus } : {}),
     },
     params: {
       title: d.title || undefined,
@@ -132,7 +144,7 @@ export function AutomationsView({
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => open(r)}>
                 <div className="font-medium">{r.name}</div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  {t(`automation.t_${r.trigger.replace(".", "_")}`)} <ArrowRight className="size-3" /> {t(`automation.a_${r.action.replace(".", "_")}`)}
+                  {t(labelOf("t", r.trigger))} <ArrowRight className="size-3" /> {t(labelOf("a", r.action))}
                 </div>
               </button>
               <Button
@@ -209,7 +221,7 @@ export function AutomationsView({
                     <SelectContent>
                       {TRIGGERS.map((tr) => (
                         <SelectItem key={tr} value={tr}>
-                          {t(`automation.t_${tr.replace(".", "_")}`)}
+                          {t(labelOf("t", tr))}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -224,7 +236,7 @@ export function AutomationsView({
                     <SelectContent>
                       {ACTIONS.map((a) => (
                         <SelectItem key={a} value={a}>
-                          {t(`automation.a_${a.replace(".", "_")}`)}
+                          {t(labelOf("a", a))}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -257,6 +269,24 @@ export function AutomationsView({
                     </Select>
                   </div>
                 )}
+                {(draft.trigger === "client.status_changed" || draft.trigger === "deal.stage_changed") && (
+                  <div className="grid gap-1.5">
+                    <Label>{t("hub.automation.toStatus")}</Label>
+                    <Select value={draft.toStatus || "-"} onValueChange={(v) => setDraft({ ...draft, toStatus: v === "-" ? "" : v })}>
+                      <SelectTrigger className="w-full" aria-label={t("hub.automation.toStatus")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-">{t("hub.automation.any")}</SelectItem>
+                        {(draft.trigger === "deal.stage_changed" ? DEAL_STAGES : CLIENT_STATUSES).map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-1.5">
                   <Label>{t("automation.to")}</Label>
                   <Select value={draft.to} onValueChange={(v) => setDraft({ ...draft, to: v })}>
@@ -265,7 +295,8 @@ export function AutomationsView({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="owner">{t("settings.OWNER")}</SelectItem>
-                      {draft.action === "telegram.notify" && <SelectItem value="admins">{t("automation.admins")}</SelectItem>}
+                      {(draft.action === "telegram.notify" || draft.action === "inbox.notify") && <SelectItem value="admins">{t("automation.admins")}</SelectItem>}
+                      {draft.action === "client.assign" && <SelectItem value="least_busy">{t("hub.automation.leastBusy")}</SelectItem>}
                       <SelectItem value="assignee">{t("calendar.who")}</SelectItem>
                       {members.map((m) => (
                         <SelectItem key={m.id} value={m.id}>

@@ -193,21 +193,26 @@ export const projectInput = z.object({
   clientId: optionalId,
   dueDate: optionalDate,
   status: z.enum(["ACTIVE", "DONE", "ARCHIVED"]).default("ACTIVE"),
+  description: optionalText(5000),
+  budgetCents: z.coerce.number().int().min(0).nullish().transform((v) => v ?? null),
 });
 
 export async function saveProject(ctx: Context, id: string | null, raw: z.input<typeof projectInput>): Promise<Project> {
   requirePermission(ctx.permissions, "tasks.manage");
   const input = projectInput.parse(raw);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const { row, event } = await withTenant(ctx.organization.id, async (tx) => {
     if (id) {
+      const [before] = await tx.select({ status: projects.status }).from(projects).where(eq(projects.id, id));
       const [row] = await tx.update(projects).set(input).where(eq(projects.id, id)).returning();
       if (!row) throw new NotFoundError();
-      return row;
+      return { row, event: row.status === "DONE" && before?.status !== "DONE" ? ("project.completed" as const) : null };
     }
     const [row] = await tx.insert(projects).values({ ...input, organizationId: ctx.organization.id }).returning();
     await audit(tx, ctx, "project.create", "project", row.id, { name: row.name });
-    return row;
+    return { row, event: "project.created" as const };
   });
+  if (event) await (await import("./automations")).fireAutomations(ctx, event, row.id);
+  return row;
 }
 
 export async function listProjects(ctx: Context, includeClosed = false) {

@@ -1,4 +1,5 @@
 import { formatDate, isLocale, MESSAGES, regionOf, translator } from "@/i18n";
+import { auditExport } from "@/server/audit";
 import { countryProfile } from "@/lib/countries";
 import { tablePdf } from "@/server/pdf";
 import { ForbiddenError } from "@/server/permissions";
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const region = regionOf(ctx.organization);
   try {
     const report = await buildReport(ctx, kind, range.from, range.to);
+    await auditExport(ctx, "report.export", { report: kind, from: range.from, to: range.to });
     const name = `${t(`reports.${kind}`)}_${range.from}_${range.to}`.replace(/[^\w.-]+/g, "_");
     if (sp.get("format") === "pdf") {
       const pdf = await tablePdf({

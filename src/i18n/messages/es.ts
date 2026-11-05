@@ -1,6 +1,8 @@
 import type { Messages } from "./de";
+import hub from "./hub/es";
 
 const es: Messages = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "Una plataforma. Todo tu negocio. Todo tu trabajo." },
   common: {
     save: "Guardar",
@@ -1164,7 +1166,7 @@ const es: Messages = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Finanzas", report: "Informe",
       apikey: "Clave de API",
       sponsor: "Patrocinio",
       auth: "Cuenta",
@@ -1402,6 +1404,7 @@ const es: Messages = {
     title: "Permisos de {name}",
     edit: "Configurar permisos",
     area: {
+      hr: "RR. HH.",
       clients: "Clientes",
       orders: "Pedidos y cotizaciones",
       products: "Productos",
@@ -1419,7 +1422,7 @@ const es: Messages = {
       content: "Contenido",
       time: "Registro de tiempo",
     },
-    action: { read: "Ver", create: "Crear", update: "Editar", delete: "Eliminar", manage: "Administrar", issue: "Emitir", cancel: "Anular", export: "Exportar", use: "Usar", publish: "Publicar" },
+    action: { admin: "Administración", read: "Ver", create: "Crear", update: "Editar", delete: "Eliminar", manage: "Administrar", issue: "Emitir", cancel: "Anular", export: "Exportar", use: "Usar", publish: "Publicar" },
   },
   share: {
     revoke: "Anular enlace",

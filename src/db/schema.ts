@@ -16,6 +16,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   date,
   index,
@@ -34,7 +35,11 @@ import {
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
-const orgId = () => uuid("organization_id").notNull();
+/** Every tenant row belongs to a company and goes with it. */
+const orgId = () =>
+  uuid("organization_id")
+    .notNull()
+    .references((): AnyPgColumn => organizations.id, { onDelete: "cascade" });
 
 // --- Platform -----------------------------------------------------------------------------
 export const roleEnum = pgEnum("member_role", [
@@ -219,6 +224,8 @@ export const memberships = pgTable(
     /** Modules this person keeps out of their own menu. */
     hiddenModules: text("hidden_modules").array().notNull().default(sql`'{}'::text[]`),
     departmentId: uuid("department_id"),
+    /** For CUSTOM: the named role whose rights apply, on top of `permissions`. */
+    customRoleId: uuid("custom_role_id"),
     /** SHA-256 of the secret in this person's calendar feed link. */
     calendarTokenHash: text("calendar_token_hash"),
     createdAt: createdAt(),
@@ -552,6 +559,7 @@ export const documents = pgTable(
     projectId: uuid("project_id"),
     orderId: uuid("order_id"),
     invoiceId: uuid("invoice_id"),
+    taskId: uuid("task_id"),
     archived: boolean("archived").notNull().default(false),
     uploadedBy: uuid("uploaded_by"),
     createdAt: createdAt(),
@@ -775,6 +783,7 @@ export const appointments = pgTable(
     organizationId: orgId(),
     title: text("title").notNull(),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    taskId: uuid("task_id"),
     assignedUserId: uuid("assigned_user_id"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
@@ -803,6 +812,9 @@ export const projects = pgTable(
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     status: projectStatusEnum("status").notNull().default("ACTIVE"),
     dueDate: date("due_date"),
+    description: text("description"),
+    /** What it may cost; empty: no limit set. */
+    budgetCents: integer("budget_cents"),
     createdAt: createdAt(),
   },
   (t) => [index("projects_org_idx").on(t.organizationId)],
@@ -825,6 +837,11 @@ export const tasks = pgTable(
     assignedUserId: uuid("assigned_user_id"),
     createdBy: uuid("created_by"),
     position: integer("position").notNull().default(0),
+    /** Rough effort, for planning the day. */
+    estimateMinutes: integer("estimate_minutes"),
+    /** The day the person chose to do it, and where in that day. */
+    plannedFor: date("planned_for"),
+    plannedPosition: integer("planned_position").notNull().default(0),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -898,6 +915,7 @@ export const assistantMessages = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     channel: assistantChannelEnum("channel").notNull(),
+    conversationId: uuid("conversation_id"),
     role: assistantRoleEnum("role").notNull(),
     content: text("content").notNull(),
     /** On answers: tokens used and tools run, for usage and cost. */
@@ -1220,6 +1238,7 @@ export const departments = pgTable(
     id: id(),
     organizationId: orgId(),
     name: text("name").notNull(),
+    unitId: uuid("unit_id"),
     managerUserId: uuid("manager_user_id"),
     createdAt: createdAt(),
   },
@@ -1293,8 +1312,377 @@ export const habitChecks = pgTable(
   (t) => [uniqueIndex("habit_checks_day_key").on(t.habitId, t.day)],
 );
 
+// --- Roles of a company ---------------------------------------------------------------------------
+/** A set of rights with a name, given to any number of people. */
+export const customRoles = pgTable(
+  "custom_roles",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("custom_roles_org_name_key").on(t.organizationId, t.name)],
+);
+
+// --- One person's settings ------------------------------------------------------------------------
+/** Favourites, quick actions, default views, notification and working-time settings. */
+export const userPreferences = pgTable(
+  "user_preferences",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    data: jsonb("data").notNull().default(sql`'{}'::jsonb`),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("user_preferences_key").on(t.organizationId, t.userId)],
+);
+
+// --- Inbox ----------------------------------------------------------------------------------------
+/** Something one person should know or decide; the same `dedupeKey` is kept once. */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    /** Key of the text in messages; `vars` fill it in. */
+    kind: text("kind").notNull(),
+    vars: jsonb("vars").notNull().default(sql`'{}'::jsonb`),
+    href: text("href"),
+    entity: text("entity"),
+    entityId: uuid("entity_id"),
+    /** 2 important, 1 normal, 0 low. */
+    priority: integer("priority").notNull().default(1),
+    dedupeKey: text("dedupe_key").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    /** When it went out by Telegram or mail; empty while a quiet time holds it back. */
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("notifications_dedupe_key").on(t.organizationId, t.userId, t.dedupeKey), index("notifications_user_idx").on(t.organizationId, t.userId, t.dismissedAt, t.createdAt)],
+);
+
+/** An insight someone put aside: stays away until the facts behind it change or the time is over. */
+export const insightDismissals = pgTable(
+  "insight_dismissals",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    until: timestamp("until", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("insight_dismissals_key").on(t.organizationId, t.userId, t.key)],
+);
+
+// --- Tasks: links between them --------------------------------------------------------------------
+/** `taskId` cannot start before `dependsOnId` is done. */
+export const taskDependencies = pgTable(
+  "task_dependencies",
+  {
+    id: id(),
+    organizationId: orgId(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    dependsOnId: uuid("depends_on_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("task_dependencies_key").on(t.taskId, t.dependsOnId), index("task_dependencies_on_idx").on(t.dependsOnId)],
+);
+
+export const taskComments = pgTable(
+  "task_comments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("task_comments_task_idx").on(t.taskId, t.createdAt)],
+);
+
+/** Who works on a project (tasks name their own person on top). */
+export const projectMembers = pgTable(
+  "project_members",
+  {
+    id: id(),
+    organizationId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("project_members_key").on(t.projectId, t.userId)],
+);
+
+// --- Assistant: conversations, memory, actions ----------------------------------------------------
+export const assistantConversations = pgTable(
+  "assistant_conversations",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** What the conversation is about: "client", "project", "task" and its id. */
+    contextType: text("context_type"),
+    contextId: uuid("context_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("assistant_conversations_user_idx").on(t.organizationId, t.userId, t.updatedAt)],
+);
+
+/** What a person told the assistant to keep in mind. They read, change and delete it themselves. */
+export const assistantMemories = pgTable(
+  "assistant_memories",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("assistant_memories_user_idx").on(t.organizationId, t.userId)],
+);
+
+/** Every tool the assistant ran or proposed: what, with which data, with which outcome. */
+export const assistantActions = pgTable(
+  "assistant_actions",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id"),
+    tool: text("tool").notNull(),
+    input: jsonb("input").notNull().default(sql`'{}'::jsonb`),
+    /** read, low (runs at once), confirm (waits for the person). */
+    risk: text("risk").notNull(),
+    /** PROPOSED, DONE, FAILED, REJECTED. */
+    status: text("status").notNull(),
+    result: jsonb("result"),
+    error: text("error"),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("assistant_actions_user_idx").on(t.organizationId, t.userId, t.createdAt), index("assistant_actions_status_idx").on(t.organizationId, t.status)],
+);
+
+/** The day's summary of one person, written once a day. */
+export const dailySummaries = pgTable(
+  "daily_summaries",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("daily_summaries_key").on(t.organizationId, t.userId, t.day)],
+);
+
+/** A standing instruction the assistant carries out on a schedule, reading only. */
+export const aiAgents = pgTable(
+  "ai_agents",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull(),
+    /** DAILY or WEEKLY. */
+    schedule: text("schedule").notNull().default("DAILY"),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    lastResult: text("last_result"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_agents_user_idx").on(t.organizationId, t.userId)],
+);
+
+// --- People ---------------------------------------------------------------------------------------
+export const employeeProfiles = pgTable(
+  "employee_profiles",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    position: text("position"),
+    hireDate: date("hire_date"),
+    vacationDays: integer("vacation_days").notNull().default(30),
+    phone: text("phone"),
+    emergencyContact: text("emergency_contact"),
+    notes: text("notes"),
+  },
+  (t) => [uniqueIndex("employee_profiles_key").on(t.organizationId, t.userId)],
+);
+
+export const absences = pgTable(
+  "absences",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** VACATION, SICK, OTHER. */
+    kind: text("kind").notNull(),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date").notNull(),
+    /** PENDING, APPROVED, REJECTED. */
+    status: text("status").notNull().default("PENDING"),
+    note: text("note"),
+    decidedBy: uuid("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("absences_org_idx").on(t.organizationId, t.startDate), index("absences_user_idx").on(t.organizationId, t.userId)],
+);
+
+/** A larger part of a company; departments belong to one. */
+export const businessUnits = pgTable(
+  "business_units",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("business_units_org_name_key").on(t.organizationId, t.name)],
+);
+
+// --- Team chat ------------------------------------------------------------------------------------
+export const chatChannels = pgTable(
+  "chat_channels",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name"),
+    /** CHANNEL: everyone; DIRECT: two people, `directKey` holds them in order. */
+    kind: text("kind").notNull().default("CHANNEL"),
+    directKey: text("direct_key"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("chat_channels_direct_key").on(t.organizationId, t.directKey), uniqueIndex("chat_channels_name_key").on(t.organizationId, t.name)],
+);
+
+export const chatMembers = pgTable(
+  "chat_members",
+  {
+    id: id(),
+    organizationId: orgId(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => chatChannels.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("chat_members_key").on(t.channelId, t.userId), index("chat_members_user_idx").on(t.organizationId, t.userId)],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: id(),
+    organizationId: orgId(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => chatChannels.id, { onDelete: "cascade" }),
+    userId: uuid("user_id"),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("chat_messages_channel_idx").on(t.channelId, t.createdAt)],
+);
+
+// --- Personal money -------------------------------------------------------------------------------
+/** One person's own income and spending: never part of the company's figures. */
+export const personalTransactions = pgTable(
+  "personal_transactions",
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** IN or OUT. */
+    kind: text("kind").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    bookedOn: date("booked_on").notNull(),
+    category: text("category"),
+    description: text("description"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("personal_transactions_user_idx").on(t.organizationId, t.userId, t.bookedOn)],
+);
+
+// --- Creator: figures per piece of content --------------------------------------------------------
+export const contentStats = pgTable(
+  "content_stats",
+  {
+    id: id(),
+    organizationId: orgId(),
+    contentId: uuid("content_id")
+      .notNull()
+      .references(() => contentItems.id, { onDelete: "cascade" }),
+    views: integer("views"),
+    likes: integer("likes"),
+    comments: integer("comments"),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("content_stats_content_idx").on(t.contentId, t.fetchedAt)],
+);
+
 /** One person's own rows: not part of what an owner exports of the company. */
-export const PRIVATE_TABLES: readonly string[] = ["goals", "habits", "habit_checks"];
+export const PRIVATE_TABLES: readonly string[] = [
+  "goals",
+  "habits",
+  "habit_checks",
+  "personal_transactions",
+  "user_preferences",
+  "notifications",
+  "insight_dismissals",
+  "assistant_conversations",
+  "assistant_memories",
+  "daily_summaries",
+  "chat_members",
+];
 
 /** Every table guarded by Row Level Security (db/rls.sql keeps the same list). */
 export const TENANT_TABLES = [
@@ -1340,4 +1728,24 @@ export const TENANT_TABLES = [
   "goals",
   "habits",
   "habit_checks",
+  "custom_roles",
+  "user_preferences",
+  "notifications",
+  "insight_dismissals",
+  "task_dependencies",
+  "task_comments",
+  "project_members",
+  "assistant_conversations",
+  "assistant_memories",
+  "assistant_actions",
+  "daily_summaries",
+  "ai_agents",
+  "employee_profiles",
+  "absences",
+  "business_units",
+  "chat_channels",
+  "chat_members",
+  "chat_messages",
+  "personal_transactions",
+  "content_stats",
 ] as const;

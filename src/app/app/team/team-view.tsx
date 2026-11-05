@@ -17,12 +17,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import type { Role } from "@/server/permissions";
-import { assignDepartmentAction, inviteAction, passwordLinkAction, removeAction, revokeAction, roleAction, type TeamResult } from "./actions";
-import { DepartmentsCard, PermissionsDialog, type Department } from "./team-extras";
+import { assignCustomRoleAction, assignDepartmentAction, inviteAction, passwordLinkAction, removeAction, revokeAction, roleAction, type TeamResult } from "./actions";
+import { CustomRolesCard, DepartmentsCard, PermissionsDialog, type CustomRole, type Department } from "./team-extras";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MANAGER", "EMPLOYEE", "ACCOUNTANT", "VIEWER"];
 
-type Member = { userId: string; name: string; email: string; role: string; permissions: string[]; departmentId: string | null; since: string };
+type Member = { userId: string; name: string; email: string; role: string; permissions: string[]; customRoleId: string | null; departmentId: string | null; since: string };
 type Pending = { id: string; email: string; role: string; expiresAt: string };
 
 function LinkBox({ url }: { url: string }) {
@@ -52,7 +52,9 @@ export function TeamView({
   departments,
   allPermissions,
   myPermissions,
+  customRoles,
 }: {
+  customRoles: CustomRole[];
   me: string;
   myRole: string;
   canManage: boolean;
@@ -173,6 +175,13 @@ export function TeamView({
                               <ShieldCheck className="size-4" /> {t("permissions.edit")}
                             </DropdownMenuItem>
                           )}
+                          {m.role !== "OWNER" &&
+                            customRoles.map((r) => (
+                              <DropdownMenuItem key={r.id} onClick={() => run(() => assignCustomRoleAction(m.userId, m.customRoleId === r.id ? null : r.id))}>
+                                <ShieldCheck className="size-4" /> {t("hub.roles.assign")}: {r.name}
+                                {m.customRoleId === r.id ? " ✓" : ""}
+                              </DropdownMenuItem>
+                            ))}
                           <DropdownMenuItem className="text-destructive" onClick={() => setRemoving(m)}>
                             <Trash2 className="size-4" /> {t("team.remove")}
                           </DropdownMenuItem>
@@ -188,6 +197,7 @@ export function TeamView({
       </div>
 
       {canManage && <DepartmentsCard departments={departments} members={members} />}
+      {canManage && <CustomRolesCard roles={customRoles} members={members} all={allPermissions} mine={myPermissions} />}
       {rights && <PermissionsDialog member={rights} all={allPermissions} mine={myPermissions} onClose={() => setRights(null)} />}
 
       {pending.length > 0 && (

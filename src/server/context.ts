@@ -8,7 +8,7 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { cleanModules, withDependents, type AppModule } from "@/lib/modules";
-import { memberships, organizations } from "@/db/schema";
+import { customRoles, memberships, organizations } from "@/db/schema";
 import { entitlementsOf, PLAN_MODULE_OF } from "./billing";
 import { permissionsFor, type Permission, type Role } from "./permissions";
 import type { SessionUser } from "./auth/sessions";
@@ -48,21 +48,23 @@ const PERMISSION_MODULES: [Permission[], AppModule[]][] = [
   [["content.read"], ["content", "social"]],
   [["automation.manage"], ["automation"]],
   [["employees.read", "employees.manage"], ["team"]],
-  [["ai.use"], ["assistant"]],
+  [["ai.use", "ai.admin"], ["assistant"]],
+  [["hr.read", "hr.manage"], ["hr"]],
 ];
 
 export async function contextFor(user: SessionUser): Promise<Context | null> {
   const rows = await getDb()
-    .select({ membership: memberships, organization: organizations })
+    .select({ membership: memberships, organization: organizations, customRights: customRoles.permissions })
     .from(memberships)
     .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
+    .leftJoin(customRoles, eq(customRoles.id, memberships.customRoleId))
     .where(eq(memberships.userId, user.userId))
     .orderBy(asc(memberships.createdAt));
   if (!rows.length) return null;
   const active = rows.find((r) => r.organization.id === user.activeOrganizationId) ?? rows[0];
   const role = active.membership.role as Role;
   const disabledModules = new Set(withDependents(active.organization.disabledModules));
-  const permissions = permissionsFor(role, active.membership.permissions);
+  const permissions = permissionsFor(role, active.membership.permissions, active.customRights);
   for (const [granted, modules] of PERMISSION_MODULES) {
     if (modules.every((m) => disabledModules.has(m))) for (const p of granted) permissions.delete(p);
   }

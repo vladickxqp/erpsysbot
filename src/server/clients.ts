@@ -130,7 +130,8 @@ export async function createClient(
 export async function updateClient(ctx: Context, id: string, raw: ClientInput, via: Via = "web"): Promise<Client> {
   requirePermission(ctx.permissions, "clients.update");
   const input = clientInput.parse(raw);
-  return withTenant(ctx.organization.id, async (tx) => {
+  const { row, statusChanged } = await withTenant(ctx.organization.id, async (tx) => {
+    const [before] = await tx.select({ status: clients.status }).from(clients).where(eq(clients.id, id));
     const [row] = await tx
       .update(clients)
       .set({ ...input, updatedAt: new Date() })
@@ -138,8 +139,10 @@ export async function updateClient(ctx: Context, id: string, raw: ClientInput, v
       .returning();
     if (!row) throw new NotFoundError();
     await audit(tx, ctx, "client.update", "client", id, undefined, via);
-    return row;
+    return { row, statusChanged: before?.status !== row.status };
   });
+  if (statusChanged) await (await import("./automations")).fireAutomations(ctx, "client.status_changed", id);
+  return row;
 }
 
 export async function deleteClient(ctx: Context, id: string, via: Via = "web"): Promise<void> {

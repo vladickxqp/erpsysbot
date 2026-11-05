@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { ServiceWorker } from "@/components/app/service-worker";
 import { Toaster } from "@/components/ui/sonner";
@@ -25,10 +26,11 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { locale, messages, region } = await getT();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang={locale} suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
           <I18nProvider locale={locale} region={region} messages={messages}>
             <TooltipProvider>{children}</TooltipProvider>
             <Toaster richColors closeButton position="top-right" />

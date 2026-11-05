@@ -1,3 +1,4 @@
+import { auditExport } from "@/server/audit";
 import { DatevError, datevExport } from "@/server/datev";
 import { ForbiddenError } from "@/server/permissions";
 import { activeContext } from "@/server/request";
@@ -14,6 +15,7 @@ export async function GET(request: Request) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return new Response("Bad request", { status: 400 });
   try {
     const { filename, bytes } = await datevExport(ctx, from, to);
+    await auditExport(ctx, "finance.export", { format: "datev", from, to });
     return new Response(new Uint8Array(bytes), {
       headers: {
         "Content-Type": "text/csv; charset=windows-1252",

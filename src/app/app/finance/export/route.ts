@@ -1,3 +1,4 @@
+import { auditExport } from "@/server/audit";
 import { exportTransactionsCsv } from "@/server/finance";
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
   const to = url.searchParams.get("to");
   try {
     const csv = await exportTransactionsCsv(ctx, from && DATE.test(from) ? from : undefined, to && DATE.test(to) ? to : undefined);
+    await auditExport(ctx, "finance.export", { from, to });
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",

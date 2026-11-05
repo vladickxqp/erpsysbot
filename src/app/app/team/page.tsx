@@ -3,7 +3,7 @@ import { listDepartments } from "@/server/departments";
 import { PERMISSIONS } from "@/server/permissions";
 import { getT } from "@/i18n/server";
 import { requirePageContext } from "@/server/request";
-import { listTeam } from "@/server/team";
+import { listCustomRoles, listTeam } from "@/server/team";
 import { TeamView } from "./team-view";
 
 export async function generateMetadata() {
@@ -16,6 +16,7 @@ export default async function TeamPage() {
   const { t } = await getT();
   const { members, pending } = await listTeam(ctx);
   const departments = await listDepartments(ctx);
+  const customRoles = await listCustomRoles(ctx);
   return (
     <>
       <PageHeader title={t("team.title")} />
@@ -25,6 +26,7 @@ export default async function TeamPage() {
         canManage={ctx.permissions.has("employees.manage")}
         departments={departments.map((d) => ({ id: d.id, name: d.name }))}
         allPermissions={PERMISSIONS}
+        customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions }))}
         myPermissions={[...ctx.permissions]}
         members={members.map((m) => ({ ...m, since: m.since.toISOString() }))}
         pending={pending.map((p) => ({ ...p, expiresAt: p.expiresAt.toISOString() }))}

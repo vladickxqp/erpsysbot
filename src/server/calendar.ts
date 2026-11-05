@@ -137,12 +137,14 @@ export async function updateAppointment(ctx: Context, id: string, raw: Appointme
 
 export async function setAppointmentStatus(ctx: Context, id: string, status: AppointmentStatus, via: Via = "web") {
   requirePermission(ctx.permissions, "calendar.manage");
-  return withTenant(ctx.organization.id, async (tx) => {
+  const row = await withTenant(ctx.organization.id, async (tx) => {
     const [row] = await tx.update(appointments).set({ status, updatedAt: new Date() }).where(eq(appointments.id, id)).returning();
     if (!row) throw new NotFoundError();
     await audit(tx, ctx, "appointment.status", "appointment", id, { status }, via);
     return row;
   });
+  if (status === "COMPLETED") await (await import("./automations")).fireAutomations(ctx, "appointment.completed", id);
+  return row;
 }
 
 export async function deleteAppointment(ctx: Context, id: string): Promise<void> {

@@ -1,6 +1,8 @@
 import type { Messages } from "./de";
+import hub from "./hub/en";
 
 const en: Messages = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "One platform. All your business. All your work." },
   common: {
     save: "Save",
@@ -1164,7 +1166,7 @@ const en: Messages = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Finance", report: "Report",
       apikey: "API key",
       sponsor: "Sponsoring",
       auth: "Account",
@@ -1402,6 +1404,7 @@ const en: Messages = {
     title: "Rights of {name}",
     edit: "Set rights",
     area: {
+      hr: "HR",
       clients: "Clients",
       orders: "Orders and quotes",
       products: "Products",
@@ -1419,7 +1422,7 @@ const en: Messages = {
       content: "Content",
       time: "Time tracking",
     },
-    action: { read: "View", create: "Create", update: "Edit", delete: "Delete", manage: "Manage", issue: "Issue", cancel: "Cancel", export: "Export", use: "Use", publish: "Publish" },
+    action: { admin: "Administration", read: "View", create: "Create", update: "Edit", delete: "Delete", manage: "Manage", issue: "Issue", cancel: "Cancel", export: "Export", use: "Use", publish: "Publish" },
   },
   share: {
     revoke: "End link",

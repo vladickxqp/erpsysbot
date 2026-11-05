@@ -1,4 +1,7 @@
+import hub from "./hub/de";
+
 const de = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
@@ -1162,7 +1165,7 @@ const de = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Finanzen", report: "Bericht",
       apikey: "API-Schlüssel",
       sponsor: "Sponsoring",
       auth: "Konto",
@@ -1400,6 +1403,7 @@ const de = {
     title: "Rechte von {name}",
     edit: "Rechte festlegen",
     area: {
+      hr: "Personal",
       clients: "Kunden",
       orders: "Aufträge und Angebote",
       products: "Produkte",
@@ -1417,7 +1421,7 @@ const de = {
       content: "Inhalte",
       time: "Zeiterfassung",
     },
-    action: { read: "Ansehen", create: "Anlegen", update: "Bearbeiten", delete: "Löschen", manage: "Verwalten", issue: "Festschreiben", cancel: "Stornieren", export: "Exportieren", use: "Nutzen", publish: "Veröffentlichen" },
+    action: { admin: "Verwaltung", read: "Ansehen", create: "Anlegen", update: "Bearbeiten", delete: "Löschen", manage: "Verwalten", issue: "Festschreiben", cancel: "Stornieren", export: "Exportieren", use: "Nutzen", publish: "Veröffentlichen" },
   },
   share: {
     revoke: "Link beenden",

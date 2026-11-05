@@ -10,9 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/client";
-import { deleteDepartmentAction, permissionsAction, saveDepartmentAction } from "./actions";
+import { deleteCustomRoleAction, deleteDepartmentAction, permissionsAction, saveCustomRoleAction, saveDepartmentAction } from "./actions";
 
 export type Department = { id: string; name: string };
+export type CustomRole = { id: string; name: string; permissions: string[] };
 
 export function DepartmentsCard({ departments, members }: { departments: Department[]; members: { departmentId: string | null }[] }) {
   const { t } = useI18n();
@@ -69,13 +70,129 @@ export function DepartmentsCard({ departments, members }: { departments: Departm
   );
 }
 
+function RightsGrid({ all, mine, chosen, setChosen }: { all: readonly string[]; mine: string[]; chosen: Set<string>; setChosen: (update: (s: Set<string>) => Set<string>) => void }) {
+  const { t } = useI18n();
+  const areas = [...new Set(all.map((p) => p.split(".")[0]))];
+  return (
+    <div className="grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
+      {areas.map((area) => (
+        <div key={area} className="grid gap-1">
+          <div className="text-sm font-medium">{t(`permissions.area.${area}`)}</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {all
+              .filter((p) => p.startsWith(`${area}.`))
+              .map((p) => (
+                <label key={p} className="flex items-center gap-1.5 text-sm">
+                  <Checkbox
+                    checked={chosen.has(p)}
+                    disabled={!mine.includes(p)}
+                    onCheckedChange={(v) =>
+                      setChosen((s) => {
+                        const next = new Set(s);
+                        if (v === true) next.add(p);
+                        else next.delete(p);
+                        return next;
+                      })
+                    }
+                  />
+                  {t(`permissions.action.${p.split(".")[1]}`)}
+                </label>
+              ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Roles with a name: a set of rights to hand to several people at once. */
+export function CustomRolesCard({ roles, members, all, mine }: { roles: CustomRole[]; members: { customRoleId: string | null }[]; all: readonly string[]; mine: string[] }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [editing, setEditing] = useState<CustomRole | null>(null);
+  const [chosen, setChosen] = useState(new Set<string>());
+  const [pending, start] = useTransition();
+  const open = (role: CustomRole) => {
+    setEditing(role);
+    setChosen(new Set(role.permissions));
+  };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-base">{t("hub.roles.title")}</CardTitle>
+        <Button size="sm" variant="outline" onClick={() => open({ id: "", name: "", permissions: [] })}>
+          <Plus className="size-4" /> {t("hub.roles.new")}
+        </Button>
+      </CardHeader>
+      <CardContent className="grid gap-2 text-sm">
+        {roles.length === 0 && <p className="text-muted-foreground">{t("hub.roles.empty")}</p>}
+        {roles.map((r) => (
+          <div key={r.id} className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+            <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => open(r)}>
+              {r.name}
+            </button>
+            <span className="text-xs text-muted-foreground">{t("hub.roles.people", { count: members.filter((m) => m.customRoleId === r.id).length })}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              disabled={pending}
+              aria-label={t("common.delete")}
+              onClick={() =>
+                start(async () => {
+                  const res = await deleteCustomRoleAction(r.id);
+                  if (res.error) toast.error(t(res.error));
+                  router.refresh();
+                })
+              }
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+      <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? editing.name : t("hub.roles.new")}</DialogTitle>
+            <DialogDescription className="sr-only">{t("hub.roles.title")}</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <form
+              className="grid gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                start(async () => {
+                  const res = await saveCustomRoleAction(editing.id || null, editing.name, [...chosen]);
+                  if (res.error) toast.error(t(res.error));
+                  else {
+                    setEditing(null);
+                    router.refresh();
+                  }
+                });
+              }}
+            >
+              <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder={t("hub.roles.name")} aria-label={t("hub.roles.name")} required maxLength={60} autoFocus />
+              <RightsGrid all={all} mine={mine} chosen={chosen} setChosen={setChosen} />
+              <DialogFooter>
+                <Button type="submit" disabled={pending}>
+                  {t("common.save")}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 /** Rights by area; the action words are few, so "clients.read" reads as area + word. */
 export function PermissionsDialog({ member, all, mine, onClose }: { member: { userId: string; name: string; permissions: string[] }; all: readonly string[]; mine: string[]; onClose: () => void }) {
   const { t } = useI18n();
   const router = useRouter();
   const [chosen, setChosen] = useState(new Set(member.permissions));
   const [pending, start] = useTransition();
-  const areas = [...new Set(all.map((p) => p.split(".")[0]))];
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg">
@@ -83,34 +200,7 @@ export function PermissionsDialog({ member, all, mine, onClose }: { member: { us
           <DialogTitle>{t("permissions.title", { name: member.name })}</DialogTitle>
           <DialogDescription className="sr-only">{t("permissions.title", { name: member.name })}</DialogDescription>
         </DialogHeader>
-        <div className="grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
-          {areas.map((area) => (
-            <div key={area} className="grid gap-1">
-              <div className="text-sm font-medium">{t(`permissions.area.${area}`)}</div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {all
-                  .filter((p) => p.startsWith(`${area}.`))
-                  .map((p) => (
-                    <label key={p} className="flex items-center gap-1.5 text-sm">
-                      <Checkbox
-                        checked={chosen.has(p)}
-                        disabled={!mine.includes(p)}
-                        onCheckedChange={(v) =>
-                          setChosen((s) => {
-                            const next = new Set(s);
-                            if (v === true) next.add(p);
-                            else next.delete(p);
-                            return next;
-                          })
-                        }
-                      />
-                      {t(`permissions.action.${p.split(".")[1]}`)}
-                    </label>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <RightsGrid all={all} mine={mine} chosen={chosen} setChosen={setChosen} />
         <DialogFooter>
           <Button
             disabled={pending}

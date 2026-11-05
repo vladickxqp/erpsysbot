@@ -76,6 +76,7 @@ export const PLAN_MODULE_OF: Record<string, string> = {
   invoices: "invoices",
   finance: "finance",
   employees: "team",
+  hr: "team",
   ai: "assistant",
   calendar: "calendar",
   tasks: "tasks",

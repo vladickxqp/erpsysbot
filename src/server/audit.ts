@@ -15,6 +15,11 @@ export async function auditAccess(userId: string, organizationId: string | null,
   await withTenant(organizationId, (tx) => tx.insert(auditLog).values({ organizationId, userId, action, entity: "user", entityId: userId }));
 }
 
+/** A file with company data left the app: who, what, for which period. */
+export async function auditExport(ctx: Pick<Context, "user" | "organization">, action: string, data?: Record<string, unknown>): Promise<void> {
+  await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, action, "export", null, data));
+}
+
 export async function audit(
   tx: Tx,
   ctx: Pick<Context, "user" | "organization">,

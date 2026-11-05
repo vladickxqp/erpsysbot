@@ -88,17 +88,19 @@ export async function saveDeal(ctx: Context, id: string | null, raw: DealInput, 
 export async function moveDeal(ctx: Context, id: string, stage: DealStage): Promise<void> {
   assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.update");
-  await withTenant(ctx.organization.id, async (tx) => {
+  const moved = await withTenant(ctx.organization.id, async (tx) => {
     const [current] = await tx.select().from(deals).where(eq(deals.id, id)).limit(1);
     if (!current) throw new NotFoundError();
-    if (current.stage === stage) return;
+    if (current.stage === stage) return false;
     await tx
       .update(deals)
       .set({ stage, closedAt: closed(stage) ? new Date() : null, updatedAt: new Date() })
       .where(eq(deals.id, id));
     if (stage === "WON") await tx.update(clients).set({ status: "ACTIVE" }).where(and(eq(clients.id, current.clientId), eq(clients.status, "LEAD")));
     await audit(tx, ctx, "deal.move", "deal", id, { from: current.stage, to: stage });
+    return true;
   });
+  if (moved) await (await import("./automations")).fireAutomations(ctx, "deal.stage_changed", id);
 }
 
 export async function deleteDeal(ctx: Context, id: string): Promise<void> {

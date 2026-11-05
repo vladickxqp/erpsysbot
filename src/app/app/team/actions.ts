@@ -11,7 +11,7 @@ import { registrationOpen } from "@/server/settings";
 import { ForbiddenError, type Role } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
 import { assignDepartment, deleteDepartment, saveDepartment } from "@/server/departments";
-import { TeamError, changeRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation, setMemberPermissions } from "@/server/team";
+import { TeamError, assignCustomRole, changeRole, deleteCustomRole, inviteMember, passwordLinkForMember, removeMember, revokeInvitation, saveCustomRole, setMemberPermissions } from "@/server/team";
 
 export type TeamResult = { ok?: boolean; url?: string; mailed?: boolean; error?: string };
 
@@ -34,6 +34,30 @@ export async function permissionsAction(userId: string, permissions: string[]): 
   const ctx = await requireContext();
   return guarded(async () => {
     await setMemberPermissions(ctx, userId, permissions);
+    return { ok: true };
+  });
+}
+
+export async function saveCustomRoleAction(id: string | null, name: string, permissions: string[]): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await saveCustomRole(ctx, id, { name, permissions });
+    return { ok: true };
+  });
+}
+
+export async function deleteCustomRoleAction(id: string): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await deleteCustomRole(ctx, id);
+    return { ok: true };
+  });
+}
+
+export async function assignCustomRoleAction(userId: string, roleId: string | null): Promise<TeamResult> {
+  const ctx = await requireContext();
+  return guarded(async () => {
+    await assignCustomRole(ctx, userId, roleId);
     return { ok: true };
   });
 }

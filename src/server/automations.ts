@@ -13,21 +13,22 @@
 import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { automationRuns, automations, clients, invoices, memberships, orders, products, tasks, telegramLinks, users } from "@/db/schema";
+import { appointments, automationRuns, automations, clients, deals, invoices, memberships, orders, products, projects, tasks, telegramLinks, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { DEFAULT_REGION, formatMoney, isLocale, regionOf, type Locale } from "@/i18n";
 import { audit } from "./audit";
 import { displayName, NotFoundError } from "./clients";
 import { contextFor, type Context } from "./context";
+import { companyLeads, notify } from "./notifications";
 import { addDays, today } from "./money";
 import { requirePermission } from "./permissions";
 import { createTask } from "./tasks";
 import { escapeHtml, sendMessage } from "./telegram/api";
 
-export const EVENT_TRIGGERS = ["client.created", "order.created", "order.completed"] as const;
+export const EVENT_TRIGGERS = ["client.created", "client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "order.created", "order.completed"] as const;
 export const SCHEDULED_TRIGGERS = ["invoice.overdue", "task.overdue", "stock.low"] as const;
 export const TRIGGERS = [...EVENT_TRIGGERS, ...SCHEDULED_TRIGGERS] as const;
-export const ACTIONS = ["task.create", "telegram.notify"] as const;
+export const ACTIONS = ["task.create", "telegram.notify", "inbox.notify", "client.assign"] as const;
 export type Trigger = (typeof TRIGGERS)[number];
 export type Automation = typeof automations.$inferSelect;
 
@@ -42,6 +43,8 @@ export const automationInput = z.object({
       minDaysOverdue: z.coerce.number().int().min(0).max(365).optional(),
       clientType: z.enum(["PERSON", "COMPANY"]).optional(),
       clientStatus: z.enum(["LEAD", "ACTIVE", "INACTIVE"]).optional(),
+      /** The new status of a client or stage of a deal. */
+      toStatus: z.string().trim().max(30).optional(),
     })
     .default({}),
   action: z.enum(ACTIONS),
@@ -51,7 +54,7 @@ export const automationInput = z.object({
       message: z.string().trim().max(2000).optional(),
       dueInDays: z.coerce.number().int().min(0).max(365).optional(),
       priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-      /** "owner", "assignee" (of the subject) or a user id. */
+      /** "owner", "admins", "assignee" (of the subject), "least_busy" or a user id. */
       to: z.string().trim().max(60).optional(),
     })
     .default({}),
@@ -108,6 +111,8 @@ type Subject = {
   assignedUserId?: string | null;
   clientId?: string | null;
   orderId?: string | null;
+  projectId?: string | null;
+  toStatus?: string;
   vars: Record<string, string>;
 };
 
@@ -117,6 +122,7 @@ function matches(rule: Automation, subject: Subject): boolean {
   if (c.minDaysOverdue != null && (subject.daysOverdue ?? 0) < c.minDaysOverdue) return false;
   if (c.clientType && subject.clientType !== c.clientType) return false;
   if (c.clientStatus && subject.clientStatus !== c.clientStatus) return false;
+  if (c.toStatus && subject.toStatus !== c.toStatus) return false;
   return true;
 }
 
@@ -136,6 +142,22 @@ export async function companyContext(organizationId: string): Promise<Context | 
   return contextFor({ sessionId: "automation", userId: u.id, email: u.email, name: u.name, locale: u.locale, isPlatformAdmin: false, activeOrganizationId: organizationId });
 }
 
+/** Whoever looks after the fewest clients, staff first; ties go to who joined first. */
+async function leastBusyMember(organizationId: string): Promise<string> {
+  const people = await getDb()
+    .select({ userId: memberships.userId, role: memberships.role })
+    .from(memberships)
+    .where(eq(memberships.organizationId, organizationId))
+    .orderBy(asc(memberships.createdAt));
+  const loads = await withTenant(organizationId, (tx) =>
+    tx.select({ userId: clients.assignedUserId, n: sql<number>`count(*)::int` }).from(clients).where(isNotNull(clients.assignedUserId)).groupBy(clients.assignedUserId),
+  );
+  const load = new Map(loads.map((l) => [l.userId, Number(l.n)]));
+  const staff = people.filter((p) => p.role !== "VIEWER");
+  const sorted = (staff.length ? staff : people).slice().sort((a, b) => (load.get(a.userId) ?? 0) - (load.get(b.userId) ?? 0));
+  return sorted[0].userId;
+}
+
 async function perform(ctx: Context, rule: Automation, subject: Subject): Promise<string> {
   const p = (rule.params ?? {}) as z.output<typeof automationInput>["params"];
   const target = p.to === "assignee" ? (subject.assignedUserId ?? ctx.user.userId) : p.to && p.to !== "owner" ? p.to : ctx.user.userId;
@@ -148,8 +170,38 @@ async function perform(ctx: Context, rule: Automation, subject: Subject): Promis
       assignedUserId: target,
       clientId: subject.clientId ?? null,
       orderId: subject.orderId ?? null,
+      projectId: subject.projectId ?? null,
     });
     return `task ${task.id}`;
+  }
+  if (rule.action === "client.assign") {
+    if (!subject.clientId) throw new Error("no client");
+    const person = p.to === "least_busy" ? await leastBusyMember(ctx.organization.id) : target;
+    await withTenant(ctx.organization.id, async (tx) => {
+      await tx.update(clients).set({ assignedUserId: person, updatedAt: new Date() }).where(eq(clients.id, subject.clientId!));
+      await audit(tx, ctx, "client.update", "client", subject.clientId!, { assignedUserId: person, rule: rule.id });
+    });
+    await notify(ctx.organization.id, [person], {
+      category: "assigned",
+      kind: "clientAssigned",
+      vars: { client: subject.vars.client ?? "" },
+      href: `/app/clients/${subject.clientId}`,
+      entity: "client",
+      entityId: subject.clientId,
+      dedupeKey: `client-assigned:${subject.clientId}:${person}`,
+    });
+    return `client ${person}`;
+  }
+  if (rule.action === "inbox.notify") {
+    const people = p.to === "admins" || !p.to ? await companyLeads(ctx.organization.id) : [target];
+    const written = await notify(ctx.organization.id, people, {
+      category: "update",
+      kind: "automation",
+      vars: { message: fill(p.message || rule.name, subject.vars) },
+      href: subject.projectId ? `/app/tasks/projects/${subject.projectId}` : subject.clientId ? `/app/clients/${subject.clientId}` : "/app/automations",
+      dedupeKey: `automation:${rule.id}:${subject.key}`,
+    });
+    return `inbox ${written}`;
   }
   // telegram.notify: to one person, or to the company's owners and admins.
   const recipients =
@@ -213,6 +265,15 @@ async function runRules(organizationId: string, trigger: Trigger, subject: Subje
       ran++;
     } catch (e) {
       message = e instanceof Error ? e.message.slice(0, 500) : "error";
+      // A rule that fails must not fail in silence.
+      await notify(organizationId, await companyLeads(organizationId), {
+        category: "failure",
+        kind: "automationFailed",
+        vars: { name: rule.name },
+        href: "/app/automations",
+        priority: 2,
+        dedupeKey: `automation-failed:${rule.id}:${subject.key}`,
+      }).catch(() => undefined);
     }
     await withTenant(organizationId, (tx) => tx.update(automationRuns).set({ ok, message }).where(eq(automationRuns.id, claimed)));
   }
@@ -229,6 +290,22 @@ export async function fireAutomations(ctx: Context, trigger: (typeof EVENT_TRIGG
       if (trigger === "client.created") {
         const [c] = await tx.select().from(clients).where(eq(clients.id, id));
         return c ? { key: `client:${id}`, clientType: c.type, clientStatus: c.status, clientId: id, assignedUserId: c.assignedUserId, vars: { client: displayName(c), number: String(c.number) } } : null;
+      }
+      if (trigger === "client.status_changed") {
+        const [c] = await tx.select().from(clients).where(eq(clients.id, id));
+        return c ? { key: `client:${id}:status:${c.status}:${c.updatedAt.getTime()}`, clientType: c.type, clientStatus: c.status, toStatus: c.status, clientId: id, assignedUserId: c.assignedUserId, vars: { client: displayName(c), status: c.status } } : null;
+      }
+      if (trigger === "deal.stage_changed") {
+        const [d] = await tx.select({ deal: deals, client: clients }).from(deals).innerJoin(clients, eq(clients.id, deals.clientId)).where(eq(deals.id, id));
+        return d ? { key: `deal:${id}:stage:${d.deal.stage}`, amountCents: d.deal.valueCents, toStatus: d.deal.stage, clientId: d.deal.clientId, assignedUserId: d.deal.assignedUserId, vars: { title: d.deal.title, client: displayName(d.client), stage: d.deal.stage, amount: formatMoney(d.deal.valueCents, locale, region) } } : null;
+      }
+      if (trigger === "appointment.completed") {
+        const [a] = await tx.select().from(appointments).where(eq(appointments.id, id));
+        return a ? { key: `appointment:${id}:completed`, clientId: a.clientId, assignedUserId: a.assignedUserId, vars: { title: a.title } } : null;
+      }
+      if (trigger === "project.created" || trigger === "project.completed") {
+        const [p] = await tx.select().from(projects).where(eq(projects.id, id));
+        return p ? { key: `project:${id}:${trigger === "project.created" ? "created" : "completed"}`, clientId: p.clientId, projectId: id, vars: { title: p.name } } : null;
       }
       const [o] = await tx.select({ order: orders, client: clients }).from(orders).innerJoin(clients, eq(clients.id, orders.clientId)).where(eq(orders.id, id));
       if (!o) return null;

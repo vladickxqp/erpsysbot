@@ -1,6 +1,8 @@
 import type { Messages } from "./de";
+import hub from "./hub/uk";
 
 const uk: Messages = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Увесь ваш бізнес. Уся ваша робота." },
   common: {
     save: "Зберегти",
@@ -1164,7 +1166,7 @@ const uk: Messages = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Фінанси", report: "Звіт",
       apikey: "API-ключ",
       sponsor: "Спонсорство",
       auth: "Акаунт",
@@ -1402,6 +1404,7 @@ const uk: Messages = {
     title: "Права: {name}",
     edit: "Налаштувати права",
     area: {
+      hr: "Кадри",
       clients: "Клієнти",
       orders: "Замовлення та пропозиції",
       products: "Товари",
@@ -1419,7 +1422,7 @@ const uk: Messages = {
       content: "Контент",
       time: "Облік часу",
     },
-    action: { read: "Перегляд", create: "Створення", update: "Редагування", delete: "Видалення", manage: "Керування", issue: "Виставлення", cancel: "Сторнування", export: "Експорт", use: "Використання", publish: "Публікація" },
+    action: { admin: "Адміністрування", read: "Перегляд", create: "Створення", update: "Редагування", delete: "Видалення", manage: "Керування", issue: "Виставлення", cancel: "Сторнування", export: "Експорт", use: "Використання", publish: "Публікація" },
   },
   share: {
     revoke: "Відкликати посилання",

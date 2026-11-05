@@ -28,6 +28,9 @@ export const PERMISSIONS = [
   "settings.manage",
   "billing.manage",
   "ai.use",
+  "ai.admin",
+  "hr.read",
+  "hr.manage",
   "calendar.read",
   "calendar.manage",
   "tasks.read",
@@ -59,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "invoices.read", "invoices.create",
     "finance.read",
     "employees.read",
+    "hr.read",
     "ai.use",
     "calendar.read", "calendar.manage",
     "tasks.read", "tasks.manage",
@@ -92,9 +96,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   CUSTOM: [],
 };
 
-export function permissionsFor(role: Role, extra: readonly string[] = []): Set<Permission> {
+export function permissionsFor(role: Role, ...extra: (readonly string[] | null | undefined)[]): Set<Permission> {
   const granted = new Set<Permission>(ROLE_PERMISSIONS[role]);
-  for (const p of extra) if ((PERMISSIONS as readonly string[]).includes(p)) granted.add(p as Permission);
+  for (const list of extra) for (const p of list ?? []) if ((PERMISSIONS as readonly string[]).includes(p)) granted.add(p as Permission);
   return granted;
 }
 

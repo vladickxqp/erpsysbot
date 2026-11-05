@@ -1,6 +1,8 @@
 import type { Messages } from "./de";
+import hub from "./hub/kk";
 
 const kk: Messages = {
+  hub,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",
@@ -1164,7 +1166,7 @@ const kk: Messages = {
     },
   },
   activity: {
-    entity: {
+    entity: { finance: "Қаржы", report: "Есеп",
       apikey: "API кілті",
       sponsor: "Демеушілік",
       auth: "Аккаунт",
@@ -1402,6 +1404,7 @@ const kk: Messages = {
     title: "Құқықтар: {name}",
     edit: "Құқықтарды баптау",
     area: {
+      hr: "Кадрлар",
       clients: "Клиенттер",
       orders: "Тапсырыстар мен ұсыныстар",
       products: "Тауарлар",
@@ -1419,7 +1422,7 @@ const kk: Messages = {
       content: "Контент",
       time: "Уақыт есебі",
     },
-    action: { read: "Қарау", create: "Құру", update: "Өзгерту", delete: "Жою", manage: "Басқару", issue: "Шығару", cancel: "Сторнолау", export: "Экспорт", use: "Пайдалану", publish: "Жариялау" },
+    action: { admin: "Әкімшілік", read: "Қарау", create: "Құру", update: "Өзгерту", delete: "Жою", manage: "Басқару", issue: "Шығару", cancel: "Сторнолау", export: "Экспорт", use: "Пайдалану", publish: "Жариялау" },
   },
   share: {
     revoke: "Сілтемені тоқтату",

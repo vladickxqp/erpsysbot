@@ -1,3 +1,4 @@
+import { auditExport } from "@/server/audit";
 import { PrivacyError, companyExport } from "@/server/privacy";
 import { activeContext } from "@/server/request";
 import { zipStream } from "@/server/zip";
@@ -10,6 +11,7 @@ export async function GET() {
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   try {
     const { filename, entries } = await companyExport(ctx);
+    await auditExport(ctx, "company.export", { files: entries.length });
     return new Response(zipStream(entries), {
       headers: {
         "Content-Type": "application/zip",

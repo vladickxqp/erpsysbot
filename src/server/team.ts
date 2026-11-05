@@ -10,7 +10,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { apiKeys, goals, habits, invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
+import { apiKeys, customRoles, goals, habits, invitations, memberships, organizations, passwordResets, sessions, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { audit } from "./audit";
 import { assertSeat } from "./billing";
@@ -42,6 +42,7 @@ export async function listTeam(ctx: Context) {
       email: users.email,
       role: memberships.role,
       permissions: memberships.permissions,
+      customRoleId: memberships.customRoleId,
       departmentId: memberships.departmentId,
       since: memberships.createdAt,
     })
@@ -72,11 +73,12 @@ async function guardTarget(ctx: Context, userId: string): Promise<void> {
   if (ctx.role === "OWNER") return;
   if (userId === ctx.user.userId) throw new TeamError("OWNER_ONLY");
   const [row] = await getDb()
-    .select({ role: memberships.role, permissions: memberships.permissions })
+    .select({ role: memberships.role, permissions: memberships.permissions, named: customRoles.permissions })
     .from(memberships)
+    .leftJoin(customRoles, eq(customRoles.id, memberships.customRoleId))
     .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
   if (!row) return;
-  if ([...permissionsFor(row.role as Role, row.permissions)].some((p) => !ctx.permissions.has(p))) throw new TeamError("OWNER_ONLY");
+  if ([...permissionsFor(row.role as Role, row.permissions, row.named)].some((p) => !ctx.permissions.has(p))) throw new TeamError("OWNER_ONLY");
 }
 
 /** Creates (or renews) the invitation for an address; returns the secret token for the link. */
@@ -152,7 +154,7 @@ export async function changeRole(ctx: Context, userId: string, role: Role): Prom
   await getDb()
     .update(memberships)
     // A fixed role is exactly its rights: what a custom one held does not stay behind.
-    .set({ role, permissions: [] })
+    .set({ role, permissions: [], customRoleId: null })
     .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.role", "user", userId, { from: current, to: role }));
 }
@@ -170,9 +172,64 @@ export async function setMemberPermissions(ctx: Context, userId: string, wanted:
   const granted = PERMISSIONS.filter((p) => wanted.includes(p) && ctx.permissions.has(p));
   await getDb()
     .update(memberships)
-    .set({ role: "CUSTOM", permissions: granted })
+    .set({ role: "CUSTOM", permissions: granted, customRoleId: null })
     .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
   await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.role", "user", userId, { to: "CUSTOM", permissions: granted.length }));
+}
+
+const roleInput = z.object({ name: z.string().trim().min(1).max(60), permissions: z.array(z.string()).max(PERMISSIONS.length) });
+
+export async function listCustomRoles(ctx: Context) {
+  requirePermission(ctx.permissions, "employees.read");
+  return withTenant(ctx.organization.id, (tx) => tx.select().from(customRoles).orderBy(asc(customRoles.name)));
+}
+
+/** A role with a name. Nobody puts rights into one that they do not hold themselves. */
+export async function saveCustomRole(ctx: Context, id: string | null, raw: z.input<typeof roleInput>): Promise<void> {
+  requirePermission(ctx.permissions, "employees.manage");
+  const input = roleInput.parse(raw);
+  const permissions = PERMISSIONS.filter((p) => input.permissions.includes(p) && ctx.permissions.has(p));
+  await withTenant(ctx.organization.id, async (tx) => {
+    if (id) {
+      const [current] = await tx.select().from(customRoles).where(eq(customRoles.id, id));
+      if (!current) throw new TeamError("INVALID");
+      // Rights one does not hold stay as they are: an edit neither adds nor removes them.
+      const kept = current.permissions.filter((p) => !ctx.permissions.has(p as (typeof PERMISSIONS)[number]));
+      await tx.update(customRoles).set({ name: input.name, permissions: [...new Set([...permissions, ...kept])] }).where(eq(customRoles.id, id));
+    } else {
+      await tx.insert(customRoles).values({ organizationId: ctx.organization.id, name: input.name, permissions }).onConflictDoNothing();
+    }
+    await audit(tx, ctx, "team.role_template", "custom_role", id, { name: input.name, permissions: permissions.length });
+  });
+}
+
+export async function deleteCustomRole(ctx: Context, id: string): Promise<void> {
+  requirePermission(ctx.permissions, "employees.manage");
+  // Whoever held it keeps no rights from it: nothing stays behind unnoticed.
+  await getDb().update(memberships).set({ customRoleId: null }).where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.customRoleId, id)));
+  await withTenant(ctx.organization.id, async (tx) => {
+    await tx.delete(customRoles).where(eq(customRoles.id, id));
+    await audit(tx, ctx, "team.role_template", "custom_role", id, { deleted: true });
+  });
+}
+
+/** Gives one person a named role (their role becomes CUSTOM), or takes it away with null. */
+export async function assignCustomRole(ctx: Context, userId: string, roleId: string | null): Promise<void> {
+  requirePermission(ctx.permissions, "employees.manage");
+  const current = await memberRole(ctx.organization.id, userId);
+  if (!current) throw new TeamError("NOT_MEMBER");
+  if (current === "OWNER" || userId === ctx.user.userId) throw new TeamError("OWNER_ONLY");
+  await guardTarget(ctx, userId);
+  if (roleId) {
+    const [role] = await withTenant(ctx.organization.id, (tx) => tx.select().from(customRoles).where(eq(customRoles.id, roleId)));
+    if (!role) throw new TeamError("INVALID");
+    if (ctx.role !== "OWNER" && role.permissions.some((p) => !ctx.permissions.has(p as (typeof PERMISSIONS)[number]))) throw new TeamError("OWNER_ONLY");
+  }
+  await getDb()
+    .update(memberships)
+    .set(roleId ? { role: "CUSTOM", customRoleId: roleId, permissions: [] } : { customRoleId: null })
+    .where(and(eq(memberships.organizationId, ctx.organization.id), eq(memberships.userId, userId)));
+  await withTenant(ctx.organization.id, (tx) => audit(tx, ctx, "team.role", "user", userId, { to: "CUSTOM", customRole: roleId }));
 }
 
 export async function removeMember(ctx: Context, userId: string): Promise<void> {
