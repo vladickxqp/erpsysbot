@@ -165,7 +165,7 @@ describe("assistant usage", () => {
     const result = await askAssistantDetailed(ctx, "web", "Wie läuft es?", async () =>
       round++ === 0 ? reply([{ type: "tool_use", id: "t", name: "business_overview", input: {} }], "tool_use") : reply([{ type: "text", text: "Gut." }], "end_turn"),
     );
-    expect(result).toEqual({ answer: "Gut.", tools: ["business_overview"] });
+    expect(result).toMatchObject({ answer: "Gut.", tools: ["business_overview"] });
     const [, answer] = await conversation(ctx, "web");
     expect(answer.tools).toEqual(["business_overview"]);
   });

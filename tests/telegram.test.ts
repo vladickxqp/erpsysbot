@@ -162,15 +162,15 @@ describe("assistant", () => {
       if (calls.length === 1) return reply([{ type: "tool_use", id: "t1", name: "search_clients", input: { query: "Sonnen" } }], "tool_use");
       return reply([{ type: "text", text: "Gefunden: Sonnenschein KG" }], "end_turn");
     };
-    const answer = await askAssistant(ctx, "web", "Gibt es Sonnenschein?", create);
+    const answer = await askAssistant(ctx, "telegram", "Gibt es Sonnenschein?", create);
     expect(answer).toBe("Gefunden: Sonnenschein KG");
     const toolResult = JSON.stringify(calls[1].messages.at(-1));
     expect(toolResult).toContain("Sonnenschein KG");
     expect(calls[0].system).toContain("Assistent GmbH");
-    expect((await conversation(ctx, "web")).map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect((await conversation(ctx, "telegram")).map((m) => m.role)).toEqual(["user", "assistant"]);
 
     // The next question carries the earlier exchange.
-    await askAssistant(ctx, "web", "Danke", async (params) => {
+    await askAssistant(ctx, "telegram", "Danke", async (params) => {
       expect(params.messages).toHaveLength(3);
       return reply([{ type: "text", text: "Gern" }], "end_turn");
     });

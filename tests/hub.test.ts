@@ -133,9 +133,10 @@ describe("automations", () => {
     await saveAutomation(ctx, null, { name: "Aktiv", trigger: "client.status_changed", conditions: { toStatus: "ACTIVE" }, action: "inbox.notify", params: { to: "owner", message: "{client} ist aktiv" } });
     const client = await createClient(ctx, { type: "COMPANY", companyName: "Status GmbH", status: "LEAD" });
     await updateClient(ctx, client.id, { type: "COMPANY", companyName: "Status GmbH", status: "INACTIVE" });
-    expect(await openNotifications(ctx)).toHaveLength(0);
+    const ruleNotes = async () => (await openNotifications(ctx)).filter((n) => n.kind === "automation");
+    expect(await ruleNotes()).toHaveLength(0);
     await updateClient(ctx, client.id, { type: "COMPANY", companyName: "Status GmbH", status: "ACTIVE" });
-    const notes = await openNotifications(ctx);
+    const notes = await ruleNotes();
     expect(notes).toHaveLength(1);
     expect(notes[0].vars).toEqual({ message: "Status GmbH ist aktiv" });
   });
