@@ -70,6 +70,7 @@ export function Generator({ defaultLanguage }: { defaultLanguage: string }) {
   const [items, setItems] = useState<Item[]>([]);
   const [pending, start] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [productionDate, setProductionDate] = useState("");
 
   const generate = () =>
     start(async () => {
@@ -99,7 +100,7 @@ export function Generator({ defaultLanguage }: { defaultLanguage: string }) {
       const chosen = items.filter((i) => i.keep);
       const res = await keepSuggestionsAction(
         chosen.map((i) => ({ title: i.title, text: i.text, hashtags: i.hashtags.split(/\s+/).filter(Boolean), day: i.day })),
-        { platform, contentType, plan: kind === "plan" },
+        { platform, contentType, plan: kind === "plan", productionDate: productionDate || null },
       );
       if (res.error) toast.error(t(res.error));
       else {
@@ -181,6 +182,10 @@ export function Generator({ defaultLanguage }: { defaultLanguage: string }) {
             <Button variant="outline" size="sm" onClick={() => setItems((list) => list.map((i) => ({ ...i, keep: chosen < list.length })))}>
               {chosen < items.length ? t("studio.gen.selectAll") : t("studio.gen.selectNone")}
             </Button>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              {t("hub.content.withTasks")}
+              <Input type="date" className="h-8 w-36" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} />
+            </label>
             <Button size="sm" onClick={keep} disabled={pending || chosen === 0}>
               {t(kind === "plan" ? "studio.gen.keepPlan" : "studio.gen.keep", { count: String(chosen) })}
             </Button>

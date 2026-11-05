@@ -10,6 +10,8 @@ export function startScheduler(): void {
   const run = async () => {
     await job(() => import("./recurring").then((m) => m.runAllRecurring()));
     await job(() => import("./notifications").then((m) => m.deliverWaiting()));
+    await job(() => import("./daily-jobs").then((m) => m.runDailyJobs()));
+    await job(() => import("./assistant/agents").then((m) => m.runDueAgents()));
   };
   timer = setInterval(run, 15 * 60_000);
   timer.unref?.();

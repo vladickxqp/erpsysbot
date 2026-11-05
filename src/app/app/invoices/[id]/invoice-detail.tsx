@@ -53,7 +53,9 @@ export function InvoiceDetail({
   mail,
   reminders,
   can,
+  ai,
 }: {
+  ai: boolean;
   invoice: Detail;
   clientName: string;
   items: ItemRow[];
@@ -253,7 +255,7 @@ export function InvoiceDetail({
                         <Download className="size-4" /> PDF
                       </a>
                     </Button>
-                    {mail && can.edit && <SendButton kind="reminder" id={r.id} email={clientEmail} />}
+                    {mail && can.edit && <SendButton kind="reminder" id={r.id} email={clientEmail} draftFor={ai ? invoice.id : undefined} />}
                   </div>
                 </div>
               ))}

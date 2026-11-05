@@ -124,6 +124,7 @@ export async function createClient(
   });
   // After the commit; loaded lazily (automations use this module too).
   await (await import("./automations")).fireAutomations(ctx, "client.created", created.id);
+  await (await import("./assistant/workflows")).welcomeClient(ctx, created);
   return created;
 }
 

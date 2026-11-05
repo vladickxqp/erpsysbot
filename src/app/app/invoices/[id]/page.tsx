@@ -7,6 +7,7 @@ import { asLines } from "@/server/orders";
 import { requirePageContext } from "@/server/request";
 import { mailAvailable } from "@/server/mail";
 import { listReminders } from "@/server/reminders";
+import { assistantAvailable } from "@/server/assistant/run";
 import { InvoiceDetail } from "./invoice-detail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +29,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const reminders = await listReminders(ctx, id);
   return (
     <InvoiceDetail
+      ai={assistantAvailable() && ctx.permissions.has("ai.use")}
       invoice={{
         id: invoice.id,
         kind: invoice.kind,

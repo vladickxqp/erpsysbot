@@ -5,6 +5,8 @@ import { getT } from "@/i18n/server";
 import { formatDate } from "@/i18n";
 import { displayName, getClient, NotFoundError } from "@/server/clients";
 import { requirePageContext } from "@/server/request";
+import { assistantAvailable } from "@/server/assistant/run";
+import { ClientNext } from "./client-ai";
 import { ClientDetail } from "./client-detail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -55,6 +57,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       canEdit={ctx.permissions.has("clients.update")}
       canDelete={ctx.permissions.has("clients.delete")}
     />
+    <ClientNext clientId={client.id} ai={assistantAvailable() && ctx.permissions.has("ai.use")} canTask={ctx.permissions.has("tasks.manage")} />
     <ClientCrm
       clientId={client.id}
       contacts={contacts.map((c) => ({ id: c.id, name: c.name, role: c.role, email: c.email, phone: c.phone }))}

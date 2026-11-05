@@ -127,8 +127,8 @@ describe("archive and search", () => {
     const { createTask } = await import("@/server/tasks");
     await createTask(ctx, { title: "Sonnenschein anrufen" });
     expect((await searchAll(ctx, "Sonnen")).hits.map((h) => h.kind).sort()).toEqual(["client", "invoice", "task"]);
-    expect(await searchAll(ctx, "x")).toEqual([]);
-    expect(await searchAll(await newCompany("Andere GmbH"), "Sonnen")).toEqual([]);
+    expect((await searchAll(ctx, "x")).hits).toEqual([]);
+    expect((await searchAll(await newCompany("Andere GmbH"), "Sonnen")).hits).toEqual([]);
     const viewer = await newMember(ctx, "VIEWER");
     expect((await searchAll(viewer, "Sonnen")).hits.map((h) => h.kind).sort()).toEqual(["client", "task"]);
 

@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getT } from "@/i18n/server";
+import { contentWithTasks } from "@/server/assistant/workflows";
 import { ZodError } from "zod";
 import { AssistantError } from "@/server/assistant/run";
 import { localParts, zonedTime } from "@/server/calendar";
@@ -194,14 +196,25 @@ export async function generateAction(input: GenerationInput): Promise<{ items?: 
  */
 export async function keepSuggestionsAction(
   items: { title: string; text: string; hashtags: string[]; day: number }[],
-  base: { platform: ContentInput["platform"]; contentType: ContentInput["contentType"]; plan: boolean },
+  base: { platform: ContentInput["platform"]; contentType: ContentInput["contentType"]; plan: boolean; productionDate?: string | null },
 ): Promise<ContentResult & { count?: number }> {
   const ctx = await requireContext();
   try {
     const tz = ctx.organization.timezone;
     const start = today(tz);
     let created = 0;
+    const { t } = await getT();
     for (const s of items.slice(0, 30)) {
+      if (base.productionDate) {
+        await contentWithTasks(
+          ctx,
+          { title: s.title.slice(0, 300) || "—", body: s.text, hashtags: s.hashtags, platform: base.platform, contentType: base.contentType },
+          base.productionDate,
+          (step, title) => t(`hub.content.step_${step}`, { title }),
+        );
+        created++;
+        continue;
+      }
       await createContent(ctx, {
         title: s.title.slice(0, 300) || "—",
         body: s.text,

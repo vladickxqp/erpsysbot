@@ -3,6 +3,9 @@ import { dayBounds, listAppointments, localParts } from "@/server/calendar";
 import { today } from "@/server/money";
 import { moduleOn } from "@/server/modules";
 import { myPreferences } from "@/server/preferences";
+import { assistantAvailable } from "@/server/assistant/run";
+import { storedSummary } from "@/server/assistant/workflows";
+import { myInsights } from "@/server/insights";
 import { requireContext } from "@/server/request";
 import { fitIntoDay, myDayTasks, suggestedOrder } from "@/server/task-hub";
 import { TodayView } from "./today-view";
@@ -18,6 +21,7 @@ export default async function TodayPage() {
   const day = today(tz);
   const showsTasks = ctx.permissions.has("tasks.read") && moduleOn(ctx, "tasks");
   const showsCalendar = ctx.permissions.has("calendar.read") && moduleOn(ctx, "calendar");
+  const [insights, summary] = [await myInsights(ctx), await storedSummary(ctx)];
   const [tasks, appointments, prefs] = await Promise.all([
     showsTasks ? myDayTasks(ctx, day) : Promise.resolve([]),
     showsCalendar ? listAppointments(ctx, { ...dayBounds(day, tz), userId: ctx.user.userId, activeOnly: true }) : Promise.resolve([]),
@@ -45,6 +49,9 @@ export default async function TodayPage() {
       hasWorkHours={!!prefs.workHours}
       workingToday={!!work}
       canManage={ctx.permissions.has("tasks.manage")}
+      insights={insights}
+      summary={summary}
+      ai={assistantAvailable() && ctx.permissions.has("ai.use")}
     />
   );
 }

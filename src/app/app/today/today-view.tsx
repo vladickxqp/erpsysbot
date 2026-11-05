@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Ban, CalendarDays, CheckCircle2, Clock, Flag, Plus, Sun, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, CalendarDays, CheckCircle2, Clock, Flag, Plus, Sparkles, Sun, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { daySummaryAction } from "@/app/app/assistant/actions";
+import { InsightCard } from "@/components/app/insight-card";
 import { PageHeader } from "@/components/app/page";
 import { QuickTaskButton } from "@/components/app/quick-task";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import { cn } from "@/lib/utils";
+import type { Insight } from "@/server/insights";
 import { changeTaskAction, orderPlanAction, planTaskAction, type HubResult } from "../tasks/hub-actions";
 
 type DayTask = { id: string; title: string; priority: string; status: string; dueDate: string | null; estimateMinutes: number | null; projectName: string | null; blocked: boolean };
@@ -26,6 +29,9 @@ type Props = {
   hasWorkHours: boolean;
   workingToday: boolean;
   canManage: boolean;
+  insights: Insight[];
+  summary: string | null;
+  ai: boolean;
 };
 
 export function TodayView(p: Props) {
@@ -33,6 +39,13 @@ export function TodayView(p: Props) {
   const router = useRouter();
   const [plan, setPlan] = useState(p.planned);
   const [pending, start] = useTransition();
+  const [summary, setSummary] = useState(p.summary);
+  const write = () =>
+    start(async () => {
+      const result = await daySummaryAction();
+      if (result.text) setSummary(result.text);
+      else toast.error(t(result.error ?? "common.error"));
+    });
   const run = (work: () => Promise<HubResult>) =>
     start(async () => {
       const result = await work();
@@ -101,6 +114,21 @@ export function TodayView(p: Props) {
       <PageHeader title={t("hub.today.title")} description={formatDate(p.day, locale, region)} actions={<QuickTaskButton />} />
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="grid h-fit gap-4">
+          {(p.ai || summary) && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="size-4 text-primary" aria-hidden /> {t("hub.ai.daySummary")}
+                </CardTitle>
+                {p.ai && !summary && (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={write}>
+                    {t("hub.ai.writeSummary")}
+                  </Button>
+                )}
+              </CardHeader>
+              {summary && <CardContent className="whitespace-pre-wrap text-sm">{summary}</CardContent>}
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -134,6 +162,9 @@ export function TodayView(p: Props) {
         </div>
 
         <div className="grid h-fit gap-4">
+          {p.insights.slice(0, 3).map((insight) => (
+            <InsightCard key={insight.key} insight={insight} compact />
+          ))}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

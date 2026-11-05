@@ -7,6 +7,7 @@
 import { and, asc, eq, lte, ne } from "drizzle-orm";
 import { contentItems, tasks } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { decideAction, pendingActions } from "./assistant/actions";
 import { getContent, updateContent } from "./content";
 import type { Context } from "./context";
 import { NotFoundError } from "./clients";
@@ -36,19 +37,28 @@ export type InboxItem = {
   insight?: Insight;
 };
 
-type Source = (ctx: Context) => Promise<InboxItem[]>;
-
-/** Modules add what waits for a decision here. */
-const approvalSources: Source[] = [];
-export function addApprovalSource(source: Source): void {
-  approvalSources.push(source);
-}
-
 type Decide = (ctx: Context, id: string, approve: boolean) => Promise<void>;
 const deciders = new Map<string, Decide>();
-export function addDecider(kind: string, decide: Decide): void {
-  deciders.set(kind, decide);
+const addDecider = (kind: string, decide: Decide) => deciders.set(kind, decide);
+
+async function aiProposals(ctx: Context): Promise<InboxItem[]> {
+  if (!ctx.permissions.has("ai.use")) return [];
+  return (await pendingActions(ctx)).map((a) => ({
+    id: `ai:${a.id}`,
+    category: "approval",
+    kind: "aiProposal",
+    vars: { tool: a.tool },
+    href: a.conversationId ? `/app/assistant?c=${a.conversationId}` : "/app/assistant",
+    at: a.createdAt.toISOString(),
+    priority: 1,
+    read: false,
+    actions: ["open", "approve", "reject"],
+  }));
 }
+
+addDecider("ai", async (ctx, id, approve) => {
+  await decideAction(ctx, id, approve);
+});
 
 async function dueTasks(ctx: Context): Promise<InboxItem[]> {
   if (!ctx.permissions.has("tasks.read") || !moduleOn(ctx, "tasks")) return [];
@@ -115,8 +125,7 @@ export async function inbox(ctx: Context): Promise<InboxItem[]> {
   const notes = await openNotifications(ctx);
   const due = await dueTasks(ctx);
   const reviews = await contentReviews(ctx);
-  const extra: InboxItem[] = [];
-  for (const source of approvalSources) extra.push(...(await source(ctx)));
+  const extra: InboxItem[] = await aiProposals(ctx);
   const insights = await myInsights(ctx);
 
   // A task already listed as due needs no second line for having been assigned.
