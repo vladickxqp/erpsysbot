@@ -227,7 +227,7 @@ export function CommandPalette({ items, permissions, offModules, favorites, assi
                       data-index={at}
                       role="option"
                       aria-selected={at === active}
-                      onMouseEnter={() => setActive(at)}
+                      onMouseMove={() => at !== active && setActive(at)}
                       onClick={entry.run}
                       className={cn("group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm", at === active && "bg-accent text-accent-foreground")}
                     >
