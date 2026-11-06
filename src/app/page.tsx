@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LegalLinks } from "@/components/app/legal-links";
 import { Logo } from "@/components/app/logo";
 import { Audiences } from "@/components/landing/audiences";
-import { BackdropVideo } from "@/components/landing/backdrop-video";
+import { BackdropScene } from "@/components/landing/backdrop-scene";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { ProductMock } from "@/components/landing/product-mock";
 import { HeroScroll, Reveal, ScrollTilt } from "@/components/landing/scroll-fx";
@@ -86,7 +86,7 @@ export default async function Home() {
 
       <HeroScroll className="relative flex min-h-dvh flex-col overflow-hidden">
         <div className="hero-film absolute inset-0">
-          <BackdropVideo priority />
+          <BackdropScene priority />
         </div>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,8,20,0.55),transparent_70%)]" />
         <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-[#050814] to-transparent" />
@@ -270,7 +270,7 @@ export default async function Home() {
       </section>
 
       <section className="relative mx-4 mb-10 overflow-hidden rounded-[2rem] border border-white/10 sm:mx-6 lg:mx-auto lg:max-w-6xl">
-        <BackdropVideo className="opacity-80" />
+        <BackdropScene className="opacity-80" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050814]/85 via-[#050814]/35 to-transparent" />
         <Reveal className="relative px-6 py-24 text-center sm:py-32">
           <h2 className="text-gradient mx-auto max-w-2xl text-4xl font-semibold tracking-tight sm:text-6xl">{t("landing.final.title")}</h2>

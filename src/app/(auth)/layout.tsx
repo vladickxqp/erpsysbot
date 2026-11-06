@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LegalLinks } from "@/components/app/legal-links";
 import { LocaleSwitch } from "@/components/app/locale-switch";
 import { Logo } from "@/components/app/logo";
-import { BackdropVideo } from "@/components/landing/backdrop-video";
+import { BackdropScene } from "@/components/landing/backdrop-scene";
 import { getT } from "@/i18n/server";
 import { TRIAL_DAYS } from "@/server/billing";
 import "../landing.css";
@@ -14,7 +14,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   return (
     <div className="auth-shell dark relative grid lg:grid-cols-[1.15fr_1fr]">
       <aside className="relative hidden overflow-hidden lg:sticky lg:top-0 lg:block lg:h-dvh">
-        <BackdropVideo priority />
+        <BackdropScene priority />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#050814]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050814]/80 via-transparent to-[#050814]/40" />
         <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">
@@ -39,7 +39,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
 
       <div className="relative flex min-h-dvh flex-col overflow-hidden">
         <div className="absolute inset-0 opacity-40 lg:hidden">
-          <BackdropVideo />
+          <BackdropScene />
           <div className="absolute inset-0 bg-gradient-to-b from-[#050814]/40 to-[#050814]" />
         </div>
         <header className="relative flex h-16 items-center justify-between px-4 sm:px-8 lg:justify-end">
