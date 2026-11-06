@@ -1,8 +1,10 @@
 import type { Messages } from "./de";
 import hub from "./hub/es";
+import invoicing from "./invoicing/es";
 
 const es: Messages = {
   hub,
+  invoicing,
   brand: { name: "NEXORA ONE", tagline: "Una plataforma. Todo tu negocio. Todo tu trabajo." },
   common: {
     save: "Guardar",

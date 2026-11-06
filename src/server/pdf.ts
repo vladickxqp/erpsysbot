@@ -9,8 +9,8 @@
  *
  * The seller's country decides the rest (src/lib/countries.ts): currency,
  * paper (Letter in the US), VAT or sales tax, the names of its tax numbers,
- * IBAN or account number, which note an untaxed invoice carries. The
- * document's language is the user's.
+ * IBAN or account number, which note an untaxed invoice carries. An invoice
+ * brings its own language and look (layout, colour, footer, payment text).
  *
  * DejaVu Sans (assets/fonts, free licence) covers umlauts, €, Cyrillic and
  * the Kazakh and Ukrainian letters.
@@ -21,8 +21,10 @@ import fontkit from "@pdf-lib/fontkit";
 import { degrees, PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Locale } from "@/i18n";
 import { cityLine, countryProfile } from "@/lib/countries";
+import { DOCUMENT_LABELS as LABELS, fill, type DocumentLabels as Labels } from "@/lib/document-labels";
+import { DEFAULT_STYLE, taxFree, taxNote, type InvoiceStyle } from "@/lib/invoicing";
 import type { Invoice, InvoiceItem, Party, Seller } from "./invoices";
-import { totals } from "./money";
+import { discountCents, lineList, totals } from "./money";
 import { asLines } from "./orders";
 
 const MM = 72 / 25.4;
@@ -33,107 +35,15 @@ const INK = rgb(0.06, 0.09, 0.16);
 const MUTED = rgb(0.39, 0.45, 0.55);
 const LINE = rgb(0.89, 0.91, 0.94);
 const ACCENT = rgb(0.23, 0.51, 0.96);
+const WHITE = rgb(1, 1, 1);
 
-const LABELS = {
-  de: {
-    invoice: "Rechnung", creditNote: "Gutschrift", draft: "ENTWURF", number: "Rechnungsnr.", noteNumber: "Gutschriftnr.",
-    date: "Datum", serviceDate: "Leistungsdatum", due: "Fällig am", client: "Kundennr.", pos: "Pos.", description: "Beschreibung",
-    qty: "Menge", unitPrice: "Einzelpreis", vat: "USt.", amount: "Betrag", net: "Nettobetrag", vatOn: "USt. {rate} % auf {net}",
-    total: "Gesamtbetrag", smallBusiness: "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.",
-    pay: "Bitte überweisen Sie {amount} bis zum {due} unter Angabe der Rechnungsnummer.", corrects: "Gutschrift zur Rechnung {number}.",
-    taxNumber: "Steuernr.", vatId: "USt-IdNr.", page: "Seite {n} von {of}", discount: "Rabatt",
-    quote: "Angebot", quoteNumber: "Angebotsnr.", validUntil: "Gültig bis", quoteValid: "Dieses Angebot gilt bis zum {date}.",
-    reminder1: "Zahlungserinnerung", reminderN: "{n}. Mahnung",
-    reminderIntro: "Zu der folgenden Rechnung haben wir noch keinen vollständigen Zahlungseingang festgestellt:",
-    invoiceRef: "Rechnung {number} vom {date}, fällig am {due}", open: "Offener Betrag", fee: "Mahngebühr", toPay: "Zu zahlen",
-    reminderPay: "Bitte überweisen Sie {amount} bis zum {due}. Falls Sie bereits gezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.",
-    tax: "Steuer", subtotal: "Zwischensumme", salesTaxOn: "Sales Tax {rate} % auf {net}",
-    smallBusinessAT: "Umsatzsteuerbefreit – Kleinunternehmer gemäß § 6 Abs. 1 Z 27 UStG.",
-    noVat: "Keine Umsatzsteuer: Der Verkäufer ist nicht umsatzsteuerlich registriert.", account: "Kontonr.", bankCode: "Bankleitzahl",
-  },
-  en: {
-    invoice: "Invoice", creditNote: "Credit note", draft: "DRAFT", number: "Invoice no.", noteNumber: "Credit note no.",
-    date: "Date", serviceDate: "Service date", due: "Due", client: "Client no.", pos: "No.", description: "Description",
-    qty: "Qty", unitPrice: "Unit price", vat: "VAT", amount: "Amount", net: "Net amount", vatOn: "VAT {rate} % on {net}",
-    total: "Total", smallBusiness: "No VAT charged under § 19 UStG (small business).",
-    pay: "Please pay {amount} by {due}, quoting the invoice number.", corrects: "Credit note for invoice {number}.",
-    taxNumber: "Tax no.", vatId: "VAT ID", page: "Page {n} of {of}", discount: "Discount",
-    quote: "Quote", quoteNumber: "Quote no.", validUntil: "Valid until", quoteValid: "This quote is valid until {date}.",
-    reminder1: "Payment reminder", reminderN: "Reminder no. {n}",
-    reminderIntro: "We have not yet received full payment of the following invoice:",
-    invoiceRef: "Invoice {number} of {date}, due {due}", open: "Amount open", fee: "Reminder fee", toPay: "To pay",
-    reminderPay: "Please pay {amount} by {due}. If you have already paid, please disregard this letter.",
-    tax: "Tax", subtotal: "Subtotal", salesTaxOn: "Sales tax {rate} % on {net}",
-    smallBusinessAT: "VAT exempt – small business under § 6 (1) 27 UStG.",
-    noVat: "No VAT charged: the seller is not registered for VAT.", account: "Account no.", bankCode: "Bank code",
-  },
-  ru: {
-    invoice: "Счёт", creditNote: "Кредит-нота", draft: "ЧЕРНОВИК", number: "Счёт №", noteNumber: "Кредит-нота №",
-    date: "Дата", serviceDate: "Дата услуги", due: "Оплатить до", client: "Клиент №", pos: "№", description: "Описание",
-    qty: "Кол-во", unitPrice: "Цена", vat: "НДС", amount: "Сумма", net: "Сумма без НДС", vatOn: "НДС {rate} % с {net}",
-    total: "Итого", smallBusiness: "Согласно § 19 UStG налог с оборота не взимается.",
-    pay: "Пожалуйста, оплатите {amount} до {due}, указав номер счёта.", corrects: "Кредит-нота к счёту {number}.",
-    taxNumber: "Налоговый №", vatId: "Номер плательщика НДС", page: "Страница {n} из {of}", discount: "Скидка",
-    quote: "Коммерческое предложение", quoteNumber: "Предложение №", validUntil: "Действует до", quoteValid: "Предложение действует до {date}.",
-    reminder1: "Напоминание об оплате", reminderN: "{n}-е напоминание",
-    reminderIntro: "По следующему счёту оплата поступила не полностью:",
-    invoiceRef: "Счёт {number} от {date}, срок оплаты {due}", open: "Остаток", fee: "Сбор за напоминание", toPay: "К оплате",
-    reminderPay: "Пожалуйста, оплатите {amount} до {due}. Если вы уже оплатили, просто проигнорируйте это письмо.",
-    tax: "Налог", subtotal: "Подытог", salesTaxOn: "Налог с продаж {rate} % с {net}",
-    smallBusinessAT: "Освобождено от НДС как малое предприятие согласно § 6 Abs. 1 Z 27 UStG.",
-    noVat: "Без НДС: продавец не является плательщиком НДС.", account: "Р/с", bankCode: "Код банка",
-  },
-  uk: {
-    invoice: "Рахунок", creditNote: "Кредит-нота", draft: "ЧЕРНЕТКА", number: "Рахунок №", noteNumber: "Кредит-нота №",
-    date: "Дата", serviceDate: "Дата послуги", due: "Сплатити до", client: "Клієнт №", pos: "№", description: "Опис",
-    qty: "К-сть", unitPrice: "Ціна", vat: "ПДВ", amount: "Сума", net: "Сума без ПДВ", vatOn: "ПДВ {rate} % з {net}",
-    total: "Разом", smallBusiness: "Згідно з § 19 UStG податок з обороту не нараховується.",
-    pay: "Будь ласка, сплатіть {amount} до {due}, вказавши номер рахунку.", corrects: "Кредит-нота до рахунку {number}.",
-    taxNumber: "Податковий №", vatId: "Номер платника ПДВ", page: "Сторінка {n} з {of}", discount: "Знижка",
-    quote: "Комерційна пропозиція", quoteNumber: "Пропозиція №", validUntil: "Дійсна до", quoteValid: "Пропозиція дійсна до {date}.",
-    reminder1: "Нагадування про оплату", reminderN: "{n}-е нагадування",
-    reminderIntro: "За наступним рахунком оплату отримано не в повному обсязі:",
-    invoiceRef: "Рахунок {number} від {date}, сплатити до {due}", open: "Залишок", fee: "Збір за нагадування", toPay: "До сплати",
-    reminderPay: "Будь ласка, сплатіть {amount} до {due}. Якщо ви вже сплатили, просто проігноруйте цей лист.",
-    tax: "Податок", subtotal: "Проміжна сума", salesTaxOn: "Податок з продажу {rate} % з {net}",
-    smallBusinessAT: "Звільнено від ПДВ як малий бізнес згідно з § 6 Abs. 1 Z 27 UStG.",
-    noVat: "Без ПДВ: продавець не є платником ПДВ.", account: "Р/р", bankCode: "Код банку",
-  },
-  kk: {
-    invoice: "Шот", creditNote: "Кредит-нота", draft: "НОБАЙ", number: "Шот №", noteNumber: "Кредит-нота №",
-    date: "Күні", serviceDate: "Қызмет күні", due: "Төлеу мерзімі", client: "Клиент №", pos: "№", description: "Сипаттама",
-    qty: "Саны", unitPrice: "Бағасы", vat: "ҚҚС", amount: "Сомасы", net: "ҚҚС-сыз сома", vatOn: "ҚҚС {rate} % ({net})",
-    total: "Барлығы", smallBusiness: "§ 19 UStG бойынша айналым салығы алынбайды.",
-    pay: "{amount} сомасын {due} дейін шот нөмірін көрсетіп төлеуіңізді сұраймыз.", corrects: "{number} шотына кредит-нота.",
-    taxNumber: "Салық нөмірі", vatId: "ҚҚС төлеуші нөмірі", page: "Бет {n} / {of}", discount: "Жеңілдік",
-    quote: "Коммерциялық ұсыныс", quoteNumber: "Ұсыныс №", validUntil: "Жарамды мерзімі", quoteValid: "Ұсыныс {date} дейін жарамды.",
-    reminder1: "Төлем туралы еске салу", reminderN: "{n}-еске салу",
-    reminderIntro: "Келесі шот бойынша төлем толық түспеді:",
-    invoiceRef: "{date} күнгі {number} шоты, төлеу мерзімі {due}", open: "Қалдық", fee: "Еске салу алымы", toPay: "Төлеуге",
-    reminderPay: "{amount} сомасын {due} дейін төлеуіңізді сұраймыз. Егер төлеп қойсаңыз, бұл хатты елемеңіз.",
-    tax: "Салық", subtotal: "Аралық сома", salesTaxOn: "Сатудан алынатын салық {rate} % ({net})",
-    smallBusinessAT: "§ 6 Abs. 1 Z 27 UStG бойынша шағын кәсіпкер ретінде ҚҚС-тан босатылған.",
-    noVat: "ҚҚС-сыз: сатушы ҚҚС төлеуші емес.", account: "Есеп шот", bankCode: "Банк коды",
-  },
-  es: {
-    invoice: "Factura", creditNote: "Nota de crédito", draft: "BORRADOR", number: "Factura n.º", noteNumber: "Nota de crédito n.º",
-    date: "Fecha", serviceDate: "Fecha del servicio", due: "Vence", client: "Cliente n.º", pos: "N.º", description: "Descripción",
-    qty: "Cant.", unitPrice: "Precio unit.", vat: "IVA", amount: "Importe", net: "Base imponible", vatOn: "IVA {rate} % sobre {net}",
-    total: "Total", smallBusiness: "Sin IVA según § 19 UStG (pequeña empresa).",
-    pay: "Por favor, pague {amount} antes del {due}, indicando el número de factura.", corrects: "Nota de crédito de la factura {number}.",
-    taxNumber: "N.º fiscal", vatId: "ID de IVA", page: "Página {n} de {of}", discount: "Descuento",
-    quote: "Cotización", quoteNumber: "Cotización n.º", validUntil: "Válida hasta", quoteValid: "Esta cotización es válida hasta el {date}.",
-    reminder1: "Recordatorio de pago", reminderN: "Recordatorio n.º {n}",
-    reminderIntro: "Aún no hemos recibido el pago completo de la siguiente factura:",
-    invoiceRef: "Factura {number} del {date}, vence el {due}", open: "Importe pendiente", fee: "Cargo por recordatorio", toPay: "A pagar",
-    reminderPay: "Por favor, pague {amount} antes del {due}. Si ya pagó, ignore esta carta.",
-    tax: "Impuesto", subtotal: "Subtotal", salesTaxOn: "Impuesto sobre ventas {rate} % sobre {net}",
-    smallBusinessAT: "Exento de IVA como pequeña empresa según § 6 (1) 27 UStG.",
-    noVat: "Sin IVA: el vendedor no está registrado a efectos del IVA.", account: "Cuenta", bankCode: "Código bancario",
-  },
-} as const;
+/** "#2563eb" as a colour, and the ink that reads on it. */
+function accentOf(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
+  return { color: rgb(r, g, b), ink: 0.299 * r + 0.587 * g + 0.114 * b > 0.6 ? INK : WHITE };
+}
 
-type Labels = Record<keyof (typeof LABELS)["de"], string>;
+
 
 let fonts: Promise<[Uint8Array, Uint8Array]> | null = null;
 function loadFonts() {
@@ -142,7 +52,6 @@ function loadFonts() {
   return fonts;
 }
 
-const fill = (text: string, vars: Record<string, string>) => text.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
 
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const lines: string[] = [];
@@ -173,8 +82,14 @@ type Spec = {
   number: string | null;
   issueDate: string | null;
   serviceDate?: string | null;
+  serviceEndDate?: string | null;
   dueDate?: string | null;
   validUntil?: string | null;
+  /** What the invoice is about. */
+  subject?: string | null;
+  /** The sentence a tax-free invoice must carry. */
+  taxNote?: string | null;
+  style?: InvoiceStyle;
   items: StoredItem[];
   netCents: number;
   grossCents: number;
@@ -201,20 +116,26 @@ export type PdfInput = {
   corrects?: string | null;
   locale: Locale;
   logo?: Logo | null;
+  style?: InvoiceStyle;
 };
 
-export function invoicePdf({ invoice, items, seller, buyer, corrects, locale, logo }: PdfInput): Promise<Uint8Array> {
+/** A document states what it stated when it was issued: payments made later are not on it. */
+export function invoicePdf({ invoice, items, seller, buyer, corrects, locale, logo, style }: PdfInput): Promise<Uint8Array> {
   return renderDocument({
     kind: invoice.kind,
     draft: invoice.status === "DRAFT",
     number: invoice.number,
     issueDate: invoice.issueDate,
     serviceDate: invoice.serviceDate,
+    serviceEndDate: invoice.serviceEndDate,
     dueDate: invoice.dueDate,
+    subject: invoice.title,
+    taxNote: taxFree(invoice.taxTreatment) ? taxNote(invoice.taxTreatment, locale, invoice.exemptionReason) : null,
+    style,
     items,
     netCents: invoice.netCents,
     grossCents: invoice.grossCents,
-    paidCents: invoice.paidCents,
+    paidCents: 0,
     smallBusiness: invoice.smallBusiness,
     notes: invoice.notes,
     corrects,
@@ -381,6 +302,11 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   };
   const date = (iso: string | null | undefined) => (iso ? new Intl.DateTimeFormat(tag).format(new Date(`${iso}T12:00:00Z`)) : "—");
   const qty = (q: number) => new Intl.NumberFormat(tag, { maximumFractionDigits: 3 }).format(q);
+  const style = spec.style ?? DEFAULT_STYLE;
+  const modern = style.layout === "MODERN";
+  const compact = style.layout === "COMPACT";
+  const accent = accentOf(style.accentColor);
+  const titleColor = modern ? accent.color : INK;
 
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -395,10 +321,14 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   doc.setCreator("NEXORA ONE");
 
   const pages: PDFPage[] = [];
+  // A sign the font lacks would print as an empty box, and PDF/A forbids it.
+  const printable = (value: string) => [...value.replace(/\s/g, " ")].map((ch) => (glyphs.has(ch.codePointAt(0)!) ? ch : "?")).join("");
   const text = (page: PDFPage, value: string, x: number, y: number, size = 9, font = regular, color = INK) =>
-    page.drawText(value, { x, y, size, font, color });
-  const right = (page: PDFPage, value: string, x: number, y: number, size = 9, font = regular, color = INK) =>
-    page.drawText(value, { x: x - font.widthOfTextAtSize(value, size), y, size, font, color });
+    page.drawText(printable(value), { x, y, size, font, color });
+  const right = (page: PDFPage, value: string, x: number, y: number, size = 9, font = regular, color = INK) => {
+    const shown = printable(value);
+    page.drawText(shown, { x: x - font.widthOfTextAtSize(shown, size), y, size, font, color });
+  };
 
   const newPage = () => {
     const page = doc.addPage([sheet.width, sheet.height]);
@@ -414,11 +344,15 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   // --- Head ---------------------------------------------------------------------------------
   let page = newPage();
   const top = sheet.height - 20 * MM;
+  const headInk = modern ? accent.ink : MUTED;
+  if (modern) page.drawRectangle({ x: 0, y: sheet.height - 42 * MM, width: sheet.width, height: 42 * MM, color: accent.color });
   const picture = spec.logo ? await (spec.logo.mime === "image/png" ? doc.embedPng(spec.logo.bytes) : doc.embedJpg(spec.logo.bytes)).catch(() => null) : null;
   if (picture) {
     const size = picture.scaleToFit(55 * MM, 16 * MM);
+    // A logo is drawn for white paper: on the band it gets a white ground.
+    if (modern) page.drawRectangle({ x: LEFT - 6, y: top + 6 - size.height, width: size.width + 12, height: size.height + 12, color: WHITE });
     page.drawImage(picture, { x: LEFT, y: top + 12 - size.height, width: size.width, height: size.height });
-  } else text(page, seller.name, LEFT, top, 15, bold);
+  } else text(page, seller.name, LEFT, top, compact ? 12 : 15, bold, modern ? accent.ink : INK);
   const sellerLines = [
     seller.street,
     cityLine(seller),
@@ -426,7 +360,7 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
     seller.email,
     seller.website,
   ].filter(Boolean) as string[];
-  sellerLines.forEach((line, i) => right(page, line, RIGHT, top - i * 11, 8.5, regular, MUTED));
+  sellerLines.forEach((line, i) => right(page, line, RIGHT, top - i * 11, 8.5, regular, headInk));
 
   // DIN 5008 form B: address field 45 mm from the top, 20 mm from the left.
   const addressTop = sheet.height - 50 * MM;
@@ -451,19 +385,25 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
         : [
             [credit ? L.noteNumber : L.number, spec.number ?? "—"],
             [L.date, date(spec.issueDate)],
-            [L.serviceDate, date(spec.serviceDate ?? spec.issueDate)],
+            spec.serviceEndDate && spec.serviceEndDate !== spec.serviceDate
+              ? [L.servicePeriod, `${date(spec.serviceDate)} – ${date(spec.serviceEndDate)}`]
+              : [L.serviceDate, date(spec.serviceDate ?? spec.issueDate)],
             ...(credit ? [] : ([[L.due, date(spec.dueDate)]] as [string, string][])),
             ...client,
           ];
   meta.forEach(([label, value], i) => {
     const y = addressTop - 8 - i * 13;
-    text(page, label, RIGHT - 170, y, 8.5, regular, MUTED);
+    text(page, label, RIGHT - 215, y, 8.5, regular, MUTED);
     right(page, value, RIGHT, y, 9, bold);
   });
 
   let y = sheet.height - 105 * MM;
-  text(page, `${title} ${spec.number ?? ""}`.trim(), LEFT, y, 16, bold);
-  y -= 16;
+  text(page, `${title} ${spec.number ?? ""}`.trim(), LEFT, y, compact ? 13 : 16, bold, titleColor);
+  y -= compact ? 14 : 16;
+  if (spec.subject) {
+    text(page, spec.subject, LEFT, y, 10, bold);
+    y -= 14;
+  }
   if (credit && corrects) {
     text(page, fill(L.corrects, { number: corrects }), LEFT, y, 9, regular, MUTED);
     y -= 14;
@@ -480,6 +420,10 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   };
   const paragraph = (value: string, size = 9) => {
     for (const w of wrap(value, regular, size, RIGHT - LEFT)) {
+      if (y < 30 * MM) {
+        page = newPage();
+        y = sheet.height - 25 * MM;
+      }
       text(page, w, LEFT, y, size);
       y -= size + 3;
     }
@@ -504,13 +448,15 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   // --- Lines --------------------------------------------------------------------------------
   const cols = { pos: LEFT, desc: LEFT + 28, qty: RIGHT - 215, price: RIGHT - 120, vat: RIGHT - 70, amount: RIGHT };
   const header = (p: PDFPage, at: number) => {
-    p.drawRectangle({ x: LEFT - 4, y: at - 5, width: RIGHT - LEFT + 8, height: 18, color: rgb(0.97, 0.98, 0.99) });
-    text(p, L.pos, cols.pos, at, 8, bold, MUTED);
-    text(p, L.description, cols.desc, at, 8, bold, MUTED);
-    right(p, L.qty, cols.qty, at, 8, bold, MUTED);
-    right(p, L.unitPrice, cols.price, at, 8, bold, MUTED);
-    if (!spec.smallBusiness) right(p, salesTax ? L.tax : L.vat, cols.vat, at, 8, bold, MUTED);
-    right(p, L.amount, cols.amount, at, 8, bold, MUTED);
+    const ink = modern ? accent.ink : MUTED;
+    if (compact) p.drawLine({ start: { x: LEFT - 4, y: at - 5 }, end: { x: RIGHT + 4, y: at - 5 }, thickness: 0.8, color: INK });
+    else p.drawRectangle({ x: LEFT - 4, y: at - 5, width: RIGHT - LEFT + 8, height: 18, color: modern ? accent.color : rgb(0.97, 0.98, 0.99) });
+    text(p, L.pos, cols.pos, at, 8, bold, ink);
+    text(p, L.description, cols.desc, at, 8, bold, ink);
+    right(p, L.qty, cols.qty, at, 8, bold, ink);
+    right(p, L.unitPrice, cols.price, at, 8, bold, ink);
+    if (!spec.smallBusiness) right(p, salesTax ? L.tax : L.vat, cols.vat, at, 8, bold, ink);
+    right(p, L.amount, cols.amount, at, 8, bold, ink);
   };
   const hasLines = items.length > 0;
   const lines = asLines(items);
@@ -523,7 +469,7 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
       const line = lines[index];
       const wrapped = wrap(item.description, regular, 9, descWidth);
       const discount = line.discountPercent ? [`${L.discount} ${qty(line.discountPercent)} %`] : [];
-      const height = (wrapped.length + discount.length) * 11 + 6;
+      const height = (wrapped.length + discount.length) * 11 + (compact ? 3 : 6);
       if (y - height < 45 * MM) {
         page = newPage();
         y = sheet.height - 25 * MM;
@@ -538,7 +484,8 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
       if (!spec.smallBusiness) right(page, `${qty(Number(item.vatRate))} %`, cols.vat, y, 9, regular, MUTED);
       right(page, money(item.netCents), cols.amount, y, 9);
       y -= height;
-      page.drawLine({ start: { x: LEFT - 4, y: y + 4 }, end: { x: RIGHT + 4, y: y + 4 }, thickness: 0.5, color: LINE });
+      // Halfway between this line's text and the next one's.
+      page.drawLine({ start: { x: LEFT - 4, y: y + 10 }, end: { x: RIGHT + 4, y: y + 10 }, thickness: 0.5, color: LINE });
     });
 
     // --- Totals -----------------------------------------------------------------------------
@@ -548,6 +495,11 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
       y = sheet.height - 25 * MM;
     }
     y -= 8;
+    const discounts = discountCents(lines);
+    if (discounts) {
+      totalRow(L.listTotal, money(lines.reduce((all, line) => all + lineList(line), 0)));
+      totalRow(L.discounts, money(-discounts));
+    }
     totalRow(salesTax ? L.subtotal : L.net, money(spec.netCents));
     if (!spec.smallBusiness) {
       for (const group of sum.byRate) {
@@ -563,10 +515,21 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
   if (hasLines && spec.smallBusiness) {
     notes.push(country.smallBusiness === "DE" ? L.smallBusiness : country.smallBusiness === "AT" ? L.smallBusinessAT : L.noVat);
   }
+  if (spec.taxNote) notes.push(spec.taxNote);
   if (spec.kind === "INVOICE" && !spec.draft) {
-    notes.push(fill(L.pay, { amount: money(spec.grossCents - spec.paidCents), due: date(spec.dueDate) }));
+    const owed = { amount: money(spec.grossCents - spec.paidCents), due: date(spec.dueDate), number: spec.number ?? "" };
+    notes.push(fill(style.paymentInstructions ?? L.pay, owed));
+    if (seller.iban && country.iban) {
+      notes.push(
+        [`${L.bankDetails}: ${seller.legalName || seller.name}`, seller.bankName, `IBAN ${seller.iban.replace(/(.{4})/g, "$1 ").trim()}`, seller.bic ? `BIC ${seller.bic}` : null]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    }
   }
   if (spec.kind === "QUOTE" && spec.validUntil) notes.push(fill(L.quoteValid, { date: date(spec.validUntil) }));
+  // Credit notes made before they had a reason carry the invoice's number here.
+  if (spec.notes && credit && spec.notes !== corrects) notes.push(`${L.reason}: ${spec.notes}`);
   if (spec.notes && !credit) notes.push(spec.notes);
   for (const note of notes) {
     paragraph(note);
@@ -590,13 +553,13 @@ async function renderDocument(spec: Spec): Promise<Uint8Array> {
     )
       .filter(Boolean)
       .join(" · "),
-    seller.footer ?? "",
+    style.footer ?? seller.footer ?? "",
   ].filter(Boolean);
   pages.forEach((p, i) => {
     p.drawLine({ start: { x: LEFT, y: 22 * MM }, end: { x: RIGHT, y: 22 * MM }, thickness: 0.5, color: LINE });
     footer.forEach((line, j) => text(p, line, LEFT, 22 * MM - 10 - j * 9, 7, regular, MUTED));
     right(p, fill(L.page, { n: String(i + 1), of: String(pages.length) }), RIGHT, 22 * MM - 10, 7, regular, MUTED);
-    p.drawRectangle({ x: 0, y: sheet.height - 4, width: sheet.width, height: 4, color: ACCENT });
+    if (!compact && !(modern && i === 0)) p.drawRectangle({ x: 0, y: sheet.height - 4, width: sheet.width, height: 4, color: accent.color });
   });
 
   return doc.save();

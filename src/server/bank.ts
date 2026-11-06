@@ -7,6 +7,7 @@
  * amount is matched on import; everything else waits for a person, with the
  * likeliest invoice suggested.
  */
+import { openCents } from "@/lib/invoicing";
 import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { bankTransactions, clients, invoices } from "@/db/schema";
@@ -198,7 +199,7 @@ async function openInvoices(ctx: Context): Promise<OpenInvoice[]> {
       .innerJoin(clients, eq(clients.id, invoices.clientId))
       // A statement is in the company's currency: invoices in another one are matched by hand in their own amount.
       .where(and(eq(invoices.kind, "INVOICE"), inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID"]), isNull(invoices.currency)));
-    return rows.map((r) => ({ id: r.invoice.id, number: r.invoice.number, openCents: r.invoice.grossCents - r.invoice.paidCents, clientName: displayName(r.client) }));
+    return rows.map((r) => ({ id: r.invoice.id, number: r.invoice.number, openCents: openCents(r.invoice), clientName: displayName(r.client) }));
   });
 }
 

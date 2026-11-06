@@ -1,5 +1,6 @@
 # Every push and pull request: lint, types, tests (embedded database) and the
-# production build. A red check means: do not deploy this commit.
+# production build; the same tests on real PostgreSQL; e-invoices through the
+# official validators. A red check means: do not deploy this commit.
 name: CI
 
 on:
@@ -33,3 +34,50 @@ jobs:
       - run: npx playwright test
         env:
           PLAYWRIGHT_CHANNEL: chrome
+
+  # The same tests against real PostgreSQL: every migration, the roles and policies of db/rls.sql.
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx vitest run --no-file-parallelism --reporter=default --reporter=json --outputFile=vitest.json
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # Failures as annotations, which the run's page shows to everyone.
+      - if: failure()
+        run: node scripts/report-tests.mjs vitest.json
+
+  # E-invoices of every tax treatment, judged by the official validators.
+  einvoice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci --no-audit --no-fund
+      - run: npx vitest run tests/einvoice.test.ts
+        env:
+          EINVOICE_SAMPLES: ${{ runner.temp }}/einvoices
+      - run: node scripts/validate-einvoices.mjs "${{ runner.temp }}/einvoices"

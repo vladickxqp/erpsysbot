@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/client";
 import { US_STATE_TAX } from "@/lib/us-tax";
 import { countryProfile } from "@/lib/countries";
+import { INVOICE_FILE_KINDS, type InvoiceFileKind } from "@/lib/invoicing";
 import { saveCompanyAction } from "./actions";
 
 export type CompanyValues = {
@@ -33,8 +34,10 @@ export type CompanyValues = {
   smallBusiness: boolean;
   paymentTermsDays: number;
   invoiceNumberFormat: string;
+  creditNoteNumberFormat: string;
   quoteNumberFormat: string;
   invoiceFooter: string;
+  einvoiceFormat: InvoiceFileKind;
 };
 
 export function CompanyForm({
@@ -161,7 +164,28 @@ export function CompanyForm({
             <span className="text-xs text-muted-foreground">{t("company.invoiceNumberHint")}</span>
           </label>
           {field("paymentTermsDays", "sm:col-span-2", { type: "number", min: 0, max: 120 })}
+          <label className="grid gap-1.5 sm:col-span-3">
+            <span className="text-sm font-medium">{t("invoicing.creditNumberFormat")}</span>
+            <Input value={v.creditNoteNumberFormat} onChange={(e) => setV({ ...v, creditNoteNumberFormat: e.target.value })} disabled={!canEdit} aria-invalid={bad.includes("creditNoteNumberFormat") || undefined} />
+          </label>
           {field("quoteNumberFormat", "sm:col-span-3")}
+          {profile.xrechnung && (
+            <label className="grid gap-1.5 sm:col-span-3">
+              <span className="text-sm font-medium">{t("invoicing.defaultFormat")}</span>
+              <Select value={v.einvoiceFormat} onValueChange={(f) => setV({ ...v, einvoiceFormat: f as InvoiceFileKind })} disabled={!canEdit}>
+                <SelectTrigger className="w-full" aria-label={t("invoicing.defaultFormat")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVOICE_FILE_KINDS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {t(`invoicing.format_${k}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          )}
           <label className="grid gap-1.5 sm:col-span-1">
             <span className="text-sm font-medium">{t("company.currency")}</span>
             <Select value={v.currency} onValueChange={(c) => setV({ ...v, currency: c })} disabled={!canEdit || currencyLocked}>

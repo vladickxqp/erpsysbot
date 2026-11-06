@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Ban, BellRing, Download, Lock, Pencil, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, BellRing, CheckCircle2, Copy, Download, FileMinus2, Lock, Mail, Pencil, Trash2, Wallet, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -19,8 +19,10 @@ import { useI18n } from "@/i18n/client";
 import { ShareButton } from "@/components/app/share-button";
 import { formatDate, formatMoney } from "@/i18n";
 import { PAYMENT_METHODS } from "@/lib/domain";
+import { taxNote, type InvoiceFileKind, type TaxTreatment } from "@/lib/invoicing";
 import type { Totals } from "@/server/money";
-import { cancelAction, deleteDraftAction, issueAction, paymentAction, reminderAction, type InvoiceResult } from "../actions";
+import { cancelAction, deleteDraftAction, duplicateAction, issueAction, paymentAction, reminderAction, type InvoiceResult } from "../actions";
+import { CreditNoteDialog, SendInvoiceDialog } from "../invoice-actions";
 
 type Detail = {
   id: string;
@@ -36,9 +38,17 @@ type Detail = {
   notes: string | null;
   grossCents: number;
   paidCents: number;
+  creditedCents: number;
   smallBusiness: boolean;
   overdue: boolean;
+  title: string | null;
+  sent: boolean;
+  taxTreatment: TaxTreatment;
+  exemptionReason: string | null;
+  language: string;
 };
+
+type Delivery = { id: string; status: "SENT" | "FAILED"; format: InvoiceFileKind; recipient: string; error: string | null; createdAt: string };
 
 export function InvoiceDetail({
   invoice,
@@ -54,7 +64,14 @@ export function InvoiceDetail({
   reminders,
   can,
   ai,
+  deliveries,
+  defaultFormat,
+  einvoiceMissing,
 }: {
+  deliveries: Delivery[];
+  defaultFormat: InvoiceFileKind;
+  /** What an e-invoice of this one still lacks; null where the standard does not apply. */
+  einvoiceMissing: string[] | null;
   ai: boolean;
   invoice: Detail;
   clientName: string;
@@ -73,18 +90,22 @@ export function InvoiceDetail({
   const router = useRouter();
   const money = (c: number) => formatMoney(c, locale, { ...region, currency: invoice.currency ?? region.currency });
   const [pending, start] = useTransition();
-  const [dialog, setDialog] = useState<null | "issue" | "cancel" | "delete" | "pay">(null);
-  const remaining = invoice.grossCents - invoice.paidCents;
+  const [dialog, setDialog] = useState<null | "issue" | "cancel" | "delete" | "pay" | "send" | "credit">(null);
+  const remaining = invoice.grossCents - invoice.paidCents - invoice.creditedCents;
   const [amount, setAmount] = useState((remaining / 100).toFixed(2).replace(".", ","));
   const [paidOn, setPaidOn] = useState(today);
   const [method, setMethod] = useState<string>("TRANSFER");
   const draft = invoice.status === "DRAFT";
   const open = invoice.kind === "INVOICE" && ["ISSUED", "PARTIALLY_PAID"].includes(invoice.status);
-  const cancellable = invoice.kind === "INVOICE" && ["ISSUED", "PARTIALLY_PAID", "PAID"].includes(invoice.status);
+  const creditable = invoice.kind === "INVOICE" && ["ISSUED", "PARTIALLY_PAID", "PAID"].includes(invoice.status);
+  const cancellable = creditable && !invoice.creditedCents;
+  const note = invoice.taxTreatment === "STANDARD" || invoice.taxTreatment === "SMALL_BUSINESS" ? null : taxNote(invoice.taxTreatment, locale, invoice.exemptionReason);
 
   const explain = (r: InvoiceResult) => {
     if (r.error === "forbidden") return t("common.forbidden");
     if (r.code === "COMPANY_INCOMPLETE") return t("invoices.companyIncomplete", { fields: (r.missing ?? []).map((f) => t(`invoices.field_${f}`)).join(", ") });
+    if (r.code === "CLIENT_INCOMPLETE") return t("invoicing.clientIncomplete", { fields: (r.missing ?? []).map((f) => t(`invoices.field_${f}`)).join(", ") });
+    if (r.code === "TAX_TREATMENT") return (r.missing ?? []).map((f) => t(`invoicing.problem_${f}`)).join(", ");
     if (r.code === "OVERPAID") return t("invoices.overpaid");
     if (r.code === "NOT_OPEN") return t("invoices.notOpen");
     return t("common.error");
@@ -125,9 +146,10 @@ export function InvoiceDetail({
               {invoice.kind === "CREDIT_NOTE" ? `${t("invoices.creditNote")} ` : ""}
               {invoice.number ?? t("invoices.draftNumber")}
             </h1>
-            <InvoiceStatusBadge status={invoice.status} overdue={invoice.overdue} kind={invoice.kind} />
+            <InvoiceStatusBadge status={invoice.status} overdue={invoice.overdue} kind={invoice.kind} sent={invoice.sent} />
             {!draft && <Lock className="size-4 text-muted-foreground" aria-hidden />}
           </div>
+          {invoice.title && <p className="mt-1 font-medium">{invoice.title}</p>}
           <p className="mt-1 text-sm text-muted-foreground">
             <Link href={`/app/clients/${invoice.clientId}`} className="text-primary hover:underline">
               {clientName}
@@ -163,14 +185,30 @@ export function InvoiceDetail({
             </a>
           </Button>
           {!draft && <ShareButton kind="invoice" id={invoice.id} />}
-          {!draft && invoice.kind === "INVOICE" && region.country === "DE" && (
-            <Button variant="outline" asChild>
-              <a href={`/app/invoices/${invoice.id}/xrechnung`} download>
-                <Download className="size-4" /> XRechnung
-              </a>
+          {!draft && einvoiceMissing?.length === 0 && (
+            <>
+              <Button variant="outline" asChild>
+                <a href={`/app/invoices/${invoice.id}/xrechnung`} download>
+                  <Download className="size-4" /> XRechnung
+                </a>
+              </Button>
+              <Button variant="outline" asChild>
+                <a href={`/app/invoices/${invoice.id}/zugferd`} download>
+                  <Download className="size-4" /> ZUGFeRD
+                </a>
+              </Button>
+            </>
+          )}
+          {!draft && mail && can.edit && (
+            <Button variant={invoice.sent ? "outline" : "default"} onClick={() => setDialog("send")}>
+              <Mail className="size-4" /> {t(invoice.sent ? "invoicing.resend" : "invoicing.send")}
             </Button>
           )}
-          {!draft && mail && can.edit && <SendButton kind="invoice" id={invoice.id} email={clientEmail} />}
+          {invoice.kind === "INVOICE" && can.edit && (
+            <Button variant="outline" disabled={pending} onClick={() => run(() => duplicateAction(invoice.id), (r) => router.push(`/app/invoices/${r.id}`))}>
+              <Copy className="size-4" /> {t("invoicing.duplicate")}
+            </Button>
+          )}
           {invoice.overdue && can.issue && reminders.length < 3 && (
             <Button
               variant="outline"
@@ -192,6 +230,11 @@ export function InvoiceDetail({
               <Trash2 className="size-4" /> <span className="sr-only">{t("common.delete")}</span>
             </Button>
           )}
+          {creditable && can.cancel && (
+            <Button variant="outline" onClick={() => setDialog("credit")}>
+              <FileMinus2 className="size-4" /> {t("invoicing.credit")}
+            </Button>
+          )}
           {cancellable && can.cancel && (
             <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDialog("cancel")}>
               <Ban className="size-4" /> {t("invoices.cancel")}
@@ -200,9 +243,17 @@ export function InvoiceDetail({
         </div>
       </div>
 
+      {!draft && einvoiceMissing && einvoiceMissing.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border p-3 text-sm text-muted-foreground">
+          <AlertTriangle className="size-4 shrink-0" />
+          {t("invoicing.send_NOT_READY", { fields: einvoiceMissing.map((m) => t(`invoicing.missing_${m}`)).join(", ") })}
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <ItemsTable items={items} totals={totals} smallBusiness={invoice.smallBusiness} />
+          {note && <p className="mt-4 rounded-xl border bg-card p-4 text-sm">{note}</p>}
           {invoice.notes && <p className="mt-4 whitespace-pre-wrap rounded-xl border bg-card p-4 text-sm">{invoice.notes}</p>}
         </div>
         <div className="grid h-fit gap-4">
@@ -224,12 +275,39 @@ export function InvoiceDetail({
                   </div>
                 ))
               )}
+              {invoice.creditedCents > 0 && invoice.status !== "CANCELLED" && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">{t("invoicing.credited")}</span>
+                  <span className="tabular-nums">{money(invoice.creditedCents)}</span>
+                </div>
+              )}
               {invoice.status !== "CANCELLED" && (
                 <div className="mt-2 flex justify-between border-t pt-2 font-medium">
                   <span>{t("invoices.remaining", { amount: "" }).replace(/[:\s]+$/, "")}</span>
                   <span className="tabular-nums">{money(remaining)}</span>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+        {deliveries.length > 0 && (
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="text-base">{t("invoicing.deliveries")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 text-sm">
+              {deliveries.map((d) => (
+                <div key={d.id} className="flex items-start gap-2">
+                  {d.status === "SENT" ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden /> : <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />}
+                  <div className="min-w-0">
+                    <div className="truncate">{d.recipient}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatDate(d.createdAt, locale, region)} · {t(`invoicing.format_${d.format}`)} · {t(`invoicing.delivery_${d.status}`)}
+                    </div>
+                    {d.error && <div className="text-xs break-words text-destructive">{d.error}</div>}
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
@@ -301,6 +379,9 @@ export function InvoiceDetail({
           })
         }
       />
+
+      {dialog === "send" && <SendInvoiceDialog id={invoice.id} email={clientEmail} format={defaultFormat} resend={invoice.sent} onClose={() => setDialog(null)} />}
+      {dialog === "credit" && <CreditNoteDialog id={invoice.id} onClose={() => setDialog(null)} />}
 
       <Dialog open={dialog === "pay"} onOpenChange={(o) => setDialog(o ? "pay" : null)}>
         <DialogContent className="sm:max-w-md">

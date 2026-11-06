@@ -80,7 +80,7 @@ export async function datevRows(ctx: Context, from: string, to: string, chart: "
       .select({ invoice: invoices, client: clients })
       .from(invoices)
       .innerJoin(clients, eq(clients.id, invoices.clientId))
-      .where(and(inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"]), gte(invoices.issueDate, from), lte(invoices.issueDate, to)))
+      .where(and(inArray(invoices.status, ["ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED", "CREDITED"]), gte(invoices.issueDate, from), lte(invoices.issueDate, to)))
       .orderBy(asc(invoices.issueDate), asc(invoices.number));
     const ids = issued.map((r) => r.invoice.id);
     const lines = ids.length

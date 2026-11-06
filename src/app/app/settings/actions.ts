@@ -22,6 +22,7 @@ import { sendVerificationMail } from "@/server/auth/email-verification";
 import { SESSION_COOKIE } from "@/server/auth/sessions";
 import { newCalendarLink } from "@/server/calendar-feed";
 import { setCompanyLogo, updateCompany, type CompanyInput } from "@/server/company";
+import { deleteInvoiceTemplate, saveInvoiceTemplate, TemplateError, type TemplateInput } from "@/server/invoice-templates";
 import { takeMailThrottle } from "@/server/mail";
 import { deleteAccount, deleteCompany, PrivacyError } from "@/server/privacy";
 import { setCompanyModules, setMyModules } from "@/server/modules";
@@ -31,6 +32,34 @@ import { botUsername } from "@/server/telegram/api";
 import { createLinkToken, setNotify, unlink } from "@/server/telegram/links";
 
 export type CompanyResult = { ok?: boolean; error?: "forbidden" | "check"; fields?: string[] };
+
+export type TemplateResult = { ok?: boolean; error?: "forbidden" | "check" | TemplateError["code"] };
+
+export async function saveTemplateAction(id: string | null, input: TemplateInput): Promise<TemplateResult> {
+  const ctx = await requireContext();
+  try {
+    await saveInvoiceTemplate(ctx, id, input);
+    revalidatePath("/app/settings");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "forbidden" };
+    if (e instanceof TemplateError) return { error: e.code };
+    if (e instanceof ZodError) return { error: "check" };
+    throw e;
+  }
+}
+
+export async function deleteTemplateAction(id: string): Promise<TemplateResult> {
+  const ctx = await requireContext();
+  try {
+    await deleteInvoiceTemplate(ctx, id);
+    revalidatePath("/app/settings");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "forbidden" };
+    throw e;
+  }
+}
 
 export async function saveCompanyAction(input: CompanyInput): Promise<CompanyResult> {
   const ctx = await requireContext();

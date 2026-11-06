@@ -217,7 +217,7 @@ DO $$
 DECLARE
   t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats', 'recurring_invoices', 'bank_transactions', 'client_contacts', 'client_activities', 'time_entries', 'departments', 'sponsorships', 'goals', 'habits', 'habit_checks', 'custom_roles', 'user_preferences', 'notifications', 'insight_dismissals', 'task_dependencies', 'task_comments', 'project_members', 'assistant_conversations', 'assistant_memories', 'assistant_actions', 'daily_summaries', 'ai_agents', 'employee_profiles', 'absences', 'business_units', 'chat_channels', 'chat_members', 'chat_messages', 'personal_transactions', 'content_stats'] LOOP
+  FOREACH t IN ARRAY ARRAY['dashboards', 'content_items', 'content_comments', 'content_templates', 'content_generations', 'social_accounts', 'social_stats', 'recurring_invoices', 'bank_transactions', 'client_contacts', 'client_activities', 'time_entries', 'departments', 'sponsorships', 'goals', 'habits', 'habit_checks', 'custom_roles', 'user_preferences', 'notifications', 'insight_dismissals', 'task_dependencies', 'task_comments', 'project_members', 'assistant_conversations', 'assistant_memories', 'assistant_actions', 'daily_summaries', 'ai_agents', 'employee_profiles', 'absences', 'business_units', 'chat_channels', 'chat_members', 'chat_messages', 'personal_transactions', 'content_stats', 'invoice_templates', 'invoice_files', 'invoice_deliveries'] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (organization_id = app_org_id()) WITH CHECK (organization_id = app_org_id())', t);
@@ -249,7 +249,13 @@ BEGIN
     OR NEW.buyer_snapshot IS DISTINCT FROM OLD.buyer_snapshot
     OR NEW.seller_snapshot IS DISTINCT FROM OLD.seller_snapshot
     OR NEW.kind <> OLD.kind OR NEW.status = 'DRAFT'
-    OR NEW.currency IS DISTINCT FROM OLD.currency OR NEW.exchange_rate IS DISTINCT FROM OLD.exchange_rate) THEN
+    OR NEW.currency IS DISTINCT FROM OLD.currency OR NEW.exchange_rate IS DISTINCT FROM OLD.exchange_rate
+    OR NEW.title IS DISTINCT FROM OLD.title OR NEW.notes IS DISTINCT FROM OLD.notes
+    OR NEW.service_date IS DISTINCT FROM OLD.service_date OR NEW.service_end_date IS DISTINCT FROM OLD.service_end_date
+    OR NEW.due_date IS DISTINCT FROM OLD.due_date OR NEW.language <> OLD.language
+    OR NEW.tax_treatment <> OLD.tax_treatment OR NEW.exemption_reason IS DISTINCT FROM OLD.exemption_reason
+    OR NEW.small_business <> OLD.small_business OR NEW.template_snapshot IS DISTINCT FROM OLD.template_snapshot
+    OR NEW.corrects_id IS DISTINCT FROM OLD.corrects_id) THEN
     RAISE EXCEPTION 'issued invoice % cannot be changed', OLD.number USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
@@ -277,3 +283,20 @@ $$;
 DROP TRIGGER IF EXISTS invoice_items_guard ON invoice_items;
 CREATE TRIGGER invoice_items_guard BEFORE INSERT OR UPDATE OR DELETE ON invoice_items
   FOR EACH ROW EXECUTE FUNCTION invoice_items_guard();
+
+-- What was sent and what was tried is history: rows are added, never changed.
+CREATE OR REPLACE FUNCTION invoice_history_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND current_setting('app.purge_org', true) = OLD.organization_id::text THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION '% of an invoice cannot be changed', TG_TABLE_NAME USING ERRCODE = 'check_violation';
+END
+$$;
+DROP TRIGGER IF EXISTS invoice_files_guard ON invoice_files;
+CREATE TRIGGER invoice_files_guard BEFORE UPDATE OR DELETE ON invoice_files
+  FOR EACH ROW EXECUTE FUNCTION invoice_history_guard();
+DROP TRIGGER IF EXISTS invoice_deliveries_guard ON invoice_deliveries;
+CREATE TRIGGER invoice_deliveries_guard BEFORE UPDATE OR DELETE ON invoice_deliveries
+  FOR EACH ROW EXECUTE FUNCTION invoice_history_guard();

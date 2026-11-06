@@ -73,11 +73,15 @@ export function LineEditor({
   onChange,
   products,
   smallBusiness,
+  hideTotals,
 }: {
   lines: EditableLine[];
   onChange: (lines: EditableLine[]) => void;
   products: ProductOption[];
+  /** No tax on these lines: no rate to choose. */
   smallBusiness: boolean;
+  /** The page shows the sums itself. */
+  hideTotals?: boolean;
 }) {
   const { t, locale, region } = useI18n();
   const money = (cents: number) => formatMoney(cents, locale, region);
@@ -89,7 +93,7 @@ export function LineEditor({
   const sum = valid ? totals(valid, smallBusiness) : null;
 
   return (
-    <div className="grid gap-3">
+    <div className="@container grid gap-3">
       {lines.map((l, index) => {
         const price = parseMoney(l.price);
         const net =
@@ -97,9 +101,9 @@ export function LineEditor({
             ? lineNet({ quantity: num(l.quantity), unitPriceCents: price, discountPercent: num(l.discountPercent || "0") || 0 })
             : null;
         return (
-          <div key={l.key} className="grid gap-2 rounded-lg border bg-background p-3 sm:grid-cols-12 sm:items-end">
+          <div key={l.key} className="grid grid-cols-2 items-end gap-2 rounded-lg border bg-background p-3 @lg:grid-cols-6 @4xl:grid-cols-12">
             {products.length > 0 && (
-              <div className="sm:col-span-12">
+              <div className="col-span-2 @lg:col-span-6 @4xl:col-span-12">
                 <Select
                   value={l.productId ?? ""}
                   onValueChange={(id) => {
@@ -127,30 +131,30 @@ export function LineEditor({
                 </Select>
               </div>
             )}
-            <label className="grid gap-1 sm:col-span-5">
+            <label className="col-span-2 grid gap-1 @lg:col-span-6 @4xl:col-span-5">
               <span className="text-xs text-muted-foreground">
                 {index + 1}. {t("lines.description")}
               </span>
               <Input value={l.description} onChange={(e) => set(l.key, { description: e.target.value })} required />
             </label>
-            <label className="grid gap-1 sm:col-span-1">
+            <label className="grid gap-1 @4xl:col-span-1">
               <span className="text-xs text-muted-foreground">{t("lines.quantity")}</span>
               <Input inputMode="decimal" value={l.quantity} onChange={(e) => set(l.key, { quantity: e.target.value })} />
             </label>
-            <label className="grid gap-1 sm:col-span-1">
+            <label className="grid gap-1 @4xl:col-span-1">
               <span className="text-xs text-muted-foreground">{t("lines.unit")}</span>
               <Input value={l.unit} onChange={(e) => set(l.key, { unit: e.target.value })} />
             </label>
-            <label className="grid gap-1 sm:col-span-2">
+            <label className="grid gap-1 @lg:col-span-2">
               <span className="text-xs text-muted-foreground">{t("lines.price")}</span>
               <Input inputMode="decimal" value={l.price} placeholder="0,00" onChange={(e) => set(l.key, { price: e.target.value })} />
             </label>
-            <label className="grid gap-1 sm:col-span-1">
+            <label className="grid gap-1 @4xl:col-span-1">
               <span className="text-xs text-muted-foreground">{t("lines.discount")}</span>
               <Input inputMode="decimal" value={l.discountPercent} onChange={(e) => set(l.key, { discountPercent: e.target.value })} />
             </label>
             {!smallBusiness && (
-              <label className="grid gap-1 sm:col-span-1">
+              <label className="grid gap-1 @4xl:col-span-1">
                 <span className="text-xs text-muted-foreground">{t(taxLabel)}</span>
                 <Select value={String(l.vatRate)} onValueChange={(v) => set(l.key, { vatRate: Number(v) })}>
                   <SelectTrigger className="w-full" aria-label={t(taxLabel)}>
@@ -166,7 +170,7 @@ export function LineEditor({
                 </Select>
               </label>
             )}
-            <div className={`flex items-center justify-between gap-2 ${smallBusiness ? "sm:col-span-2" : "sm:col-span-1"}`}>
+            <div className={`col-span-2 flex items-center justify-between gap-2 @lg:col-span-6 ${smallBusiness ? "@4xl:col-span-2" : "@4xl:col-span-1"}`}>
               <span className="text-sm tabular-nums font-medium">{net !== null ? money(net) : "—"}</span>
               <Button
                 type="button"
@@ -186,7 +190,7 @@ export function LineEditor({
         <Button type="button" variant="outline" onClick={() => onChange([...lines, blankLine(region, locale)])}>
           <Plus className="size-4" /> {t("lines.add")}
         </Button>
-        <dl className="min-w-56 text-sm">
+        <dl className={hideTotals ? "hidden" : "min-w-56 text-sm"}>
           {sum ? (
             <>
               <div className="flex justify-between gap-6 py-0.5">

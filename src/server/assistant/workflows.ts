@@ -4,6 +4,7 @@
  * production tasks. Every result is a draft until a person saves it through
  * the normal functions; every figure comes from the records.
  */
+import { openCents } from "@/lib/invoicing";
 import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { and } from "drizzle-orm";
@@ -161,7 +162,7 @@ export async function draftReminderText(ctx: Context, invoiceId: string, create:
   const { invoice, client } = await getInvoice(ctx, invoiceId);
   const locale = isLocale(ctx.user.locale) ? ctx.user.locale : "de";
   const region = regionOf(ctx.organization);
-  const facts = `Invoice ${invoice.number}, open amount ${formatMoney(invoice.grossCents - invoice.paidCents, locale, region)}, due ${invoice.dueDate ? formatDate(invoice.dueDate, locale, region) : "—"}, client ${client ? displayName(client) : "—"}, sender ${ctx.organization.name}.`;
+  const facts = `Invoice ${invoice.number}, open amount ${formatMoney(openCents(invoice), locale, region)}, due ${invoice.dueDate ? formatDate(invoice.dueDate, locale, region) : "—"}, client ${client ? displayName(client) : "—"}, sender ${ctx.organization.name}.`;
   return ask(ctx, "reminder_text", `You write a short, polite payment reminder e-mail in ${languageOf(ctx)} for the sender to review. Plain text, no subject line, no invented details, no threats.`, facts, create);
 }
 

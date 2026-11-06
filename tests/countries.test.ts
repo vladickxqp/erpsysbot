@@ -14,7 +14,7 @@ import { contextFor, type Context } from "@/server/context";
 import { createInvoiceDraft, InvoiceStateError, issueInvoice } from "@/server/invoices";
 import { setCompanyCountry, suspensionOf } from "@/server/platform";
 import { renderInvoice } from "@/server/send";
-import { xrechnungXml } from "@/server/xrechnung";
+import { keepInvoiceFile } from "@/server/invoice-files";
 import { newCompany } from "./helpers";
 
 let n = 0;
@@ -97,10 +97,10 @@ describe("tax and invoices by country", () => {
     expect(draft.vatCents).toBe(888);
     expect(draft.grossCents).toBe(10888);
     const issued = await issueInvoice(us, draft.id);
-    const doc = await renderInvoice(us, issued.id, "en");
+    const doc = await renderInvoice(us, issued.id);
     const size = (await PDFDocument.load(doc.pdf)).getPage(0).getSize();
     expect([Math.round(size.width), Math.round(size.height)]).toEqual([612, 792]);
-    await expect(xrechnungXml(us, issued.id)).rejects.toMatchObject({ code: "NOT_GERMAN" });
+    await expect(keepInvoiceFile(us, issued.id, "XRECHNUNG")).rejects.toMatchObject({ code: "NOT_READY", missing: ["sellerCountry"] });
     // Issued: the currency stays.
     await expect(updateCompany(us, { name: "Acme Inc", currency: "EUR" })).rejects.toThrow();
   });
@@ -136,10 +136,10 @@ describe("documents in every language", () => {
     await updateCompany(ctx, { name: "Tbilisi LLC", street: "Rustaveli 1", postalCode: "0108", city: "Tbilisi", taxNumber: "123456789" });
     const ge = await reload(ctx);
     const client = await createClient(ge, { type: "COMPANY", companyName: "Client" });
-    const draft = await createInvoiceDraft(ge, { clientId: client.id, items: [line(250, 18)] });
-    const issued = await issueInvoice(ge, draft.id);
-    for (const locale of ["de", "en", "ru", "uk", "kk", "es"] as const) {
-      const doc = await renderInvoice(ge, issued.id, locale);
+    for (const language of ["de", "en", "ru", "uk", "kk", "es"] as const) {
+      const draft = await createInvoiceDraft(ge, { clientId: client.id, language, items: [line(250, 18)] });
+      const issued = await issueInvoice(ge, draft.id);
+      const doc = await renderInvoice(ge, issued.id);
       expect(Buffer.from(doc.pdf.slice(0, 5)).toString()).toBe("%PDF-");
     }
   });

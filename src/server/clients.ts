@@ -281,6 +281,62 @@ export async function exportClientsCsv(ctx: Context): Promise<string> {
 }
 
 /** Every client as id and name, for pickers (orders, invoices). */
+/** What the invoice form needs of a customer: enough to show, check and print. */
+export async function invoiceClients(ctx: Context) {
+  requirePermission(ctx.permissions, "clients.read");
+  const rows = await withTenant(ctx.organization.id, (tx) =>
+    tx
+      .select({
+        id: clients.id,
+        number: clients.number,
+        firstName: clients.firstName,
+        lastName: clients.lastName,
+        companyName: clients.companyName,
+        email: clients.email,
+        street: clients.street,
+        postalCode: clients.postalCode,
+        city: clients.city,
+        country: clients.country,
+        vatId: clients.vatId,
+      })
+      .from(clients)
+      .where(isNull(clients.archivedAt))
+      .orderBy(asc(sql`lower(coalesce(${clients.companyName}, ${clients.lastName}, ${clients.firstName}))`))
+      .limit(2000),
+  );
+  return rows.map((r) => ({ ...r, name: displayName(r) }));
+}
+
+export const clientCard = z
+  .object({
+    firstName: optional(100),
+    lastName: optional(100),
+    companyName: optional(160),
+    email: clientInput.innerType().shape.email,
+    street: optional(160),
+    postalCode: optional(20),
+    city: optional(100),
+    country: z.string().trim().toUpperCase().length(2),
+    vatId: optional(40),
+  })
+  .refine((c) => c.companyName || c.firstName || c.lastName, { message: "name", path: ["lastName"] });
+
+/** Completes what an invoice needs of a customer and leaves the rest of the record alone. */
+export async function updateClientCard(ctx: Context, id: string, raw: z.input<typeof clientCard>): Promise<Client> {
+  requirePermission(ctx.permissions, "clients.update");
+  const input = clientCard.parse(raw);
+  return withTenant(ctx.organization.id, async (tx) => {
+    const [row] = await tx
+      .update(clients)
+      .set({ ...input, type: input.companyName ? "COMPANY" : "PERSON", updatedAt: new Date() })
+      .where(eq(clients.id, id))
+      .returning();
+    if (!row) throw new NotFoundError();
+    await audit(tx, ctx, "client.update", "client", id);
+    return row;
+  });
+}
+
 export async function clientOptions(ctx: Context): Promise<{ id: string; name: string; number: number }[]> {
   requirePermission(ctx.permissions, "clients.read");
   const rows = await withTenant(ctx.organization.id, (tx) =>

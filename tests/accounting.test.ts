@@ -28,7 +28,7 @@ describe("recurring invoices", () => {
 
   it("makes the due invoices once, catches up missed dates and stops at the end date", async () => {
     const ctx = await company("Abo GmbH");
-    const client = await createClient(ctx, { companyName: "Mieter KG" });
+    const client = await createClient(ctx, { companyName: "Mieter KG", street: "Hofweg 3", postalCode: "68159", city: "Mannheim" });
     const plan = await saveRecurring(ctx, null, {
       clientId: client.id,
       title: "Miete",

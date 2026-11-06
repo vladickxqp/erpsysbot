@@ -9,10 +9,12 @@ export type Mail = {
   to: string;
   subject: string;
   text: string;
+  /** Where answers go: the company, not the address the server sends from. */
+  replyTo?: string;
   attachments?: { filename: string; content: Uint8Array; contentType?: string }[];
 };
 
-type Sender = (mail: Mail) => Promise<void>;
+type Sender = (mail: Mail) => Promise<void | { messageId?: string }>;
 
 let sender: Sender | null = null;
 /** Tests replace the transport; null puts the real one back. */
@@ -54,12 +56,16 @@ export function mailAvailable(): boolean {
 }
 
 export async function sendMail(mail: Mail): Promise<boolean> {
-  if (override) {
-    await override(mail);
-    return true;
-  }
+  if (!mailAvailable()) return false;
+  await deliverMail(mail);
+  return true;
+}
+
+/** Hands the mail to the server; throws when it does not take it. */
+export async function deliverMail(mail: Mail): Promise<{ messageId: string | null }> {
+  if (override) return { messageId: (await override(mail))?.messageId ?? null };
   const config = smtp();
-  if (!config) return false;
+  if (!config) throw new Error("no mail server");
   sender ??= (() => {
     const transport = createTransport({
       host: config.host,
@@ -68,15 +74,16 @@ export async function sendMail(mail: Mail): Promise<boolean> {
       auth: config.user ? { user: config.user, pass: config.password } : undefined,
     });
     return async (m: Mail) => {
-      await transport.sendMail({
+      const info = await transport.sendMail({
         from: mailFrom() ?? config.user,
         to: m.to,
+        replyTo: m.replyTo,
         subject: m.subject,
         text: m.text,
         attachments: m.attachments?.map((a) => ({ filename: a.filename, content: Buffer.from(a.content), contentType: a.contentType })),
       });
+      return { messageId: info.messageId };
     };
   })();
-  await sender(mail);
-  return true;
+  return { messageId: (await sender(mail))?.messageId ?? null };
 }

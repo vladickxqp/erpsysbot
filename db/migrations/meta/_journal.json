@@ -127,6 +127,13 @@
       "when": 1793861304118,
       "tag": "0017_part2_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793958028516,
+      "tag": "0018_invoicing",
+      "breakpoints": true
     }
   ]
 }

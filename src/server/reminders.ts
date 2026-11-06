@@ -4,6 +4,7 @@
  * the time it was written and a new date to pay by; the invoice itself is
  * never touched.
  */
+import { openCents } from "@/lib/invoicing";
 import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
@@ -35,7 +36,7 @@ export async function createReminder(ctx: Context, invoiceId: string, raw: z.inp
   return withTenant(ctx.organization.id, async (tx) => {
     const [invoice] = await tx.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1);
     if (!invoice) throw new NotFoundError();
-    const open = invoice.grossCents - invoice.paidCents;
+    const open = openCents(invoice);
     if (invoice.kind !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID"].includes(invoice.status) || !invoice.dueDate || invoice.dueDate >= now || open <= 0) {
       throw new ReminderError("NOT_OVERDUE");
     }
@@ -99,7 +100,7 @@ export async function overdueInvoices(ctx: Context) {
         id: invoices.id,
         number: invoices.number,
         dueDate: invoices.dueDate,
-        openCents: sql<number>`${invoices.grossCents} - ${invoices.paidCents}`,
+        openCents: sql<number>`${invoices.grossCents} - ${invoices.paidCents} - ${invoices.creditedCents}`,
         level: sql<number>`coalesce((select max(level) from payment_reminders r where r.invoice_id = ${invoices.id}), 0)::int`,
         client: { companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName },
       })

@@ -1,7 +1,6 @@
 import { PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
-import { clientOptions } from "@/server/clients";
-import { listProducts } from "@/server/products";
+import { invoiceFormProps } from "../form-props";
 import { requirePageContext } from "@/server/request";
 import { InvoiceForm } from "../invoice-form";
 
@@ -14,17 +13,12 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const ctx = await requirePageContext("invoices.create");
   const { t } = await getT();
   const { client } = await searchParams;
-  const [clients, products] = await Promise.all([clientOptions(ctx), listProducts(ctx, { activeOnly: true })]);
-  const preset = clients.find((c) => c.id === client)?.id;
+  const props = await invoiceFormProps(ctx);
+  const preset = props.clients.find((c) => c.id === client)?.id;
   return (
     <>
       <PageHeader title={t("invoices.new")} />
-      <InvoiceForm
-        clients={clients}
-        products={products}
-        smallBusiness={ctx.organization.smallBusiness}
-        initial={preset ? { clientId: preset, serviceDate: "", dueDate: "", notes: "", lines: [] } : undefined}
-      />
+      <InvoiceForm {...props} initial={preset ? { clientId: preset } : undefined} />
     </>
   );
 }

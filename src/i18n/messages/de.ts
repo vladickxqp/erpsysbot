@@ -1,7 +1,9 @@
 import hub from "./hub/de";
+import invoicing from "./invoicing/de";
 
 const de = {
   hub,
+  invoicing,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",

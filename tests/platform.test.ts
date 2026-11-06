@@ -16,7 +16,7 @@ import { createOrder, setOrderStatus } from "@/server/orders";
 import { invitePlatform, isSuspended, listCompanies, platformStats, setSuspended } from "@/server/platform";
 import { listTasks } from "@/server/tasks";
 import { inviteMember } from "@/server/team";
-import { xrechnungXml } from "@/server/xrechnung";
+import { keepInvoiceFile } from "@/server/invoice-files";
 import { newCompany } from "./helpers";
 
 const unique = (name: string) => `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.org`;
@@ -140,12 +140,13 @@ describe("automations", () => {
 
 describe("xrechnung", () => {
   it("writes the issued invoice as UBL with totals, VAT and buyer reference; refuses drafts", async () => {
-    const ctx = await withCompanyData(await newCompany("E-Rechnung GmbH"));
-    const client = await createClient(ctx, { companyName: "Amt & Co <Stadt>", email: "amt@example.org", buyerReference: "04011000-12345-67" });
+    const company = await withCompanyData(await newCompany("E-Rechnung GmbH"));
+    const ctx = { ...company, organization: { ...company.organization, phone: "+49 30 123456", email: "buchhaltung@example.org" } };
+    const client = await createClient(ctx, { companyName: "Amt & Co <Stadt>", email: "amt@example.org", buyerReference: "04011000-12345-67", street: "Rathausplatz 1", postalCode: "10115", city: "Berlin" });
     const draft = await createInvoiceDraft(ctx, { clientId: client.id, items: [{ description: "Wartung", quantity: 2, unit: "Std", unitPriceCents: 6_550, vatRate: 19 }] });
-    await expect(xrechnungXml(ctx, draft.id)).rejects.toMatchObject({ code: "DRAFT" });
+    await expect(keepInvoiceFile(ctx, draft.id, "XRECHNUNG")).rejects.toMatchObject({ code: "DRAFT" });
     const issued = await issueInvoice(ctx, draft.id);
-    const { xml } = await xrechnungXml(ctx, issued.id);
+    const xml = new TextDecoder().decode((await keepInvoiceFile(ctx, issued.id, "XRECHNUNG")).bytes);
     expect(xml).toContain("<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>");
     expect(xml).toContain(`<cbc:ID>${issued.number}</cbc:ID>`);
     expect(xml).toContain("<cbc:BuyerReference>04011000-12345-67</cbc:BuyerReference>");

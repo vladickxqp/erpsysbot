@@ -11,7 +11,11 @@ import { listSessions, recoveryCodesLeft, twoFactorEnabled } from "@/server/auth
 import { mailAvailable } from "@/server/mail";
 import { myPreferences } from "@/server/preferences";
 import { quickActions } from "@/server/widget-data";
+import { listInvoiceTemplates } from "@/server/invoice-templates";
+import { sellerOf } from "@/server/invoices";
+import { styleOf, type InvoiceFileKind } from "@/lib/invoicing";
 import { CompanyForm } from "./company-form";
+import { InvoiceTemplatesCard } from "./invoice-templates-card";
 import { PreferencesCard } from "./preferences-card";
 import { PrivacyCard } from "./privacy-card";
 import { SecurityCard } from "./security-card";
@@ -59,10 +63,21 @@ export default async function SettingsPage() {
               smallBusiness: o.smallBusiness,
               paymentTermsDays: o.paymentTermsDays,
               invoiceNumberFormat: o.invoiceNumberFormat,
+              creditNoteNumberFormat: o.creditNoteNumberFormat,
               quoteNumberFormat: o.quoteNumberFormat,
               invoiceFooter: o.invoiceFooter ?? "",
+              einvoiceFormat: o.einvoiceFormat as InvoiceFileKind,
             }}
           />
+          {ctx.permissions.has("settings.manage") && (
+            <InvoiceTemplatesCard
+              templates={(await listInvoiceTemplates(ctx)).map((x) => ({ ...styleOf(x), id: x.id, name: x.name, language: x.language, isDefault: x.isDefault }))}
+              seller={sellerOf(o)}
+              logoId={o.logoDocumentId}
+              currency={o.currency}
+              language={o.locale}
+            />
+          )}
           <PreferencesCard initial={await myPreferences(ctx)} hasTelegram={!!telegram} hasMail={mailAvailable()} quickKeys={quickActions(ctx).map((a) => a.key)} />
           <ModulesCard companyOff={[...ctx.disabledModules]} myOff={[...ctx.hiddenModules]} canManage={ctx.permissions.has("settings.manage")} />
         </div>

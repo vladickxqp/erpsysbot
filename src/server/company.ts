@@ -13,6 +13,8 @@ import { getDb } from "@/db/client";
 import { documents, invoices, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { countryProfile, parseRate, validTaxId } from "@/lib/countries";
+import { INVOICE_FILE_KINDS } from "@/lib/invoicing";
+import { validNumberPattern } from "./money";
 import type { Context } from "./context";
 import { NotFoundError } from "./clients";
 import { requirePermission } from "./permissions";
@@ -82,13 +84,9 @@ export function companyInputFor(country: string) {
       .default(false)
       .transform((v) => v && profile.smallBusiness !== null),
     paymentTermsDays: z.coerce.number().int().min(0).max(120).default(14),
-    invoiceNumberFormat: z
-      .string()
-      .trim()
-      .min(3)
-      .max(40)
-      .refine((v) => /\{N+\}/.test(v), "number")
-      .default(profile.numbers.invoice),
+    invoiceNumberFormat: z.string().trim().min(3).max(40).refine(validNumberPattern, "number").default(profile.numbers.invoice),
+    creditNoteNumberFormat: z.string().trim().min(3).max(40).refine(validNumberPattern, "number").default(profile.numbers.creditNote),
+    einvoiceFormat: z.enum(INVOICE_FILE_KINDS).default("PDF"),
     quoteNumberFormat: z
       .string()
       .trim()

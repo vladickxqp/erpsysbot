@@ -10,6 +10,7 @@
  * - Actions run as the company's owner; messages go only to people of the
  *   company, by their linked Telegram.
  */
+import { openCents } from "@/lib/invoicing";
 import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
@@ -358,10 +359,10 @@ export async function runScheduledAutomations(): Promise<number> {
       const days = Math.floor((Date.parse(day) - Date.parse(invoice.dueDate!)) / 86_400_000);
       total += await runRules(orgId, "invoice.overdue", {
         key: `invoice:${invoice.id}:overdue`,
-        amountCents: invoice.grossCents - invoice.paidCents,
+        amountCents: openCents(invoice),
         daysOverdue: days,
         clientId: invoice.clientId,
-        vars: { client: displayName(client), number: invoice.number ?? "", amount: formatMoney(invoice.grossCents - invoice.paidCents, locale, region), days: String(days) },
+        vars: { client: displayName(client), number: invoice.number ?? "", amount: formatMoney(openCents(invoice), locale, region), days: String(days) },
       });
     }
     for (const task of lateTasks) {

@@ -190,6 +190,8 @@ export const organizations = pgTable("organizations", {
   quoteNumberFormat: text("quote_number_format").notNull().default("AN-{YYYY}-{NNNN}"),
   creditNoteNumberFormat: text("credit_note_number_format").notNull().default("GS-{YYYY}-{NNNN}"),
   invoiceFooter: text("invoice_footer"),
+  /** What goes to a customer by default: PDF, ZUGFERD or XRECHNUNG (src/lib/invoicing.ts). */
+  einvoiceFormat: text("einvoice_format").notNull().default("PDF"),
   currency: text("currency").notNull().default("EUR"),
   /** The tax rates its lines may carry; null: the country's (src/lib/countries.ts). */
   taxRates: numeric("tax_rates", { precision: 6, scale: 3, mode: "number" }).array(),
@@ -680,7 +682,46 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "PARTIALLY_PAID",
   "PAID",
   "CANCELLED",
+  "CREDITED",
 ]);
+/** How an invoice is taxed (src/lib/invoicing.ts): the seller's status and the kind of sale decide it. */
+export const invoiceTaxTreatmentEnum = pgEnum("invoice_tax_treatment", [
+  "STANDARD",
+  "SMALL_BUSINESS",
+  "REVERSE_CHARGE",
+  "INTRA_EU",
+  "EXPORT",
+  "EXEMPT",
+  "NOT_TAXABLE",
+]);
+export const invoiceFileKindEnum = pgEnum("invoice_file_kind", ["PDF", "ZUGFERD", "XRECHNUNG"]);
+export const invoiceDeliveryStatusEnum = pgEnum("invoice_delivery_status", ["SENT", "FAILED"]);
+
+/** How a company's invoices look. None stored: the built-in look (src/lib/invoicing.ts). */
+export const invoiceTemplates = pgTable(
+  "invoice_templates",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    /** CLASSIC, MODERN or COMPACT. */
+    layout: text("layout").notNull().default("CLASSIC"),
+    accentColor: text("accent_color").notNull().default("#2563eb"),
+    /** The language a new invoice with this template starts in. */
+    language: text("language").notNull().default("de"),
+    /** Replaces the company's footer line on the document. */
+    footer: text("footer"),
+    /** Replaces the standard sentence; {amount}, {due} and {number} are filled in. */
+    paymentInstructions: text("payment_instructions"),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("invoice_templates_org_name_key").on(t.organizationId, t.name),
+    uniqueIndex("invoice_templates_org_default_key").on(t.organizationId).where(sql`${t.isDefault}`),
+  ],
+);
 
 export const invoices = pgTable(
   "invoices",
@@ -697,10 +738,23 @@ export const invoices = pgTable(
     orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
     /** The invoice a credit note corrects. */
     correctsId: uuid("corrects_id"),
+    /** What the invoice is about, above its lines. */
+    title: text("title"),
+    /** A draft may carry the date it should be issued with; empty: the day it is issued. */
     issueDate: date("issue_date"),
     serviceDate: date("service_date"),
+    /** With `serviceDate`: the last day of a service period. */
+    serviceEndDate: date("service_end_date"),
     dueDate: date("due_date"),
     notes: text("notes"),
+    /** The document's language. */
+    language: text("language").notNull().default("de"),
+    taxTreatment: invoiceTaxTreatmentEnum("tax_treatment").notNull().default("STANDARD"),
+    /** Why no tax is due, for EXEMPT and NOT_TAXABLE: printed and sent in the e-invoice. */
+    exemptionReason: text("exemption_reason"),
+    templateId: uuid("template_id").references(() => invoiceTemplates.id, { onDelete: "set null" }),
+    /** The look as it was when issued: later edits of the template do not change it. */
+    templateSnapshot: jsonb("template_snapshot"),
     /** Seller and buyer as they were when issued: later edits do not change it. */
     sellerSnapshot: jsonb("seller_snapshot"),
     buyerSnapshot: jsonb("buyer_snapshot"),
@@ -708,17 +762,24 @@ export const invoices = pgTable(
     vatCents: integer("vat_cents").notNull().default(0),
     grossCents: integer("gross_cents").notNull().default(0),
     paidCents: integer("paid_cents").notNull().default(0),
+    /** What credit notes have taken back from this invoice, as a positive amount. */
+    creditedCents: integer("credited_cents").notNull().default(0),
     /** Billed in another currency than the company's; amounts here are in it. */
     currency: text("currency"),
     /** Company currency per 1 of `currency`, for the books. */
     exchangeRate: numeric("exchange_rate", { precision: 14, scale: 6, mode: "number" }),
     smallBusiness: boolean("small_business").notNull().default(false),
     issuedAt: timestamp("issued_at", { withTimezone: true }),
+    /** First delivery that really went out; a failed one leaves it empty. */
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** Chosen by the form once: the same request twice stays one invoice. */
+    requestId: text("request_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex("invoices_org_number_key").on(t.organizationId, t.number),
+    uniqueIndex("invoices_org_request_key").on(t.organizationId, t.requestId),
     index("invoices_org_status_idx").on(t.organizationId, t.status),
     index("invoices_client_idx").on(t.clientId),
   ],
@@ -733,6 +794,54 @@ export const invoiceItems = pgTable(
       .references(() => invoices.id, { onDelete: "cascade" }),
   },
   (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
+);
+
+/**
+ * The files of an issued invoice, exactly as they left the company. The bytes
+ * live in UPLOAD_DIR under `storageKey`, the hash proves they did not change;
+ * db/rls.sql refuses to alter or delete a row.
+ */
+export const invoiceFiles = pgTable(
+  "invoice_files",
+  {
+    id: id(),
+    organizationId: orgId(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "restrict" }),
+    kind: invoiceFileKindEnum("kind").notNull(),
+    name: text("name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    storageKey: text("storage_key").notNull(),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("invoice_files_invoice_kind_key").on(t.invoiceId, t.kind)],
+);
+
+/** Every attempt to send an invoice, the failed ones too. Rows are never changed. */
+export const invoiceDeliveries = pgTable(
+  "invoice_deliveries",
+  {
+    id: id(),
+    organizationId: orgId(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "restrict" }),
+    status: invoiceDeliveryStatusEnum("status").notNull(),
+    format: invoiceFileKindEnum("format").notNull(),
+    recipient: text("recipient").notNull(),
+    subject: text("subject").notNull(),
+    /** The mail server's id of the message. */
+    messageId: text("message_id"),
+    /** Why it failed, without anything secret. */
+    error: text("error"),
+    sentBy: uuid("sent_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("invoice_deliveries_invoice_idx").on(t.invoiceId, t.createdAt)],
 );
 
 export const payments = pgTable(
@@ -1753,4 +1862,7 @@ export const TENANT_TABLES = [
   "chat_messages",
   "personal_transactions",
   "content_stats",
+  "invoice_templates",
+  "invoice_files",
+  "invoice_deliveries",
 ] as const;

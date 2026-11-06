@@ -5,6 +5,7 @@
  * on the link — with that user's role, exactly as in the app. Unlinked
  * accounts only get the way to link.
  */
+import { openCents } from "@/lib/invoicing";
 import { isSuspended } from "../platform";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -240,7 +241,7 @@ async function invoicesText(ctx: Context, t: T): Promise<string> {
     const label = h(`${i.number} · ${i.clientName}`);
     const linked = base ? `<a href="${base}/app/invoices/${i.id}">${label}</a>` : label;
     const due = i.dueDate ? ` · ${formatDate(i.dueDate, locale, region)}` : "";
-    return `${i.overdue ? "⚠️ " : ""}${linked}\n${formatMoney(i.grossCents - i.paidCents, locale, region)}${due}`;
+    return `${i.overdue ? "⚠️ " : ""}${linked}\n${formatMoney(openCents(i), locale, region)}${due}`;
   });
   return [`<b>${t("bot.openInvoices", { count: total })}</b>`, ...lines].join("\n\n");
 }

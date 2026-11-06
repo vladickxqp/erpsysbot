@@ -58,7 +58,7 @@ export async function invoiceStats(ctx: Context): Promise<InvoiceStats> {
   const now = today(ctx.organization.timezone);
   return withTenant(ctx.organization.id, async (tx) => {
     // In the company's currency: invoices in another one count at their rate.
-    const open = sql`(${invoices.grossCents} - ${invoices.paidCents}) * coalesce(${invoices.exchangeRate}, 1)`;
+    const open = sql`(${invoices.grossCents} - ${invoices.paidCents} - ${invoices.creditedCents}) * coalesce(${invoices.exchangeRate}, 1)`;
     const late = sql`${invoices.dueDate} < ${now}`;
     const [row] = await tx
       .select({

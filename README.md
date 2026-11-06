@@ -192,6 +192,9 @@ background jobs; what depends on it goes off with it.
 
 ### Accounting
 
+- **Invoices:** write, issue, send and correct in `/app/invoices`, with PDF
+  templates, XRechnung and ZUGFeRD, delivery history and an archive of what was
+  sent. See [docs/RECHNUNGEN.md](docs/RECHNUNGEN.md).
 - **Recurring invoices:** Invoices → Recurring. Weekly to yearly; draft, or
   issued and e-mailed automatically. Missed dates are caught up, each date is
   billed once.
@@ -216,6 +219,10 @@ curl -H "Authorization: Bearer nx_…" https://<your domain>/api/v1/clients
 | `GET /api/v1/clients?q=&page=` | clients |
 | `POST /api/v1/clients` | new client (JSON like the client form) |
 | `GET /api/v1/invoices?q=&page=` | invoices |
+| `POST /api/v1/invoices` | new draft; `Idempotency-Key` keeps a repeat from making a second one |
+| `GET /api/v1/invoices/<id>` | one invoice |
+| `POST /api/v1/invoices/<id>/issue`, `/send` | issue it; send it (`to`, `format`, `message`) |
+| `GET /api/v1/invoices/<id>/files/pdf` | its file; also `zugferd`, `xrechnung` |
 | `GET /api/v1/tasks?q=&open=1` | tasks |
 | `POST /api/v1/tasks` | new task |
 

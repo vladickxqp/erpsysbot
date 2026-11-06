@@ -27,7 +27,7 @@ export default async function SharedPage({ params }: { params: Promise<{ token: 
               <span>
                 {t(doc.kind === "quote" ? "nav.quotes" : "nav.invoices")} {doc.number}
               </span>
-              <Badge variant="secondary">{t(doc.kind === "quote" ? `quotes.${doc.status}` : `invoices.${doc.status}`)}</Badge>
+              <Badge variant="secondary">{t(doc.kind === "quote" ? `quotes.${doc.status}` : doc.status === "CREDITED" ? "invoicing.status_CREDITED" : `invoices.${doc.status}`)}</Badge>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               {doc.company}

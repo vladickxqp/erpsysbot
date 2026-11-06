@@ -30,7 +30,7 @@ drei unabhängige Sicherheitsprüfungen. **Mit echten Schlüsseln noch nie gelau
 | calendar | Termine, Serien, alles mit Datum | Core | appointments | calendar.* | /app/calendar | ICS-Link | COMPLETE |
 | tasks | Aufgaben, Abhängigkeiten, Projekte, Team, Budget | Core | tasks, task_dependencies, task_comments, projects, project_members | tasks.* | /app/tasks, /app/tasks/[id], /app/tasks/projects/[id], /app/tasks/plan | /api/v1/tasks | COMPLETE |
 | time | Zeiterfassung, Abrechnung | Core | time_entries | time.* | /app/time | — | COMPLETE |
-| orders, quotes, invoices | Aufträge, Angebote, Rechnungen, Mahnungen | crm | orders, quotes, invoices, payments, payment_reminders, recurring_invoices | orders.*, invoices.* | /app/orders, /app/quotes, /app/invoices | /api/v1/invoices, XRechnung, Kundenlinks | COMPLETE |
+| orders, quotes, invoices | Aufträge, Angebote, Rechnungen, Mahnungen | crm | orders, quotes, invoices, payments, payment_reminders, recurring_invoices | orders.*, invoices.* | /app/orders, /app/quotes, /app/invoices | /api/v1/invoices, XRechnung, ZUGFeRD, Kundenlinks | COMPLETE, siehe docs/RECHNUNGEN.md |
 | finance | Buchungen, Bank, DATEV, Belege | invoices | transactions, bank_transactions | finance.* | /app/finance | CAMT/CSV, DATEV | COMPLETE für Einnahmen/Ausgaben |
 | products, inventory | Produkte, Lager, Einkauf | orders | products, stock_movements, suppliers, purchase_orders | products.manage, inventory.manage | /app/products, /app/purchasing | — | COMPLETE |
 | documents, media | Dateien, Medien | Core | documents | documents.* | /app/documents, /app/media | — | COMPLETE |
@@ -73,7 +73,6 @@ drei unabhängige Sicherheitsprüfungen. **Mit echten Schlüsseln noch nie gelau
 
 | Punkt | Warum |
 |---|---|
-| ZUGFeRD | Verlangt PDF/A-3 mit ICC-Profil und XML im CII-Format. Ohne amtlichen Validator ist nicht prüfbar, ob eine Datei gültig ist. XRechnung deckt die Pflicht in Deutschland. |
 | ESF Kasachstan, E-Rechnung Ukraine | Brauchen staatliche Zugänge und Zertifikate des Unternehmens. |
 | Instagram, TikTok, Facebook, LinkedIn, X | Brauchen freigegebene Entwickler-Apps des Betreibers. |
 | Online-Zahlung durch Kunden | Braucht Stripe Connect mit dem Konto jeder Firma. |

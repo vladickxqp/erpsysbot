@@ -14,11 +14,23 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? "github" : "line",
   use: { baseURL: `http://localhost:${port}`, channel: process.env.PLAYWRIGHT_CHANNEL, locale: "de-DE" },
-  webServer: {
-    command: `npx next start -p ${port}`,
-    port,
-    timeout: 120_000,
-    reuseExistingServer: false,
-    env: { DATABASE_URL: "pglite:./.data/e2e", REGISTRATION: "open", APP_URL: `http://localhost:${port}`, ANTHROPIC_API_KEY: "" },
-  },
+  webServer: [
+    { command: "node e2e/fake-mail.mjs", port: 3326, reuseExistingServer: false },
+    {
+      command: `npx next start -p ${port}`,
+      port,
+      timeout: 120_000,
+      reuseExistingServer: false,
+      env: {
+        DATABASE_URL: "pglite:./.data/e2e",
+        UPLOAD_DIR: "./.data/e2e-uploads",
+        REGISTRATION: "open",
+        APP_URL: `http://localhost:${port}`,
+        ANTHROPIC_API_KEY: "",
+        SMTP_HOST: "127.0.0.1",
+        SMTP_PORT: "2526",
+        SMTP_FROM: "noreply@nexora.example",
+      },
+    },
+  ],
 });

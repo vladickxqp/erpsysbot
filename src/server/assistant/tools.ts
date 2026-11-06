@@ -6,6 +6,7 @@
  * for the person to confirm (src/server/assistant/actions.ts). Issuing,
  * payments, cancelling and deleting stay in the app.
  */
+import { openCents } from "@/lib/invoicing";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z, ZodError } from "zod";
 import { INVOICE_FILTERS, ORDER_STATUSES } from "@/lib/domain";
@@ -256,7 +257,7 @@ export const TOOLS: Tool[] = [
           issue_date: i.issueDate,
           due_date: i.dueDate,
           gross: major(i.grossCents),
-          open: major(i.grossCents - i.paidCents),
+          open: major(openCents(i)),
         })),
       };
     },

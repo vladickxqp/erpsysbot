@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { getT } from "@/i18n/server";
 import { NotFoundError } from "@/server/clients";
-import { getInvoice, missingCompanyData } from "@/server/invoices";
+import { countryProfile } from "@/lib/countries";
+import type { InvoiceFileKind } from "@/lib/invoicing";
+import { einvoiceProblems } from "@/server/einvoice";
+import { invoiceHistory } from "@/server/invoice-files";
+import { getInvoice, missingCompanyData, pdfData } from "@/server/invoices";
 import { totals, today } from "@/server/money";
 import { asLines } from "@/server/orders";
 import { requirePageContext } from "@/server/request";
@@ -27,8 +31,13 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const { invoice, items, payments, client, clientName, related } = found;
   const now = today(ctx.organization.timezone);
   const reminders = await listReminders(ctx, id);
+  const { deliveries } = await invoiceHistory(ctx, id);
+  const einvoiceMissing = countryProfile(ctx.organization.country).xrechnung && invoice.status !== "DRAFT" ? einvoiceProblems(await pdfData(ctx, id)) : null;
   return (
     <InvoiceDetail
+      deliveries={deliveries.map((d) => ({ id: d.id, status: d.status, format: d.format, recipient: d.recipient, error: d.error, createdAt: d.createdAt.toISOString() }))}
+      defaultFormat={ctx.organization.einvoiceFormat as InvoiceFileKind}
+      einvoiceMissing={einvoiceMissing}
       ai={assistantAvailable() && ctx.permissions.has("ai.use")}
       invoice={{
         id: invoice.id,
@@ -44,7 +53,13 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         grossCents: invoice.grossCents,
         currency: invoice.currency,
         paidCents: invoice.paidCents,
+        creditedCents: invoice.creditedCents,
         smallBusiness: invoice.smallBusiness,
+        title: invoice.title,
+        sent: !!invoice.sentAt,
+        taxTreatment: invoice.taxTreatment,
+        exemptionReason: invoice.exemptionReason,
+        language: invoice.language,
         overdue:
           invoice.kind === "INVOICE" && ["ISSUED", "PARTIALLY_PAID"].includes(invoice.status) && !!invoice.dueDate && invoice.dueDate < now,
       }}

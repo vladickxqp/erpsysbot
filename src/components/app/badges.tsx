@@ -17,9 +17,11 @@ const ORDER: Record<string, string> = {
 const INVOICE: Record<string, string> = {
   DRAFT: "bg-muted text-muted-foreground",
   ISSUED: "bg-primary/10 text-primary border-primary/20",
+  SENT: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20",
   PARTIALLY_PAID: "bg-warning/10 text-warning border-warning/30",
   PAID: "bg-success/10 text-success border-success/20",
   CANCELLED: "bg-muted text-muted-foreground",
+  CREDITED: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/20",
   OVERDUE: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
@@ -32,7 +34,7 @@ export function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-export function InvoiceStatusBadge({ status, overdue, kind }: { status: string; overdue?: boolean; kind?: string }) {
+export function InvoiceStatusBadge({ status, overdue, kind, sent }: { status: string; overdue?: boolean; kind?: string; sent?: boolean }) {
   const { t } = useI18n();
   if (kind === "CREDIT_NOTE") {
     return (
@@ -41,10 +43,10 @@ export function InvoiceStatusBadge({ status, overdue, kind }: { status: string; 
       </Badge>
     );
   }
-  const key = overdue ? "OVERDUE" : status;
+  const key = overdue ? "OVERDUE" : status === "ISSUED" && sent ? "SENT" : status;
   return (
     <Badge variant="outline" className={cn("whitespace-nowrap", INVOICE[key])}>
-      {t(`invoices.${key}`)}
+      {t(key === "SENT" || key === "CREDITED" ? `invoicing.status_${key}` : `invoices.${key}`)}
     </Badge>
   );
 }

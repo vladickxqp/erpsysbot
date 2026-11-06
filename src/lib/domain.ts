@@ -7,8 +7,11 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 /** Still to be worked on. */
 export const OPEN_STATUSES: OrderStatus[] = ["NEW", "CONFIRMED", "IN_PROGRESS", "WAITING"];
 
-export const INVOICE_FILTERS = ["DRAFT", "OPEN", "OVERDUE", "PAID", "CANCELLED", "CREDIT_NOTE"] as const;
+export const INVOICE_FILTERS = ["DRAFT", "OPEN", "SENT", "OVERDUE", "PARTIALLY_PAID", "PAID", "CANCELLED", "CREDITED", "CREDIT_NOTE"] as const;
 export type InvoiceFilter = (typeof INVOICE_FILTERS)[number];
+
+export const INVOICE_SORTS = ["number", "client", "issueDate", "dueDate", "total", "status", "created"] as const;
+export type InvoiceSort = (typeof INVOICE_SORTS)[number];
 
 export const PAYMENT_METHODS = ["TRANSFER", "CASH", "CARD", "PAYPAL", "OTHER"] as const;
 

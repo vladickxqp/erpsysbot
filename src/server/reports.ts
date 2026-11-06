@@ -3,6 +3,7 @@
  * a title, columns and rows — the page shows it, the export writes it as CSV
  * or PDF. Money is in cents.
  */
+import { openCents } from "@/lib/invoicing";
 import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { getDb } from "@/db/client";
@@ -83,7 +84,7 @@ export async function buildReport(ctx: Context, kind: ReportKind, from: string, 
             due: invoice.dueDate,
             days: Math.max(0, late),
             bucket: `reports.${bucket}`,
-            open: Math.round((invoice.grossCents - invoice.paidCents) * (invoice.exchangeRate ?? 1)),
+            open: Math.round(openCents(invoice) * (invoice.exchangeRate ?? 1)),
           };
         });
         const totals: Record<string, number> = { open: sum(rows, "open") };

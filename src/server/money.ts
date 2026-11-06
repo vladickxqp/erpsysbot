@@ -39,6 +39,13 @@ export function lineNet(line: Pick<Line, "quantity" | "unitPriceCents" | "discou
   return Math.round(line.quantity * line.unitPriceCents * (1 - line.discountPercent / 100));
 }
 
+/** What a line costs before its discount. */
+export const lineList = (line: Pick<Line, "quantity" | "unitPriceCents">): number => Math.round(line.quantity * line.unitPriceCents);
+
+/** The discounts of all lines together, as a positive amount. */
+export const discountCents = (lines: Pick<Line, "quantity" | "unitPriceCents" | "discountPercent">[]): number =>
+  lines.reduce((sum, line) => sum + lineList(line) - lineNet(line), 0);
+
 export type Totals = {
   netCents: number;
   vatCents: number;
@@ -98,10 +105,24 @@ export function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** "RE-{YYYY}-{NNNN}" with 2026 and 7 → "RE-2026-0007". */
-export function formatNumber(pattern: string, year: number, n: number): string {
+/** "RE-{YYYY}-{NNNN}" with 2026 and 7 → "RE-2026-0007"; {MM} is the month of the document. */
+export function formatNumber(pattern: string, year: number, n: number, month = 1): string {
   return pattern
     .replace(/\{YYYY\}/g, String(year))
     .replace(/\{YY\}/g, String(year).slice(-2))
+    .replace(/\{MM\}/g, String(month).padStart(2, "0"))
     .replace(/\{(N+)\}/g, (_, ns: string) => String(n).padStart(ns.length, "0"));
 }
+
+/**
+ * The period a number runs in, by what the pattern shows: a month with {MM},
+ * a year with {YYYY} or {YY}, else the numbers run on for ever. A pattern
+ * without a year that started over each January would repeat itself.
+ */
+export function numberPeriod(pattern: string, isoDate: string): string {
+  if (pattern.includes("{MM}")) return isoDate.slice(0, 7);
+  return /\{YY(YY)?\}/.test(pattern) ? isoDate.slice(0, 4) : "all";
+}
+
+/** A numbering pattern: a running number, and only the placeholders we fill in. */
+export const validNumberPattern = (pattern: string) => /\{N+\}/.test(pattern) && !/\{(?!YYYY\}|YY\}|MM\}|N+\})[^}]*\}/.test(pattern);
