@@ -117,7 +117,8 @@ export async function deleteDeal(ctx: Context, id: string): Promise<void> {
 export async function listDeals(ctx: Context, opts: { clientId?: string } = {}) {
   assertModule(ctx, "pipeline");
   requirePermission(ctx.permissions, "clients.read");
-  const since = new Date(Date.now() - 30 * 86_400_000);
+  // Goes into raw SQL below: the Postgres driver takes a string there, not a Date.
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
   return withTenant(ctx.organization.id, async (tx) => {
     const rows = await tx
       .select({ deal: deals, client: { companyName: clients.companyName, firstName: clients.firstName, lastName: clients.lastName } })

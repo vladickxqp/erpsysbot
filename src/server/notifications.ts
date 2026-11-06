@@ -128,7 +128,7 @@ export async function deliverWaiting(at = new Date()): Promise<number> {
   for (const person of waiting) {
     const prefs = cleanPreferences(person.data);
     if (!prefs.notifications.quietFrom) continue;
-    const since = new Date(at.getTime() - 24 * 3_600_000);
+    const since = new Date(at.getTime() - 24 * 3_600_000).toISOString();
     const open = await withTenant(person.organizationId, (tx) =>
       tx
         .select()

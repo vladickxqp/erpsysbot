@@ -32,13 +32,13 @@ export async function platformStats(user: SessionUser) {
   const since7 = new Date(Date.now() - 7 * DAY);
   const since1 = new Date(Date.now() - DAY);
   const [companies] = await db
-    .select({ total: sql<number>`count(*)::int`, recent: sql<number>`count(*) filter (where ${organizations.createdAt} >= ${since30})::int` })
+    .select({ total: sql<number>`count(*)::int`, recent: sql<number>`count(*) filter (where ${organizations.createdAt} >= ${since30.toISOString()})::int` })
     .from(organizations);
   const [people] = await db.select({ total: sql<number>`count(*)::int` }).from(users);
   const [active] = await db.select({ n: sql<number>`count(distinct ${sessions.userId})::int` }).from(sessions).where(gte(sessions.createdAt, since7));
   const [ai] = await db
     .select({
-      day: sql<number>`count(*) filter (where ${assistantMessages.role} = 'user' and ${assistantMessages.createdAt} >= ${since1})::int`,
+      day: sql<number>`count(*) filter (where ${assistantMessages.role} = 'user' and ${assistantMessages.createdAt} >= ${since1.toISOString()})::int`,
       month: sql<number>`count(*) filter (where ${assistantMessages.role} = 'user')::int`,
       input: sql<number>`coalesce(sum(${assistantMessages.inputTokens}), 0)::bigint`,
       output: sql<number>`coalesce(sum(${assistantMessages.outputTokens}), 0)::bigint`,
