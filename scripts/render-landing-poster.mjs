@@ -18,11 +18,18 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(outputText).toStrin
 
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined, args: ["--use-angle=default", "--ignore-gpu-blocklist"] });
 
-for (const [name, width, height, quality] of [
-  ["poster-wide.webp", 1920, 1080, 0.82],
-  ["poster-tall.webp", 720, 1280, 0.8],
+// Drawn at the proportions of a real screen, enlarged the way a sharp display does it,
+// so the lines have the same weight in every size.
+for (const [name, width, height, scale, quality] of [
+  ["wide-1920.webp", 1920, 1080, 1, 0.82],
+  ["wide-2560.webp", 1920, 1080, 4 / 3, 0.8],
+  ["wide-3840.webp", 1920, 1080, 2, 0.76],
+  ["wide-7680.webp", 1920, 1080, 4, 0.7],
+  ["tall-720.webp", 360, 640, 2, 0.8],
+  ["tall-1440.webp", 360, 640, 4, 0.76],
+  ["tall-2160.webp", 360, 640, 6, 0.72],
 ]) {
-  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
   await page.setContent(`<canvas id="c" style="position:fixed;inset:0;width:${width}px;height:${height}px"></canvas>`);
   const picture = await page.evaluate(
     async ({ moduleUrl, quality }) => {

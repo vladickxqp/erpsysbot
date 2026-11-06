@@ -3,7 +3,8 @@
 // after PERIOD seconds and the land after LENGTH units, so it can run for ever.
 
 const PERIOD = 48;
-const LENGTH = 96;
+// A whole number of wide grid cells (2.5 units), or the lines would jump when it repeats.
+const LENGTH = 100;
 const NEAR = 0.6;
 const FAR = 130;
 
@@ -269,33 +270,67 @@ function landMesh(gl: WebGL2RenderingContext, columns: number, rows: number): { 
   return { vao, count: order.length };
 }
 
-/** Enough for every laptop screen; larger ones are enlarged a little by the browser. */
-const MOST_PIXELS = 6_000_000;
+/** What one picture may cost on the graphics card: leaves room for the page at 60 pictures a second. */
+const BUDGET_MS = 11;
+
+/** Phones and tablets run at full speed only where it costs them next to nothing. */
+const LIGHT_MS = 6;
 
 /** Below this a screen no longer feels smooth, at the lowest detail not worth showing. */
 const SLOW_MS = 38;
 const HOPELESS_MS = 50;
-const DETAILS = [1, 0.85, 0.7, 0.55];
+
+/** Share of the screen's own resolution. Below the last step the still picture is sharper. */
+const DETAILS = [1, 0.85, 0.7, 0.6, 0.5];
+const LOWEST = DETAILS[DETAILS.length - 1];
+
+/** Above this the memory goes into the picture: the lines are smoothed in the shader anyway. */
+const EDGE_SMOOTHING_PIXELS = 10_000_000;
+
+/** The share of the screen's resolution this graphics card can fill in time, null when too little. */
+export function fitDetail(costMs: number): number | null {
+  if (costMs <= BUDGET_MS) return 1;
+  const detail = Math.sqrt(BUDGET_MS / costMs);
+  return detail < LOWEST ? null : detail;
+}
 
 /** The detail to go on with after a run of frames, null when a still picture serves better. */
-export function nextDetail(detail: number, averageMs: number): number | null {
-  if (averageMs <= SLOW_MS) return detail;
+export function nextDetail(detail: number, typicalMs: number): number | null {
+  if (typicalMs <= SLOW_MS) return detail;
   const lower = DETAILS.find((step) => step < detail);
   if (lower !== undefined) return lower;
-  return averageMs > HOPELESS_MS ? null : detail;
+  return typicalMs > HOPELESS_MS ? null : detail;
+}
+
+/** Enough points for the hills to stay round on this many pixels. */
+export function meshSize(width: number, height: number): { columns: number; rows: number } {
+  return {
+    columns: Math.min(1000, Math.max(200, Math.round(width / 4.5))),
+    rows: Math.min(720, Math.max(160, Math.round(height / 4))),
+  };
 }
 
 export type Scene = {
   /** Draws the moment `seconds` into the flight, at the size the canvas has on screen. */
   draw(seconds: number): void;
-  /** How much of the full resolution is used, from 1 down. */
+  /** Draws like `draw` and waits for the card: what one picture costs, in milliseconds. */
+  cost(seconds: number): number;
+  /** How much of the screen's own resolution is used, from 1 down. */
   setDetail(detail: number): void;
   dispose(): void;
 };
 
 /** The scene on this canvas, or null where the graphics card cannot draw it. */
 export function createScene(canvas: HTMLCanvasElement, { small }: { small: boolean }): Scene | null {
-  const gl = canvas.getContext("webgl2", { alpha: false, antialias: true, depth: true, powerPreference: small ? "low-power" : "high-performance" });
+  const screen = window.devicePixelRatio || 1;
+  const nativeWidth = canvas.clientWidth * screen;
+  const nativeHeight = canvas.clientHeight * screen;
+  const gl = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: nativeWidth * nativeHeight <= EDGE_SMOOTHING_PIXELS,
+    depth: true,
+    powerPreference: small ? "low-power" : "high-performance",
+  });
   if (!gl) return null;
 
   const sky = compile(gl, SKY_VERTEX, SKY_FRAGMENT);
@@ -305,14 +340,16 @@ export function createScene(canvas: HTMLCanvasElement, { small }: { small: boole
   const skyAt = (name: string) => gl.getUniformLocation(sky, name);
   const landAt = (name: string) => gl.getUniformLocation(land, name);
   const empty = gl.createVertexArray();
-  const mesh = small ? landMesh(gl, 220, 170) : landMesh(gl, 420, 300);
-
-  const maxDensity = small ? 1.75 : 2;
+  const { columns, rows } = meshSize(nativeWidth, nativeHeight);
+  const mesh = landMesh(gl, columns, rows);
+  const [widest, tallest] = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array;
+  const largest = Math.min(widest, tallest, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number);
+  const probe = new Uint8Array(4);
   let detail = 1;
 
   function resize(): number {
-    const area = Math.max(1, canvas.clientWidth * canvas.clientHeight);
-    const density = Math.min(window.devicePixelRatio || 1, maxDensity, Math.sqrt(MOST_PIXELS / area)) * detail;
+    const longest = Math.max(1, canvas.clientWidth, canvas.clientHeight);
+    const density = Math.min(window.devicePixelRatio || 1, largest / longest) * detail;
     const width = Math.max(1, Math.round(canvas.clientWidth * density));
     const height = Math.max(1, Math.round(canvas.clientHeight * density));
     if (canvas.width !== width || canvas.height !== height) {
@@ -322,9 +359,15 @@ export function createScene(canvas: HTMLCanvasElement, { small }: { small: boole
     return density;
   }
 
-  return {
+  const scene: Scene = {
     setDetail(next) {
       detail = next;
+    },
+    cost(seconds) {
+      const begun = performance.now();
+      scene.draw(seconds);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, probe);
+      return performance.now() - begun;
     },
     draw(seconds) {
       const density = resize();
@@ -369,48 +412,95 @@ export function createScene(canvas: HTMLCanvasElement, { small }: { small: boole
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };
+  return scene;
 }
 
 const WARM_UP = 20;
 const SAMPLE = 45;
+const TRIALS = 4;
+const SECOND_LOOKS = 3;
+
+function middle(values: number[]): number {
+  return [...values].sort((a, b) => a - b)[values.length >> 1];
+}
 
 /**
- * Keeps the scene moving until the returned function is called. `started` comes
- * with the first picture, `gaveUp` when this device cannot show it smoothly.
+ * Keeps the scene moving until the returned function is called. It first times
+ * a few pictures at the screen's own resolution while the still picture is
+ * showing, and settles on what this graphics card can do. `started` comes with
+ * the first picture, `gaveUp` when the still picture serves this device better.
  */
 export function animate(scene: Scene, { small, started, gaveUp }: { small: boolean; started: () => void; gaveUp: () => void }) {
   let frame = 0;
   let seconds = 0;
   let last = 0;
   let detail = 1;
-  let counted = -WARM_UP;
-  let total = 0;
+  let settled = false;
+  let halfRate = false;
+  let warming = WARM_UP;
   let running = false;
+  let secondLooks = SECOND_LOOKS;
+  const costs: number[] = [];
+  let passes: number[] = [];
+
+  function settle() {
+    costs.push(scene.cost(0));
+    if (costs.length < TRIALS) return;
+    // The first one pays for setting everything up; a busy moment only ever makes one slower.
+    const cost = Math.min(...costs.slice(1));
+    const fit = fitDetail(cost);
+    if (fit === null) {
+      stop();
+      gaveUp();
+      return;
+    }
+    detail = fit;
+    scene.setDetail(fit);
+    halfRate = small && cost * fit * fit > LIGHT_MS;
+    settled = true;
+  }
+
+  /** The start of a page is a busy moment: a card that was only held up gets its pixels back. */
+  function lookAgain() {
+    secondLooks--;
+    const fit = fitDetail(scene.cost(seconds) / (detail * detail));
+    if (fit !== null && fit > detail) {
+      detail = fit;
+      scene.setDetail(fit);
+    }
+  }
 
   function tick(now: number) {
     if (!running) return;
     frame = requestAnimationFrame(tick);
+    if (!settled) {
+      settle();
+      return;
+    }
     const passed = last ? now - last : 0;
-    // Phones get half the pictures: they save the battery and nobody sees the difference here.
-    if (small && passed > 0 && passed < 28) return;
+    if (halfRate && passed > 0 && passed < 28) return;
     last = now;
     seconds += Math.min(passed, 100) / 1000;
     scene.draw(seconds);
     if (passed === 0) started();
     if (passed === 0 || passed > 250) return;
-    counted++;
-    if (counted <= 0) return;
-    total += passed;
-    if (counted < SAMPLE) return;
-    const next = nextDetail(detail, total / counted);
-    counted = -WARM_UP;
-    total = 0;
+    if (warming > 0) {
+      warming--;
+      return;
+    }
+    passes.push(passed);
+    if (passes.length < SAMPLE) return;
+    const next = nextDetail(detail, middle(passes));
+    passes = [];
+    warming = WARM_UP;
     if (next === null) {
       stop();
       gaveUp();
     } else if (next !== detail) {
       detail = next;
       scene.setDetail(next);
+    } else if (detail < 1 && secondLooks > 0) {
+      lookAgain();
     }
   }
 

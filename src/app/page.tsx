@@ -88,7 +88,7 @@ export default async function Home() {
         <div className="hero-film absolute inset-0">
           <BackdropScene priority />
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,8,20,0.55),transparent_70%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,8,20,0.55),transparent_70%)] max-md:bg-[radial-gradient(ellipse_at_center,rgba(5,8,20,0.82),transparent_90%)]" />
         <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-[#050814] to-transparent" />
 
         <div className="hero-copy relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 pt-24 pb-10 text-center sm:px-6">
