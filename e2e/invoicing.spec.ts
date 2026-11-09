@@ -16,7 +16,9 @@ async function company(page: Page, email: string) {
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Konto erstellen" }).click();
   await page.waitForURL("**/app/welcome");
-  await page.locator("main button").first().click();
+  await page.getByRole("button", { name: "IT-Unternehmen" }).click();
+  await page.getByRole("button", { name: "Weiter", exact: true }).click();
+  await page.getByRole("button", { name: "Übernehmen" }).click();
   await page.waitForURL("**/app");
   await expect.poll(async () => (await mails(page)).filter((m) => m.includes(email)).length).toBeGreaterThan(0);
   const mail = (await mails(page)).filter((m) => m.includes(email)).pop()!;

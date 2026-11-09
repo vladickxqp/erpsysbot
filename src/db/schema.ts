@@ -205,6 +205,8 @@ export const organizations = pgTable("organizations", {
   datev: jsonb("datev"),
   /** BUSINESS, CREATOR, FREELANCER or PERSONAL (src/lib/modules.ts); null: not chosen yet. */
   workspaceType: text("workspace_type"),
+  /** What the company does, several at once (src/lib/industries.ts). */
+  industries: text("industries").array().notNull().default(sql`'{}'::text[]`),
   /** Picture from the documents store, printed on invoices and quotes. */
   logoDocumentId: uuid("logo_document_id"),
   createdAt: createdAt(),

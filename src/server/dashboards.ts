@@ -14,6 +14,7 @@ import { NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { moduleOn } from "./modules";
 import type { Permission, Role } from "./permissions";
+import { cleanIndustries, proposal } from "@/lib/industries";
 
 export const WIDGET_TYPES = [
   "quickActions",
@@ -135,7 +136,10 @@ const OWNER_WIDGETS: WidgetType[] = ["quickActions", "insights", "revenue", "exp
 export function defaultWidgets(ctx: Context): Widget[] {
   const allowed = availableWidgets(ctx);
   const kind = ctx.organization.workspaceType as WorkspaceType;
-  const wanted = FIRST_WIDGETS[kind] ?? ROLE_WIDGETS[ctx.role] ?? OWNER_WIDGETS;
+  // Those who run the company see what its industries are about; everyone else what their work is about.
+  const industries = cleanIndustries(ctx.organization.industries);
+  const fromIndustries = industries.length && (ctx.role === "OWNER" || ctx.role === "ADMIN") ? (proposal(industries).widgets as WidgetType[]) : null;
+  const wanted = fromIndustries ?? FIRST_WIDGETS[kind] ?? ROLE_WIDGETS[ctx.role] ?? OWNER_WIDGETS;
   return wanted.filter((w) => allowed.includes(w)).map(newWidget);
 }
 
