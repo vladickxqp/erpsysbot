@@ -11,6 +11,7 @@ import { withTenant, type Tx } from "@/db/tenant";
 import { clients, orderItems, orders } from "@/db/schema";
 import { audit, type Via } from "./audit";
 import { deductForOrder } from "./inventory";
+import { assertLinesOpen, assertVariants } from "./order-flow";
 import { displayName, NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { checkRates, lineNet, linesInput, totals, type Line } from "./money";
@@ -18,6 +19,7 @@ import { nextNumber } from "./numbers";
 import { requirePermission } from "./permissions";
 
 import { OPEN_STATUSES, ORDER_STATUSES, type OrderStatus } from "@/lib/domain";
+import { CHANNELS, HOLDING, type Channel, type Fulfillment } from "@/lib/order-flow";
 
 export { OPEN_STATUSES, ORDER_STATUSES, type OrderStatus };
 
@@ -55,6 +57,7 @@ export function lineRows(organizationId: string, lines: Line[]) {
     organizationId,
     position: index + 1,
     productId: line.productId ?? null,
+    variantId: line.productId ? (line.variantId ?? null) : null,
     description: line.description,
     quantity: String(line.quantity),
     unit: line.unit,
@@ -69,11 +72,12 @@ export function lineRows(organizationId: string, lines: Line[]) {
 export type StoredLine = Pick<
   OrderItemRow,
   "productId" | "description" | "quantity" | "unit" | "unitPriceCents" | "discountPercent" | "vatRate"
->;
+> & { variantId?: string | null };
 
 export function asLines(rows: StoredLine[]): Line[] {
   return rows.map((r) => ({
     productId: r.productId,
+    variantId: r.variantId ?? null,
     description: r.description,
     quantity: Number(r.quantity),
     unit: r.unit,
@@ -95,6 +99,7 @@ export async function createOrder(ctx: Context, raw: OrderInput, via: Via = "web
   const sum = totals(input.items, ctx.organization.smallBusiness);
   const created = await withTenant(ctx.organization.id, async (tx) => {
     await clientInCompany(tx, input.clientId);
+    await assertVariants(tx, input.items);
     const number = await nextNumber(tx, ctx.organization.id, "order");
     const [row] = await tx
       .insert(orders)
@@ -129,7 +134,10 @@ export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via
   checkRates(input.items, ctx.organization);
   const sum = totals(input.items, ctx.organization.smallBusiness);
   return withTenant(ctx.organization.id, async (tx) => {
+    // Goods held or sent for these lines: the lines stay as they are.
+    await assertLinesOpen(tx, id);
     await clientInCompany(tx, input.clientId);
+    await assertVariants(tx, input.items);
     const [row] = await tx
       .update(orders)
       .set({
@@ -157,9 +165,19 @@ export async function updateOrder(ctx: Context, id: string, raw: OrderInput, via
 export async function setOrderStatus(ctx: Context, id: string, status: OrderStatus, via: Via = "web") {
   requirePermission(ctx.permissions, "orders.update");
   const updated = await withTenant(ctx.organization.id, async (tx) => {
+    const [before] = await tx.select({ fulfillment: orders.fulfillmentStatus }).from(orders).where(eq(orders.id, id)).for("update");
+    if (!before) throw new NotFoundError();
+    // Goods held for the order follow its plain status: done delivers them, cancelled frees them.
+    const held = HOLDING.includes(before.fulfillment as Fulfillment) || before.fulfillment === "SHIPPED";
+    const flow =
+      held && status === "COMPLETED"
+        ? { fulfillmentStatus: "DELIVERED", deliveredAt: new Date() }
+        : held && status === "CANCELLED" && before.fulfillment !== "SHIPPED"
+          ? { fulfillmentStatus: "CANCELLED", cancelledAt: new Date() }
+          : {};
     const [row] = await tx
       .update(orders)
-      .set({ status, updatedAt: new Date() })
+      .set({ status, ...flow, updatedAt: new Date() })
       .where(eq(orders.id, id))
       .returning();
     if (!row) throw new NotFoundError();
@@ -204,7 +222,10 @@ export async function getOrder(ctx: Context, id: string) {
   });
 }
 
-export type OrderQuery = { q?: string; status?: OrderStatus | "OPEN"; clientId?: string; page?: number; pageSize?: number };
+export const ORDER_FLOWS = ["toShip", "shipped", "unpaid"] as const;
+export type OrderFlowFilter = (typeof ORDER_FLOWS)[number];
+
+export type OrderQuery = { q?: string; status?: OrderStatus | "OPEN"; flow?: OrderFlowFilter; channel?: Channel; clientId?: string; page?: number; pageSize?: number };
 
 export async function listOrders(ctx: Context, query: OrderQuery = {}) {
   requirePermission(ctx.permissions, "orders.read");
@@ -214,6 +235,10 @@ export async function listOrders(ctx: Context, query: OrderQuery = {}) {
   if (query.status === "OPEN") filters.push(inArray(orders.status, OPEN_STATUSES));
   else if (query.status) filters.push(eq(orders.status, query.status));
   if (query.clientId) filters.push(eq(orders.clientId, query.clientId));
+  if (query.flow === "toShip") filters.push(inArray(orders.fulfillmentStatus, HOLDING));
+  if (query.flow === "shipped") filters.push(eq(orders.fulfillmentStatus, "SHIPPED"));
+  if (query.flow === "unpaid") filters.push(eq(orders.paymentStatus, "UNPAID"), inArray(orders.fulfillmentStatus, [...HOLDING, "SHIPPED", "DELIVERED"]));
+  if (query.channel && (CHANNELS as readonly string[]).includes(query.channel)) filters.push(eq(orders.channel, query.channel));
   const q = query.q?.trim();
   if (q) {
     const like = `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
@@ -221,6 +246,8 @@ export async function listOrders(ctx: Context, query: OrderQuery = {}) {
     filters.push(
       or(
         ilike(orders.title, like),
+        ilike(orders.externalRef, like),
+        ilike(orders.shipName, like),
         ilike(clients.companyName, like),
         ilike(clients.lastName, like),
         ilike(clients.firstName, like),

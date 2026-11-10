@@ -4,7 +4,10 @@ import { NotFoundError } from "@/server/clients";
 import { totals } from "@/server/money";
 import { asLines, getOrder } from "@/server/orders";
 import { requirePageContext } from "@/server/request";
+import type { Channel, Fulfillment, Payment } from "@/lib/order-flow";
+import { getOrderFlow } from "@/server/order-flow";
 import { OrderDetail } from "./order-detail";
+import { OrderFlowPanel } from "./order-flow-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePageContext("orders.read");
@@ -22,6 +25,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   });
   const { order, items, clientName } = found;
   const sum = totals(asLines(items), ctx.organization.smallBusiness);
+  // Companies that sell goods see the way of the goods; service companies keep the plain order.
+  const flow = [...ctx.disabledModules].includes("products") ? null : await getOrderFlow(ctx, id);
   return (
     <OrderDetail
       order={{
@@ -35,6 +40,34 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         createdAt: order.createdAt.toISOString(),
       }}
       clientName={clientName}
+      locked={order.fulfillmentStatus !== "UNFULFILLED" && order.fulfillmentStatus !== "CANCELLED"}
+      flow={
+        flow && (
+          <OrderFlowPanel
+            orderId={order.id}
+            fulfillment={order.fulfillmentStatus as Fulfillment}
+            payment={order.paymentStatus as Payment}
+            channel={order.channel as Channel}
+            externalRef={order.externalRef}
+            address={{
+              shipName: order.shipName ?? "",
+              shipStreet: order.shipStreet ?? "",
+              shipPostalCode: order.shipPostalCode ?? "",
+              shipCity: order.shipCity ?? "",
+              shipCountry: order.shipCountry ?? "",
+            }}
+            carrier={order.carrier}
+            trackingNumber={order.trackingNumber}
+            lines={flow.lines.map((l) => ({ id: l.id, description: l.description, needed: l.needed, available: l.available, enough: l.enough }))}
+            events={flow.events.map((e) => {
+              const data = (e.data ?? {}) as { note?: string; carrier?: string; trackingNumber?: string };
+              return { id: e.id, kind: e.kind, at: e.createdAt.toISOString(), note: data.note ?? null, carrier: data.carrier ?? null, trackingNumber: data.trackingNumber ?? null };
+            })}
+            hasLines={items.length > 0}
+            canUpdate={ctx.permissions.has("orders.update")}
+          />
+        )
+      }
       items={items.map((i) => ({
         id: i.id,
         position: i.position,

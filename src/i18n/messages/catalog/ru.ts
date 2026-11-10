@@ -71,6 +71,7 @@ const catalog: typeof de = {
   moveUp: "Вперёд",
   moveDown: "Назад",
   movements: "Движения",
+  held: "в резерве: {count}",
   movement: {
     PURCHASE: "Поступление",
     SALE: "Продажа",

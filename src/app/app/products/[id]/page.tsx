@@ -5,6 +5,7 @@ import type { VariantOption } from "@/lib/variants";
 import { getProductDetail, listCategories } from "@/server/catalog";
 import { NotFoundError } from "@/server/clients";
 import { listSuppliers } from "@/server/inventory";
+import { heldForProduct } from "@/server/order-flow";
 import { requirePageContext } from "@/server/request";
 import { ProductEditor, type EditorProduct } from "./product-editor";
 
@@ -26,6 +27,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           throw e;
         });
   const p = detail?.product;
+  const held = p?.trackStock ? await heldForProduct(ctx, p.id) : { total: 0, byVariant: {} };
   const product: EditorProduct | null = p
     ? {
         id: p.id,
@@ -89,6 +91,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         history: o.history.map((h) => ({ priceCents: h.purchasePriceCents, currency: h.currency, at: h.recordedAt.toISOString() })),
       }))}
       bestOfferId={detail?.bestOfferId ?? null}
+      held={held}
       movements={(detail?.movements ?? []).map((m) => ({ id: m.id, type: m.type, quantity: Number(m.quantity), variantId: m.variantId, note: m.note, at: m.createdAt.toISOString() }))}
       margins={detail?.margins ?? null}
       fees={detail?.fees ?? null}

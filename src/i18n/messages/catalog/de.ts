@@ -69,6 +69,7 @@ const catalog = {
   moveUp: "Nach vorne",
   moveDown: "Nach hinten",
   movements: "Bewegungen",
+  held: "{count} reserviert",
   movement: {
     PURCHASE: "Wareneingang",
     SALE: "Verkauf",

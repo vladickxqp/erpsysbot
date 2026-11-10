@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
 import { clientOptions, NotFoundError } from "@/server/clients";
 import { getOrder } from "@/server/orders";
-import { listProducts } from "@/server/products";
+import { lineProducts } from "@/server/order-flow";
 import { requirePageContext } from "@/server/request";
 import { OrderEditor } from "./order-editor";
 
@@ -15,7 +15,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
     if (e instanceof NotFoundError) notFound();
     throw e;
   });
-  const [clients, products] = await Promise.all([clientOptions(ctx), listProducts(ctx, { activeOnly: true })]);
+  const [clients, products] = await Promise.all([clientOptions(ctx), lineProducts(ctx)]);
   const { order, items } = found;
   return (
     <>
@@ -31,6 +31,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
         }}
         items={items.map((i) => ({
           productId: i.productId,
+          variantId: i.variantId,
           description: i.description,
           quantity: i.quantity,
           unit: i.unit,

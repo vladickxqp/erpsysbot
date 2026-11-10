@@ -62,13 +62,13 @@ export async function bookMovement(
 /** An order is done: its tracked products leave the stock (once). */
 export async function deductForOrder(tx: Tx, ctx: Pick<Context, "organization" | "user">, orderId: string): Promise<number> {
   const lines = await tx
-    .select({ id: orderItems.id, productId: orderItems.productId, quantity: orderItems.quantity })
+    .select({ id: orderItems.id, productId: orderItems.productId, variantId: orderItems.variantId, quantity: orderItems.quantity })
     .from(orderItems)
     .innerJoin(products, eq(products.id, orderItems.productId))
     .where(and(eq(orderItems.orderId, orderId), isNotNull(orderItems.productId), eq(products.trackStock, true)));
   let booked = 0;
   for (const line of lines) {
-    if (await bookMovement(tx, ctx, { productId: line.productId!, type: "SALE", quantity: -Number(line.quantity), dedupeKey: `order:${orderId}:${line.id}` })) booked++;
+    if (await bookMovement(tx, ctx, { productId: line.productId!, variantId: line.variantId, type: "SALE", quantity: -Number(line.quantity), dedupeKey: `order:${orderId}:${line.id}` })) booked++;
   }
   return booked;
 }

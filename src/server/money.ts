@@ -23,6 +23,7 @@ export const taxRate = z.coerce
 
 export const lineInput = z.object({
   productId: z.string().uuid().nullish(),
+  variantId: z.string().uuid().nullish(),
   description: z.string().trim().min(1).max(500),
   quantity: z.coerce.number().positive().max(1_000_000),
   unit: z.string().trim().min(1).max(20).default("Stk"),

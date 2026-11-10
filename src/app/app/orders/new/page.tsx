@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/app/page";
 import { getT } from "@/i18n/server";
 import { clientOptions } from "@/server/clients";
-import { listProducts } from "@/server/products";
+import { lineProducts } from "@/server/order-flow";
 import { requirePageContext } from "@/server/request";
 import { OrderForm } from "../order-form";
 
@@ -14,7 +14,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const ctx = await requirePageContext("orders.create");
   const { t } = await getT();
   const { client } = await searchParams;
-  const [clients, products] = await Promise.all([clientOptions(ctx), listProducts(ctx, { activeOnly: true })]);
+  const [clients, products] = await Promise.all([clientOptions(ctx), lineProducts(ctx)]);
   const preset = clients.find((c) => c.id === client)?.id;
   return (
     <>

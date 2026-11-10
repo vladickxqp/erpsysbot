@@ -763,12 +763,31 @@ export const orders = pgTable(
     netCents: integer("net_cents").notNull().default(0),
     vatCents: integer("vat_cents").notNull().default(0),
     grossCents: integer("gross_cents").notNull().default(0),
+    /** Where the order came from (src/lib/order-flow.ts CHANNELS) and its number there. */
+    channel: text("channel").notNull().default("MANUAL"),
+    externalRef: text("external_ref"),
+    /** The goods' way (FULFILLMENT) and the money's (PAYMENT); service orders stay UNFULFILLED. */
+    fulfillmentStatus: text("fulfillment_status").notNull().default("UNFULFILLED"),
+    paymentStatus: text("payment_status").notNull().default("UNPAID"),
+    shipName: text("ship_name"),
+    shipStreet: text("ship_street"),
+    shipPostalCode: text("ship_postal_code"),
+    shipCity: text("ship_city"),
+    shipCountry: text("ship_country"),
+    carrier: text("carrier"),
+    trackingNumber: text("tracking_number"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex("orders_org_number_key").on(t.organizationId, t.number),
     index("orders_org_status_idx").on(t.organizationId, t.status),
+    index("orders_org_fulfillment_idx").on(t.organizationId, t.fulfillmentStatus),
     index("orders_client_idx").on(t.clientId),
   ],
 );
@@ -779,6 +798,8 @@ const lineColumns = () => ({
   organizationId: orgId(),
   position: integer("position").notNull(),
   productId: uuid("product_id"),
+  /** The variant sold on this line, when the product has variants. */
+  variantId: uuid("variant_id"),
   description: text("description").notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
   unit: text("unit").notNull().default("Stk"),
@@ -797,6 +818,23 @@ export const orderItems = pgTable(
       .references(() => orders.id, { onDelete: "cascade" }),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
+);
+
+/** What happened to an order, step by step: added, never changed. */
+export const orderEvents = pgTable(
+  "order_events",
+  {
+    id: id(),
+    organizationId: orgId(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    data: jsonb("data").notNull().default(sql`'{}'::jsonb`),
+    userId: uuid("user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("order_events_order_idx").on(t.orderId, t.createdAt)],
 );
 
 // --- Quotes ------------------------------------------------------------------------------------
@@ -1972,6 +2010,7 @@ export const TENANT_TABLES = [
   "products",
   "orders",
   "order_items",
+  "order_events",
   "invoices",
   "invoice_items",
   "payments",

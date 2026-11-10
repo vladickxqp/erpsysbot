@@ -45,6 +45,7 @@ const item = (position: number, description: string, quantity: string, price: nu
   invoiceId: invoice.id,
   position,
   productId: null,
+  variantId: null,
   description,
   quantity,
   unit: "Std",

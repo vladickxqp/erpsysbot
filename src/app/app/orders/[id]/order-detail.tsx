@@ -3,7 +3,7 @@
 import { ArrowLeft, Copy, FileText, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { OrderStatusBadge } from "@/components/app/badges";
 import { ItemsTable, type ItemRow } from "@/components/app/items-table";
@@ -23,6 +23,8 @@ export function OrderDetail({
   totals,
   smallBusiness,
   can,
+  flow,
+  locked,
 }: {
   order: { id: string; number: number; status: OrderStatus; title: string | null; notes: string | null; dueDate: string | null; clientId: string; createdAt: string };
   clientName: string;
@@ -30,6 +32,10 @@ export function OrderDetail({
   totals: Totals;
   smallBusiness: boolean;
   can: { update: boolean; delete: boolean; create: boolean; invoice: boolean };
+  /** The way of the goods, for companies that sell them. */
+  flow?: ReactNode;
+  /** Goods are held or sent: the lines cannot be edited. */
+  locked?: boolean;
 }) {
   const { t, locale, region } = useI18n();
   const router = useRouter();
@@ -92,7 +98,7 @@ export function OrderDetail({
               <FileText className="size-4" /> {t("orders.toInvoice")}
             </Button>
           )}
-          {can.update && (
+          {can.update && !locked && (
             <Button variant="outline" asChild>
               <Link href={`/app/orders/${order.id}/edit`}>
                 <Pencil className="size-4" /> {t("common.edit")}
@@ -116,6 +122,7 @@ export function OrderDetail({
         </div>
       </div>
 
+      {flow}
       <ItemsTable items={items} totals={totals} smallBusiness={smallBusiness} />
       {order.notes && <p className="mt-6 whitespace-pre-wrap rounded-xl border bg-card p-4 text-sm">{order.notes}</p>}
 

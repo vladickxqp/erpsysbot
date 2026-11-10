@@ -133,6 +133,8 @@ export function ProductEditor(props: {
   rates: number[];
   smallBusiness: boolean;
   can: { manage: boolean; stock: boolean; settings: boolean };
+  /** Held by open orders, in all and per variant. */
+  held?: { total: number; byVariant: Record<string, number> };
 }) {
   const { t } = useI18n();
   const { product } = props;
@@ -973,13 +975,15 @@ function Images({ product, images, can }: Parameters<typeof ProductEditor>[0] & 
 
 // --- Stock --------------------------------------------------------------------------------------
 
-function Stock({ product, variants, movements, can }: Parameters<typeof ProductEditor>[0] & { product: EditorProduct }) {
+function Stock({ product, variants, movements, can, held }: Parameters<typeof ProductEditor>[0] & { product: EditorProduct }) {
   const { t, locale, region } = useI18n();
   const { pending, run } = useAction();
   const [counting, setCounting] = useState<{ variantId: string | null; label: string; counted: string; note: string } | null>(null);
   const qty = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
   const label = (variantId: string | null) => (variantId ? choiceLabel(variants.find((v) => v.id === variantId)?.options ?? {}, product.variantOptions) : product.name);
-  const targets = variants.length ? variants.filter((v) => v.active).map((v) => ({ id: v.id, label: label(v.id), stock: v.stock })) : [{ id: null, label: product.name, stock: product.stock }];
+  const targets = variants.length
+    ? variants.filter((v) => v.active).map((v) => ({ id: v.id, label: label(v.id), stock: v.stock, held: held?.byVariant[v.id] ?? 0 }))
+    : [{ id: null, label: product.name, stock: product.stock, held: held?.total ?? 0 }];
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -991,6 +995,7 @@ function Stock({ product, variants, movements, can }: Parameters<typeof ProductE
             <div key={target.id ?? "product"} className="flex items-center justify-between gap-3 text-sm">
               <span className="min-w-0 truncate">{target.label}</span>
               <span className="flex items-center gap-2 tabular-nums">
+                {target.held > 0 && <span className="text-xs text-muted-foreground">{t("catalog.held", { count: qty.format(target.held) })} ·</span>}
                 {qty.format(target.stock)} {product.unit}
                 {can.stock && (
                   <Button variant="ghost" size="icon" aria-label={t("inventory.count")} onClick={() => setCounting({ variantId: target.id, label: target.label, counted: String(target.stock).replace(".", ","), note: "" })}>

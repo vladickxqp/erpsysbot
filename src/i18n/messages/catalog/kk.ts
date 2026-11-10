@@ -71,6 +71,7 @@ const catalog: typeof de = {
   moveUp: "Алға",
   moveDown: "Артқа",
   movements: "Қозғалыстар",
+  held: "резервте: {count}",
   movement: {
     PURCHASE: "Кіріс",
     SALE: "Сату",

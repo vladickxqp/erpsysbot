@@ -3,12 +3,14 @@ import hub from "./hub/en";
 import invoicing from "./invoicing/en";
 import industries from "./industries/en";
 import catalog from "./catalog/en";
+import orderFlow from "./orderFlow/en";
 
 const en: Messages = {
   hub,
   invoicing,
   industries,
   catalog,
+  orderFlow,
   brand: { name: "NEXORA ONE", tagline: "One platform. All your business. All your work." },
   common: {
     save: "Save",

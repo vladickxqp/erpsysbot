@@ -71,6 +71,7 @@ const catalog: typeof de = {
   moveUp: "Adelante",
   moveDown: "Atrás",
   movements: "Movimientos",
+  held: "{count} reservados",
   movement: {
     PURCHASE: "Entrada",
     SALE: "Venta",

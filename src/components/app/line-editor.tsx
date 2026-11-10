@@ -10,11 +10,14 @@ import { defaultUnit, formatMoney, intlTag, type Region } from "@/i18n";
 import { allowedRates, countryProfile } from "@/lib/countries";
 import { lineNet, parseMoney, totals } from "@/server/money";
 
-export type ProductOption = { id: string; name: string; unit: string; priceCents: number; vatRate: number; description: string | null };
+export type ProductOption = { id: string; variantId?: string | null; name: string; unit: string; priceCents: number; vatRate: number; description: string | null };
+
+const optionKey = (productId: string | null, variantId?: string | null) => (productId ? (variantId ? `${productId}:${variantId}` : productId) : "");
 
 export type EditableLine = {
   key: string;
   productId: string | null;
+  variantId?: string | null;
   description: string;
   quantity: string;
   unit: string;
@@ -32,10 +35,11 @@ export function blankLine(region?: Region, locale = "de"): EditableLine {
   return { key: key(), productId: null, description: "", quantity: "1", unit: defaultUnit(locale), price: "", discountPercent: "0", vatRate };
 }
 
-export function toEditable(lines: { productId: string | null; description: string; quantity: string | number; unit: string; unitPriceCents: number; discountPercent: string | number; vatRate: number }[]): EditableLine[] {
+export function toEditable(lines: { productId: string | null; variantId?: string | null; description: string; quantity: string | number; unit: string; unitPriceCents: number; discountPercent: string | number; vatRate: number }[]): EditableLine[] {
   return lines.map((l) => ({
     key: key(),
     productId: l.productId,
+    variantId: l.variantId ?? null,
     description: l.description,
     quantity: String(Number(l.quantity)).replace(".", ","),
     unit: l.unit,
@@ -57,6 +61,7 @@ export function serialize(lines: EditableLine[]) {
     if (!l.description.trim() || price === null || !(quantity > 0) || !(discount >= 0 && discount <= 100)) return null;
     out.push({
       productId: l.productId,
+      variantId: l.productId ? (l.variantId ?? null) : null,
       description: l.description.trim(),
       quantity,
       unit: l.unit.trim() || "Stk",
@@ -105,12 +110,13 @@ export function LineEditor({
             {products.length > 0 && (
               <div className="col-span-2 @lg:col-span-6 @4xl:col-span-12">
                 <Select
-                  value={l.productId ?? ""}
-                  onValueChange={(id) => {
-                    const p = products.find((x) => x.id === id);
+                  value={optionKey(l.productId, l.variantId)}
+                  onValueChange={(value) => {
+                    const p = products.find((x) => optionKey(x.id, x.variantId) === value);
                     if (p)
                       set(l.key, {
                         productId: p.id,
+                        variantId: p.variantId ?? null,
                         description: p.description ? `${p.name}\n${p.description}` : p.name,
                         unit: p.unit,
                         price: (p.priceCents / 100).toFixed(2).replace(".", ","),
@@ -123,7 +129,7 @@ export function LineEditor({
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
+                      <SelectItem key={optionKey(p.id, p.variantId)} value={optionKey(p.id, p.variantId)}>
                         {p.name} · {money(p.priceCents)}
                       </SelectItem>
                     ))}

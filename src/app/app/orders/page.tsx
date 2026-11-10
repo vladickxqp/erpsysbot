@@ -8,7 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate, formatMoney } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/domain";
-import { listOrders } from "@/server/orders";
+import { Badge } from "@/components/ui/badge";
+import { flowCounts } from "@/server/order-flow";
+import { listOrders, ORDER_FLOWS, type OrderFlowFilter } from "@/server/orders";
 import { requirePageContext } from "@/server/request";
 
 export async function generateMetadata() {
@@ -16,15 +18,17 @@ export async function generateMetadata() {
   return { title: t("orders.title") };
 }
 
-export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; flow?: string; page?: string }> }) {
   const ctx = await requirePageContext("orders.read");
   const { t, locale, region } = await getT();
   const sp = await searchParams;
   const status = sp.status === "OPEN" || (ORDER_STATUSES as readonly string[]).includes(sp.status ?? "") ? (sp.status as OrderStatus | "OPEN") : undefined;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
-  const { rows, total, pageSize } = await listOrders(ctx, { q: sp.q, status, page });
+  const flow = (ORDER_FLOWS as readonly string[]).includes(sp.flow ?? "") ? (sp.flow as OrderFlowFilter) : undefined;
+  const { rows, total, pageSize } = await listOrders(ctx, { q: sp.q, status, flow, page });
+  const counts = [...ctx.disabledModules].includes("products") ? null : await flowCounts(ctx);
   const canCreate = ctx.permissions.has("orders.create");
-  const filtered = Boolean(sp.q || sp.status);
+  const filtered = Boolean(sp.q || sp.status || flow);
   return (
     <>
       <PageHeader
@@ -49,6 +53,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
             ...(["DRAFT", "COMPLETED", "CANCELLED"] as const).map((s) => ({ value: s, label: t(`orders.${s}`) })),
           ]}
         />
+        {counts && (counts.toShip > 0 || counts.shipped > 0 || counts.unpaid > 0 || flow) && (
+          <FilterChips
+            name="flow"
+            options={[{ value: null, label: t("common.all") }, ...ORDER_FLOWS.map((f) => ({ value: f, label: `${t(`orderFlow.filter.${f}`)} (${counts[f]})` }))]}
+          />
+        )}
       </div>
       {rows.length === 0 ? (
         <EmptyState
@@ -93,7 +103,11 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     </TableCell>
                     <TableCell className="text-muted-foreground">{o.title ?? "—"}</TableCell>
                     <TableCell>
-                      <OrderStatusBadge status={o.status} />
+                      <span className="flex flex-wrap items-center gap-1">
+                        <OrderStatusBadge status={o.status} />
+                        {o.fulfillmentStatus !== "UNFULFILLED" && o.fulfillmentStatus !== "CANCELLED" && <Badge variant="outline">{t(`orderFlow.fulfillment.${o.fulfillmentStatus}`)}</Badge>}
+                        {o.paymentStatus === "PAID" && <Badge variant="outline">{t("orderFlow.payment.PAID")}</Badge>}
+                      </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{o.dueDate ? formatDate(o.dueDate, locale, region) : "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(o.grossCents, locale, region)}</TableCell>

@@ -71,6 +71,7 @@ const catalog: typeof de = {
   moveUp: "Move forward",
   moveDown: "Move back",
   movements: "Movements",
+  held: "{count} reserved",
   movement: {
     PURCHASE: "Goods received",
     SALE: "Sale",
