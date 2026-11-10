@@ -252,17 +252,11 @@ export function PurchasingView({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {suppliers.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                disabled={!canManage}
-                onClick={() => setSupplier({ ...s })}
-                className="rounded-xl border bg-card p-4 text-left text-sm hover:border-primary/40 disabled:cursor-default"
-              >
+              <Link key={s.id} href={`/app/purchasing/suppliers/${s.id}`} className="rounded-xl border bg-card p-4 text-left text-sm hover:border-primary/40">
                 <div className="font-medium">{s.name}</div>
                 <div className="mt-1 text-muted-foreground">{[s.contactName, s.phone, s.email].filter(Boolean).join(" · ") || "—"}</div>
                 <div className="text-muted-foreground">{[s.postalCode, s.city].filter(Boolean).join(" ")}</div>
-              </button>
+              </Link>
             ))}
           </div>
         ))}

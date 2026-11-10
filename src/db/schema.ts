@@ -209,6 +209,9 @@ export const organizations = pgTable("organizations", {
   industries: text("industries").array().notNull().default(sql`'{}'::text[]`),
   /** Picture from the documents store, printed on invoices and quotes. */
   logoDocumentId: uuid("logo_document_id"),
+  /** What the payment provider keeps of a sale: percent of the gross amount plus a fixed part (margins). */
+  paymentFeePercent: numeric("payment_fee_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
+  paymentFeeFixedCents: integer("payment_fee_fixed_cents").notNull().default(0),
   createdAt: createdAt(),
 });
 
@@ -444,6 +447,8 @@ export const products = pgTable(
     vatRate: numeric("vat_rate", { precision: 6, scale: 3, mode: "number" }).notNull().default(19),
     active: boolean("active").notNull().default(true),
     category: text("category"),
+    /** The category in the tree; `category` keeps its name for older readers. */
+    categoryId: uuid("category_id").references(() => productCategories.id, { onDelete: "set null" }),
     barcode: text("barcode"),
     /** Net purchase price in cents (for margins and purchase orders). */
     purchasePriceCents: integer("purchase_price_cents"),
@@ -451,10 +456,90 @@ export const products = pgTable(
     trackStock: boolean("track_stock").notNull().default(false),
     stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3 }).notNull().default("0"),
     minStock: numeric("min_stock", { precision: 12, scale: 3 }),
+    weightGrams: integer("weight_grams"),
+    lengthMm: integer("length_mm"),
+    widthMm: integer("width_mm"),
+    heightMm: integer("height_mm"),
+    /** Free attributes: material, model … as name → value. */
+    attributes: jsonb("attributes").notNull().default({}),
+    /** The options its variants are made of (src/lib/variants.ts). */
+    variantOptions: jsonb("variant_options").notNull().default([]),
+    /** What shipping one unit costs the company, and other costs per unit (margins). */
+    shippingCostCents: integer("shipping_cost_cents"),
+    otherCostCents: integer("other_cost_cents"),
+    returnable: boolean("returnable").notNull().default(true),
+    returnDays: integer("return_days"),
+    shippingNote: text("shipping_note"),
+    /** Made by this import; stays inactive until the company activates it. */
+    importId: uuid("import_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("products_org_name_idx").on(t.organizationId, t.name)],
+  (t) => [index("products_org_name_idx").on(t.organizationId, t.name), index("products_org_category_idx").on(t.organizationId, t.categoryId)],
+);
+
+/** Categories of products, as a tree. */
+export const productCategories = pgTable(
+  "product_categories",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    parentId: uuid("parent_id"),
+    position: integer("position").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("product_categories_org_parent_name_key").on(t.organizationId, sql`coalesce(${t.parentId}, '00000000-0000-0000-0000-000000000000'::uuid)`, sql`lower(${t.name})`)],
+);
+
+/** One combination of a product's options, with its own SKU, price and stock. */
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    /** Option name → value, e.g. { Größe: "M", Farbe: "Rot" }. */
+    options: jsonb("options").notNull(),
+    /** The same, as one stable text (src/lib/variants.ts choiceKey). */
+    optionsKey: text("options_key").notNull(),
+    sku: text("sku"),
+    barcode: text("barcode"),
+    /** Null: the product's price. */
+    priceCents: integer("price_cents"),
+    purchasePriceCents: integer("purchase_price_cents"),
+    stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3 }).notNull().default("0"),
+    minStock: numeric("min_stock", { precision: 12, scale: 3 }),
+    active: boolean("active").notNull().default(true),
+    position: integer("position").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("product_variants_product_options_key").on(t.productId, t.optionsKey),
+    uniqueIndex("product_variants_org_sku_key").on(t.organizationId, t.sku),
+  ],
+);
+
+/** Pictures of a product, from the documents store. */
+export const productImages = pgTable(
+  "product_images",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    alt: text("alt"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("product_images_product_document_key").on(t.productId, t.documentId)],
 );
 
 export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["PURCHASE", "SALE", "RETURN", "ADJUSTMENT", "TRANSFER"]);
@@ -471,6 +556,8 @@ export const stockMovements = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /** The variant whose stock moved; null for a product without variants. */
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "cascade" }),
     type: stockMovementTypeEnum("type").notNull(),
     /** Signed: + in, - out. */
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
@@ -499,9 +586,86 @@ export const suppliers = pgTable(
     city: text("city"),
     country: text("country").notNull().default("DE"),
     notes: text("notes"),
+    website: text("website"),
+    /** Null: the company's currency. */
+    currency: text("currency"),
+    paymentTermsDays: integer("payment_terms_days"),
+    shippingTerms: text("shipping_terms"),
+    /** Usual days from order to delivery, as the supplier states it. */
+    deliveryDays: integer("delivery_days"),
+    returnConditions: text("return_conditions"),
+    /** ACTIVE or INACTIVE: an inactive supplier keeps its history. */
+    status: text("status").notNull().default("ACTIVE"),
     createdAt: createdAt(),
   },
   (t) => [index("suppliers_org_name_idx").on(t.organizationId, t.name)],
+);
+
+/** What a supplier offers a product (or one variant of it) for. */
+export const productSuppliers = pgTable(
+  "product_suppliers",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    supplierSku: text("supplier_sku"),
+    /** Net, in the offer's currency. */
+    purchasePriceCents: integer("purchase_price_cents").notNull(),
+    currency: text("currency").notNull(),
+    minOrderQty: numeric("min_order_qty", { precision: 12, scale: 3 }),
+    leadTimeDays: integer("lead_time_days"),
+    shippingCostCents: integer("shipping_cost_cents"),
+    preferred: boolean("preferred").notNull().default(false),
+    notes: text("notes"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("product_suppliers_offer_key").on(t.productId, sql`coalesce(${t.variantId}, '00000000-0000-0000-0000-000000000000'::uuid)`, t.supplierId),
+    index("product_suppliers_supplier_idx").on(t.supplierId),
+  ],
+);
+
+/** Every price an offer had: a change is seen, never silently taken. */
+export const supplierPriceHistory = pgTable(
+  "supplier_price_history",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productSupplierId: uuid("product_supplier_id")
+      .notNull()
+      .references(() => productSuppliers.id, { onDelete: "cascade" }),
+    purchasePriceCents: integer("purchase_price_cents").notNull(),
+    currency: text("currency").notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("supplier_price_history_offer_idx").on(t.productSupplierId, t.recordedAt)],
+);
+
+/** A product file being imported: its rows, the column mapping, what became of it. */
+export const productImports = pgTable(
+  "product_imports",
+  {
+    id: id(),
+    organizationId: orgId(),
+    fileName: text("file_name").notNull(),
+    /** PREVIEW, APPLIED or DISCARDED. */
+    status: text("status").notNull().default("PREVIEW"),
+    header: jsonb("header").notNull(),
+    rows: jsonb("rows").notNull(),
+    mapping: jsonb("mapping").notNull(),
+    createdCount: integer("created_count").notNull().default(0),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+  },
+  (t) => [index("product_imports_org_created_idx").on(t.organizationId, t.createdAt)],
 );
 
 export const purchaseStatusEnum = pgEnum("purchase_status", ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED"]);
@@ -1867,4 +2031,10 @@ export const TENANT_TABLES = [
   "invoice_templates",
   "invoice_files",
   "invoice_deliveries",
+  "product_categories",
+  "product_variants",
+  "product_images",
+  "product_suppliers",
+  "supplier_price_history",
+  "product_imports",
 ] as const;

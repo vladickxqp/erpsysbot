@@ -2,11 +2,13 @@ import type { Messages } from "./de";
 import hub from "./hub/ru";
 import invoicing from "./invoicing/ru";
 import industries from "./industries/ru";
+import catalog from "./catalog/ru";
 
 const ru: Messages = {
   hub,
   invoicing,
   industries,
+  catalog,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Весь ваш бизнес. Вся ваша работа." },
   common: {
     save: "Сохранить",

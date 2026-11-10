@@ -22,6 +22,7 @@ import { SecurityCard } from "./security-card";
 import { CalendarLinkCard, LogoCard } from "./extras-card";
 import { ModulesCard } from "./modules-card";
 import { BusinessProfileCard } from "./business-profile-card";
+import { FeesCard } from "./fees-card";
 import { cleanIndustries } from "@/lib/industries";
 import { TelegramCard } from "./telegram-card";
 
@@ -82,6 +83,7 @@ export default async function SettingsPage() {
           )}
           <PreferencesCard initial={await myPreferences(ctx)} hasTelegram={!!telegram} hasMail={mailAvailable()} quickKeys={quickActions(ctx).map((a) => a.key)} />
           {ctx.permissions.has("settings.manage") && <BusinessProfileCard industries={cleanIndustries(o.industries)} t={t} />}
+          {ctx.permissions.has("settings.manage") && <FeesCard percent={Number(o.paymentFeePercent ?? 0)} fixedCents={o.paymentFeeFixedCents ?? 0} />}
           <ModulesCard companyOff={[...ctx.disabledModules]} myOff={[...ctx.hiddenModules]} canManage={ctx.permissions.has("settings.manage")} />
         </div>
         <div className="grid h-fit gap-4">

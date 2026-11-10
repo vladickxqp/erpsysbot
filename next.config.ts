@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // A self-contained server for the Docker image (docker/Dockerfile).
   output: "standalone",
   // PGlite loads its WebAssembly from its own folder: not bundled.
-  serverExternalPackages: ["@electric-sql/pglite", "@e-invoice-eu/core"],
+  serverExternalPackages: ["@electric-sql/pglite", "@e-invoice-eu/core", "@e965/xlsx"],
   poweredByHeader: false,
   // CSV imports of a few thousand clients go through a server action.
   experimental: { serverActions: { bodySizeLimit: "2mb" } },

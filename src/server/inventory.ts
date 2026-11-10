@@ -8,7 +8,7 @@
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type Tx } from "@/db/tenant";
-import { orderItems, products, purchaseOrderItems, purchaseOrders, stockMovements, suppliers } from "@/db/schema";
+import { orderItems, products, productVariants, purchaseOrderItems, purchaseOrders, stockMovements, suppliers } from "@/db/schema";
 import { audit } from "./audit";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
@@ -27,7 +27,7 @@ export class InventoryError extends Error {
 export async function bookMovement(
   tx: Tx,
   ctx: Pick<Context, "organization" | "user">,
-  m: { productId: string; type: MovementType; quantity: number; dedupeKey?: string | null; note?: string | null },
+  m: { productId: string; variantId?: string | null; type: MovementType; quantity: number; dedupeKey?: string | null; note?: string | null },
 ): Promise<boolean> {
   if (!m.quantity) return false;
   const inserted = await tx
@@ -35,6 +35,7 @@ export async function bookMovement(
     .values({
       organizationId: ctx.organization.id,
       productId: m.productId,
+      variantId: m.variantId ?? null,
       type: m.type,
       quantity: String(m.quantity),
       dedupeKey: m.dedupeKey ?? null,
@@ -44,6 +45,13 @@ export async function bookMovement(
     .onConflictDoNothing()
     .returning({ id: stockMovements.id });
   if (!inserted.length) return false;
+  // A variant keeps its own stock; the product's is the sum of all of them.
+  if (m.variantId) {
+    await tx
+      .update(productVariants)
+      .set({ stockQuantity: sql`${productVariants.stockQuantity} + ${String(m.quantity)}::numeric`, updatedAt: new Date() })
+      .where(eq(productVariants.id, m.variantId));
+  }
   await tx
     .update(products)
     .set({ stockQuantity: sql`${products.stockQuantity} + ${String(m.quantity)}::numeric`, updatedAt: new Date() })
@@ -66,6 +74,8 @@ export async function deductForOrder(tx: Tx, ctx: Pick<Context, "organization" |
 }
 
 const adjustInput = z.object({
+  /** Counted for this variant; left out: the product without variants. */
+  variantId: z.string().uuid().nullish(),
   /** The counted stock; the difference is booked. */
   counted: z.coerce.number().min(-1_000_000).max(1_000_000),
   note: z
@@ -83,9 +93,15 @@ export async function adjustStock(ctx: Context, productId: string, raw: z.input<
     const [product] = await tx.select().from(products).where(eq(products.id, productId)).limit(1);
     if (!product) throw new NotFoundError();
     if (!product.trackStock) throw new InventoryError("NOT_TRACKED");
-    const delta = Math.round((input.counted - Number(product.stockQuantity)) * 1000) / 1000;
-    await bookMovement(tx, ctx, { productId, type: "ADJUSTMENT", quantity: delta, note: input.note });
-    await audit(tx, ctx, "stock.adjust", "product", productId, { from: Number(product.stockQuantity), to: input.counted });
+    let before = Number(product.stockQuantity);
+    if (input.variantId) {
+      const [variant] = await tx.select().from(productVariants).where(and(eq(productVariants.id, input.variantId), eq(productVariants.productId, productId)));
+      if (!variant) throw new NotFoundError();
+      before = Number(variant.stockQuantity);
+    }
+    const delta = Math.round((input.counted - before) * 1000) / 1000;
+    await bookMovement(tx, ctx, { productId, variantId: input.variantId ?? null, type: "ADJUSTMENT", quantity: delta, note: input.note });
+    await audit(tx, ctx, "stock.adjust", "product", productId, { from: before, to: input.counted, variant: input.variantId ?? null });
   });
 }
 
@@ -129,6 +145,14 @@ export const supplierInput = z.object({
   /** Left out: the company's own country. */
   country: z.string().trim().toUpperCase().length(2).optional(),
   notes: optional(5000),
+  // Left out by a caller, these stay as they are.
+  website: z.string().trim().max(200).nullable().optional(),
+  currency: z.string().trim().toUpperCase().length(3).nullable().optional(),
+  paymentTermsDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
+  shippingTerms: z.string().trim().max(500).nullable().optional(),
+  deliveryDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
+  returnConditions: z.string().trim().max(1000).nullable().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
 });
 export type SupplierInput = z.input<typeof supplierInput>;
 
