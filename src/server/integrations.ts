@@ -4,7 +4,7 @@
  */
 import { assistantAvailable } from "./assistant/run";
 import { mailAvailable } from "./mail";
-import { botToken, youtubeKey } from "./settings";
+import { assistantKeyName, botToken, youtubeKey } from "./settings";
 import { READABLE, SOCIAL_PROVIDERS, type SocialProvider } from "./social";
 
 export type IntegrationKey = "assistant" | "telegramBot" | "mail" | SocialProvider;
@@ -21,7 +21,7 @@ export type IntegrationState = {
 export function integrationStates(): IntegrationState[] {
   const env = (ok: boolean, name: string): Pick<IntegrationState, "state" | "env"> => (ok ? { state: "ready" } : { state: "setup", env: name });
   return [
-    { key: "assistant", ...env(assistantAvailable(), "ANTHROPIC_API_KEY") },
+    { key: "assistant", ...env(assistantAvailable(), assistantKeyName()) },
     { key: "telegramBot", ...env(botToken() !== null, "BOT_TOKEN") },
     { key: "mail", ...env(mailAvailable(), "SMTP_HOST") },
     ...SOCIAL_PROVIDERS.map((p): IntegrationState => {

@@ -36,12 +36,29 @@ export function webhookSecret(): string | null {
   return token ? createHmac("sha256", token).update("telegram-webhook").digest("hex") : null;
 }
 
-export function assistantKey(): string | null {
-  return env("ANTHROPIC_API_KEY") || null;
+export type AiProvider = "anthropic" | "gemini";
+
+/** AI_PROVIDER when set, otherwise Gemini only when its key is the one given. */
+export function aiProvider(): AiProvider {
+  const chosen = env("AI_PROVIDER").toLowerCase();
+  if (chosen === "anthropic" || chosen === "gemini") return chosen;
+  return !env("ANTHROPIC_API_KEY") && env("GEMINI_API_KEY") ? "gemini" : "anthropic";
 }
 
+/** The setting that holds the key of the chosen service (shown in the Integration Hub). */
+export function assistantKeyName(): string {
+  return aiProvider() === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY";
+}
+
+export function assistantKey(): string | null {
+  return env(assistantKeyName()) || null;
+}
+
+/** AI_MODEL when it belongs to the chosen service, so switching services needs only the key. */
 export function assistantModel(): string {
-  return env("AI_MODEL") || "claude-opus-5-5";
+  const own = env("AI_MODEL");
+  if (aiProvider() === "gemini") return own.startsWith("gemini") ? own : "gemini-3.8-flash";
+  return own && !own.startsWith("gemini") ? own : "claude-opus-5-5";
 }
 
 /** Messages per person and day, across web and Telegram. */

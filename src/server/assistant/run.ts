@@ -20,6 +20,7 @@ import { locateDocument } from "../documents";
 import { entitlementsOf } from "../billing";
 import { requirePermission } from "../permissions";
 import { appUrl, assistantDailyLimit, assistantKey, assistantModel, assistantServerDailyLimit } from "../settings";
+import { createMessage } from "../ai-provider";
 import { callTool, type AssistantAction } from "./actions";
 import { getConversation, listMemories, startConversation, type AssistantContext } from "./conversations";
 import { riskOf, TOOL_DEFINITIONS } from "./tools";
@@ -43,11 +44,7 @@ export function assistantAvailable(): boolean {
 
 export type CreateMessage = (params: Anthropic.Beta.MessageCreateParamsNonStreaming) => Promise<Anthropic.Beta.BetaMessage>;
 
-let client: Anthropic | null = null;
-const defaultCreate: CreateMessage = (params) => {
-  client ??= new Anthropic({ apiKey: assistantKey() ?? undefined, timeout: 120_000 });
-  return client.beta.messages.create(params);
-};
+const defaultCreate: CreateMessage = createMessage;
 export const assistantCreate = defaultCreate;
 
 const LANGUAGES: Record<string, string> = { de: "German", en: "English", ru: "Russian", uk: "Ukrainian", kk: "Kazakh", es: "Spanish" };

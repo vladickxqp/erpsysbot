@@ -16,7 +16,8 @@ import { entitlementsOf } from "./billing";
 import { CONTENT_TYPES, CREATIVITY, GENERATION_KINDS, LENGTHS, OUTPUT_LANGUAGES, PLATFORMS, TONES, type GenerationKind } from "@/lib/content";
 import type { Context } from "./context";
 import { requirePermission } from "./permissions";
-import { assistantDailyLimit, assistantKey, assistantModel, assistantServerDailyLimit } from "./settings";
+import { assistantDailyLimit, assistantModel, assistantServerDailyLimit } from "./settings";
+import { createMessage } from "./ai-provider";
 
 
 export const generationInput = z.object({
@@ -129,11 +130,7 @@ export function generationPrompt(input: z.output<typeof generationInput>, compan
 
 type CreateMessage = (params: Anthropic.Beta.MessageCreateParamsNonStreaming) => Promise<Anthropic.Beta.BetaMessage>;
 
-let client: Anthropic | null = null;
-const defaultCreate: CreateMessage = (params) => {
-  client ??= new Anthropic({ apiKey: assistantKey() ?? undefined, timeout: 180_000 });
-  return client.beta.messages.create(params);
-};
+const defaultCreate: CreateMessage = createMessage;
 
 async function generationsSince(ctx: Context, since: Date, own: boolean): Promise<number> {
   const [row] = await withTenant(ctx.organization.id, (tx) =>

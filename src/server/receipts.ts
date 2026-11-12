@@ -10,7 +10,8 @@ import { checkAiLimits, recordGeneration } from "./content-ai";
 import type { Context } from "./context";
 import { sniffType } from "./documents";
 import { requirePermission } from "./permissions";
-import { assistantKey, assistantModel } from "./settings";
+import { assistantModel } from "./settings";
+import { createMessage } from "./ai-provider";
 
 export type ReceiptFields = { vendor: string; date: string | null; amountCents: number | null; category: string };
 
@@ -35,11 +36,7 @@ const SCHEMA = {
 
 type CreateMessage = (params: Anthropic.Beta.MessageCreateParamsNonStreaming) => Promise<Anthropic.Beta.BetaMessage>;
 
-let client: Anthropic | null = null;
-const defaultCreate: CreateMessage = (params) => {
-  client ??= new Anthropic({ apiKey: assistantKey() ?? undefined, timeout: 120_000 });
-  return client.beta.messages.create(params);
-};
+const defaultCreate: CreateMessage = createMessage;
 
 export async function readReceipt(ctx: Context, file: { name: string; bytes: Uint8Array }, create: CreateMessage = defaultCreate): Promise<ReceiptFields> {
   requirePermission(ctx.permissions, "finance.create");
