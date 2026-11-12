@@ -322,6 +322,8 @@ const hub: HubMessages = {
   },
   n: {
     automation: "{message}",
+    shopOrder: "Nuevo pedido de la tienda {number} por {amount} ({store})",
+    shopPayment: "Revise el pago del pedido {number} ({store})",
     automationFailed: "La automatización «{name}» falló",
     clientAssigned: "Nuevo cliente para ti: {client}",
     taskAssigned: "{who} te asignó una tarea: {title}",

@@ -7,7 +7,7 @@ import { withTenant, type Tx } from "@/db/tenant";
 import { auditLog } from "@/db/schema";
 import type { Context } from "./context";
 
-export type Via = "web" | "telegram" | "ai";
+export type Via = "web" | "telegram" | "ai" | "shop";
 
 /** A sign-in or sign-out in the company's trail (outside any business transaction). */
 export async function auditAccess(userId: string, organizationId: string | null, action: "auth.login" | "auth.logout"): Promise<void> {

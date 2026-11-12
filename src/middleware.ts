@@ -15,7 +15,8 @@ const CLOSED = `<!doctype html><html><head><meta charset="utf-8"><meta name="vie
  *   session itself is verified against the database on every page and action
  *   (src/server/request.ts); this just saves an empty round trip.
  */
-function contentSecurity(nonce: string): string {
+/** `frameable`: the store, which the app shows in its own preview frame. */
+function contentSecurity(nonce: string, frameable = false): string {
   const dev = process.env.NODE_ENV !== "production";
   return [
     "default-src 'self'",
@@ -29,7 +30,7 @@ function contentSecurity(nonce: string): string {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    `frame-ancestors ${frameable ? "'self'" : "'none'"}`,
   ].join("; ");
 }
 
@@ -48,7 +49,7 @@ export function middleware(request: NextRequest) {
   if (/^\/app\/documents\/[^/]+\/file$/.test(request.nextUrl.pathname)) return NextResponse.next({ request: { headers: forwarded } });
   // Only scripts that carry this request's nonce run: an injected script has none.
   const nonce = btoa(crypto.randomUUID());
-  const policy = contentSecurity(nonce);
+  const policy = contentSecurity(nonce, request.nextUrl.pathname.startsWith("/shop/"));
   forwarded.set("x-nonce", nonce);
   forwarded.set("content-security-policy", policy);
   const response = NextResponse.next({ request: { headers: forwarded } });
@@ -56,4 +57,4 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/((?!api/telegram|api/stripe|api/health|landing/|_next/static|_next/image|favicon.ico).*)"] };
+export const config = { matcher: ["/((?!api/telegram|api/stripe|api/shop|api/health|landing/|_next/static|_next/image|favicon.ico).*)"] };

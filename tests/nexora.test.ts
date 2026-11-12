@@ -86,7 +86,7 @@ describe("account", () => {
 describe("modules for real", () => {
   it("switches off what depends on a module, and closes it on the server", async () => {
     expect(withDependents(["crm"])).toEqual(expect.arrayContaining(["crm", "pipeline", "orders", "quotes", "invoices"]));
-    expect(withDependents(["products"])).toEqual(["products", "inventory"]);
+    expect(withDependents(["products"])).toEqual(["products", "inventory", "store"]);
     expect(Object.keys(MODULE_REQUIRES)).toContain("invoices");
 
     const owner = await newCompany("Abhängig GmbH");

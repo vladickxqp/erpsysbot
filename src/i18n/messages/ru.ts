@@ -4,6 +4,7 @@ import invoicing from "./invoicing/ru";
 import industries from "./industries/ru";
 import catalog from "./catalog/ru";
 import orderFlow from "./orderFlow/ru";
+import store from "./store/ru";
 
 const ru: Messages = {
   hub,
@@ -11,6 +12,7 @@ const ru: Messages = {
   industries,
   catalog,
   orderFlow,
+  store,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Весь ваш бизнес. Вся ваша работа." },
   common: {
     save: "Сохранить",
@@ -1195,6 +1197,7 @@ const ru: Messages = {
       reminder: "Напоминание",
       social: "Канал",
       stock: "Остаток",
+      store: "Интернет-магазин",
       task: "Задача",
       team: "Команда",
       transaction: "Запись",

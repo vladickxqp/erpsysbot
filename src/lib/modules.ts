@@ -16,6 +16,7 @@ export const APP_MODULES = [
   "finance",
   "products",
   "inventory",
+  "store",
   "documents",
   "media",
   "content",
@@ -50,6 +51,7 @@ const PATHS: [string, AppModule][] = [
   ["/app/finance", "finance"],
   ["/app/products", "products"],
   ["/app/purchasing", "inventory"],
+  ["/app/store", "store"],
   ["/app/documents", "documents"],
   ["/app/media", "media"],
   ["/app/content", "content"],
@@ -85,6 +87,7 @@ export const MODULE_REQUIRES: Partial<Record<AppModule, AppModule[]>> = {
   quotes: ["crm"],
   invoices: ["crm"],
   inventory: ["products"],
+  store: ["products", "orders"],
 };
 
 /** The modules switched off, with everything that depends on them. */
@@ -108,7 +111,7 @@ export type WorkspaceType = (typeof WORKSPACE_TYPES)[number];
 
 export const WORKSPACE_OFF: Record<WorkspaceType, AppModule[]> = {
   BUSINESS: ["content", "social", "time", "personal"],
-  CREATOR: ["pipeline", "orders", "products", "inventory", "automation", "personal", "hr"],
-  FREELANCER: ["orders", "products", "inventory", "content", "social", "team", "automation", "personal", "hr", "chat"],
-  PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "content", "social", "reports", "team", "automation", "integrations", "hr", "chat"],
+  CREATOR: ["pipeline", "orders", "products", "inventory", "store", "automation", "personal", "hr"],
+  FREELANCER: ["orders", "products", "inventory", "store", "content", "social", "team", "automation", "personal", "hr", "chat"],
+  PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "store", "content", "social", "reports", "team", "automation", "integrations", "hr", "chat"],
 };

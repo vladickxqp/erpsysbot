@@ -3,6 +3,7 @@ import invoicing from "./invoicing/de";
 import industries from "./industries/de";
 import catalog from "./catalog/de";
 import orderFlow from "./orderFlow/de";
+import store from "./store/de";
 
 const de = {
   hub,
@@ -10,6 +11,7 @@ const de = {
   industries,
   catalog,
   orderFlow,
+  store,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
@@ -1194,6 +1196,7 @@ const de = {
       reminder: "Mahnung",
       social: "Kanal",
       stock: "Bestand",
+      store: "Onlineshop",
       task: "Aufgabe",
       team: "Team",
       transaction: "Buchung",

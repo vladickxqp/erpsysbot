@@ -58,9 +58,9 @@ const WORKSHOP_WIDGETS: WidgetName[] = ["quickActions", "agenda", "openOrders", 
 const PRODUCTION_WIDGETS: WidgetName[] = ["quickActions", "openOrders", "projects", "deadlines", "teamWorkload", "revenue", "expenses", "profit", "insights"];
 
 export const INDUSTRY_PROFILES: Record<Industry, Profile> = {
-  ONLINE_STORE: { modules: [...BASE, "products", "inventory", "orders", "media"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask"] },
-  DROPSHIPPING: { modules: [...BASE, "products", "inventory", "orders"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "newOrderTask"] },
-  RETAIL: { modules: [...BASE, "products", "inventory", "orders", "time", "hr"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask"] },
+  ONLINE_STORE: { modules: [...BASE, "products", "inventory", "orders", "media", "store"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask"] },
+  DROPSHIPPING: { modules: [...BASE, "products", "inventory", "orders", "store"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "newOrderTask"] },
+  RETAIL: { modules: [...BASE, "products", "inventory", "orders", "time", "hr", "store"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask"] },
   WHOLESALE: { modules: [...BASE, "products", "inventory", "orders", "pipeline"], widgets: STORE_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask", "newClientCall"] },
   IT_COMPANY: { modules: [...BASE, "pipeline", "time", "hr", "chat"], widgets: PROJECT_WIDGETS, automations: ["overdueReminder", "projectDoneInvoice"] },
   SOFTWARE: { modules: [...BASE, "pipeline", "time", "hr", "chat"], widgets: PROJECT_WIDGETS, automations: ["overdueReminder", "projectDoneInvoice"] },

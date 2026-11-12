@@ -781,6 +781,13 @@ export const orders = pgTable(
     shippedAt: timestamp("shipped_at", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** Placed in this online store (src/server/storefront.ts). */
+    storeId: uuid("store_id").references((): AnyPgColumn => stores.id, { onDelete: "set null" }),
+    /** How the buyer chose to pay (bank, stripe) and the provider's reference of the payment. */
+    paymentMethod: text("payment_method"),
+    paymentReference: text("payment_reference"),
+    /** The buyer's link to follow the order: only its hash is kept. */
+    customerTokenHash: text("customer_token_hash"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -835,6 +842,59 @@ export const orderEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("order_events_order_idx").on(t.orderId, t.createdAt)],
+);
+
+/** An online store of a company (src/lib/store.ts); its address is unique across all companies. */
+export const stores = pgTable(
+  "stores",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    /** DRAFT, PUBLISHED or UNPUBLISHED. */
+    status: text("status").notNull().default("DRAFT"),
+    locale: text("locale").notNull().default("de"),
+    design: jsonb("design").notNull().default({}),
+    /** The home page, block by block. */
+    blocks: jsonb("blocks").notNull().default([]),
+    /** About, contact and the legal pages, as the company wrote them. */
+    pages: jsonb("pages").notNull().default({}),
+    /** The categories it shows; empty: all. */
+    categoryIds: uuid("category_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    shipCountries: text("ship_countries").array().notNull().default(sql`'{}'::text[]`),
+    shipping: jsonb("shipping").notNull().default([]),
+    payments: jsonb("payments").notNull().default({}),
+    /** Encrypted (src/server/secret-box.ts) and never sent to a browser. */
+    stripeSecretKey: text("stripe_secret_key"),
+    stripeWebhookSecret: text("stripe_webhook_secret"),
+    /** "sk_test_…4242": which key is stored. */
+    stripeKeyHint: text("stripe_key_hint"),
+    contactEmail: text("contact_email"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("stores_slug_key").on(t.slug), index("stores_org_idx").on(t.organizationId)],
+);
+
+/** Each message a payment provider sent to a store, kept once: providers repeat them. */
+export const shopPaymentEvents = pgTable(
+  "shop_payment_events",
+  {
+    id: id(),
+    organizationId: orgId(),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    eventId: text("event_id").notNull(),
+    type: text("type").notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    result: text("result").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("shop_payment_events_provider_event_key").on(t.provider, t.eventId), index("shop_payment_events_order_idx").on(t.orderId)],
 );
 
 // --- Quotes ------------------------------------------------------------------------------------
@@ -2011,6 +2071,8 @@ export const TENANT_TABLES = [
   "orders",
   "order_items",
   "order_events",
+  "stores",
+  "shop_payment_events",
   "invoices",
   "invoice_items",
   "payments",
