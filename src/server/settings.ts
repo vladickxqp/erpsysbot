@@ -61,6 +61,14 @@ export function assistantModel(): string {
   return own && !own.startsWith("gemini") ? own : "claude-opus-5-5";
 }
 
+/** Tried in turn when the Gemini model is busy or gone (GEMINI_FALLBACK_MODELS, comma separated; "none": no other). */
+export function geminiFallbackModels(): string[] {
+  return (env("GEMINI_FALLBACK_MODELS") || "gemini-flash-lite-latest")
+    .split(",")
+    .map((m) => m.trim())
+    .filter((m) => m.startsWith("gemini"));
+}
+
 /** Messages per person and day, across web and Telegram. */
 export function assistantDailyLimit(): number {
   const n = Number(env("AI_DAILY_LIMIT"));

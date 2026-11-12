@@ -4,10 +4,11 @@
  * Gemini it is translated to Gemini's OpenAI-compatible interface and back,
  * so the assistant, the content generator and the receipt reader stay the same.
  * Errors come back as the SDK's own error classes, so the callers' handling
- * (not configured, busy, failed) works for both.
+ * (not configured, busy, failed) works for both. A Gemini model that is busy,
+ * over its limit or gone hands the request to the next one (GEMINI_FALLBACK_MODELS).
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { aiProvider, assistantKey } from "./settings";
+import { aiProvider, assistantKey, geminiFallbackModels } from "./settings";
 
 type Params = Anthropic.Beta.MessageCreateParamsNonStreaming;
 type Message = Anthropic.Beta.BetaMessage;
@@ -15,8 +16,15 @@ export type CreateMessage = (params: Params) => Promise<Message>;
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const TIMEOUT_MS = 180_000;
+/** While another model is left to try, a model that does not answer gets less time. */
+const ATTEMPT_MS = 60_000;
+/** Busy, over its limit, gone or failing: worth trying the next model. */
+const NEXT_MODEL = new Set([404, 429, 500, 502, 503, 504]);
 /** Gemini's own data on a tool call (its thought signature): kept on the block and sent back unchanged. */
 export const GEMINI_EXTRA = "geminiExtra";
+/** The model that made that signature: another model gets the neutral one Gemini accepts instead. */
+export const GEMINI_MODEL = "geminiModel";
+const NEUTRAL_SIGNATURE = { google: { thought_signature: "skip_thought_signature_validator" } };
 
 let anthropic: Anthropic | null = null;
 
@@ -72,7 +80,7 @@ export function toChat(params: Params): Record<string, unknown> {
           id: String(b.id),
           type: "function",
           function: { name: String(b.name), arguments: JSON.stringify(b.input ?? {}) },
-          ...(b[GEMINI_EXTRA] ? { extra_content: b[GEMINI_EXTRA] } : {}),
+          ...(b[GEMINI_EXTRA] ? { extra_content: b[GEMINI_MODEL] && b[GEMINI_MODEL] !== params.model ? NEUTRAL_SIGNATURE : b[GEMINI_EXTRA] } : {}),
         }));
       const text = textOf(blocks);
       if (text || calls.length) messages.push({ role: "assistant", content: text || null, ...(calls.length ? { tool_calls: calls } : {}) });
@@ -139,7 +147,7 @@ export function fromChat(body: unknown, model: string): Message {
       id: call.id || `call_${i}_${Date.now()}`,
       name: call.function?.name ?? "",
       input,
-      ...(call.extra_content ? { [GEMINI_EXTRA]: call.extra_content } : {}),
+      ...(call.extra_content ? { [GEMINI_EXTRA]: call.extra_content, [GEMINI_MODEL]: model } : {}),
     });
   });
   const reason = choice?.finish_reason;
@@ -156,14 +164,34 @@ export function fromChat(body: unknown, model: string): Message {
   } as unknown as Message;
 }
 
-export async function geminiCreate(params: Params, fetcher: typeof fetch = fetch): Promise<Message> {
+/** The chosen model first, then the fallbacks, each once. */
+export async function geminiCreate(params: Params, fetcher: typeof fetch = fetch, pauseMs = 1000): Promise<Message> {
+  const models = [...new Set([params.model, ...geminiFallbackModels()])];
+  let failure: unknown = null;
+  for (const [i, model] of models.entries()) {
+    if (i > 0) {
+      console.warn(`gemini: ${models[i - 1]} unavailable (${failure instanceof Anthropic.APIError ? (failure.status ?? "no answer") : "error"}), trying ${model}`);
+      await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    }
+    try {
+      return await geminiOnce({ ...params, model }, fetcher, i < models.length - 1 ? ATTEMPT_MS : TIMEOUT_MS);
+    } catch (e) {
+      failure = e;
+      const next = e instanceof Anthropic.APIConnectionError || (e instanceof Anthropic.APIError && e.status !== undefined && NEXT_MODEL.has(e.status));
+      if (!next) throw e;
+    }
+  }
+  throw failure;
+}
+
+async function geminiOnce(params: Params, fetcher: typeof fetch, timeoutMs: number): Promise<Message> {
   let res: Response;
   try {
     res = await fetcher(GEMINI_URL, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${assistantKey() ?? ""}` },
       body: JSON.stringify(toChat(params)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     throw new Anthropic.APIConnectionError({ message: "AI service not reachable", cause: e instanceof Error ? e : undefined });

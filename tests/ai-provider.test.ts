@@ -154,3 +154,56 @@ describe("speaking Gemini's format", () => {
     expect(String(second.at(-1)?.content)).toContain("Neumann");
   });
 });
+
+describe("when a Gemini model is busy", () => {
+  it("moves on to the next model when one is busy or does not answer, but not on a bad request", async () => {
+    vi.stubEnv("AI_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "g-key");
+    vi.stubEnv("GEMINI_FALLBACK_MODELS", "gemini-b, gemini-c");
+    const asked: string[] = [];
+    const fake = (async (_url: string, init: RequestInit) => {
+      const model = JSON.parse(String(init.body)).model as string;
+      asked.push(model);
+      if (model === "gemini-3.8-flash") return new Response(JSON.stringify([{ error: { code: 503, message: "high demand" } }]), { status: 503 });
+      if (model === "gemini-b") throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "Hallo" } }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const answer = await geminiCreate(hello, fake, 0);
+    expect(asked).toEqual(["gemini-3.8-flash", "gemini-b", "gemini-c"]);
+    expect(answer).toMatchObject({ model: "gemini-c", content: [{ type: "text", text: "Hallo" }] });
+
+    asked.length = 0;
+    const bad = (async (_url: string, init: RequestInit) => {
+      asked.push(JSON.parse(String(init.body)).model);
+      return new Response(JSON.stringify({ error: { message: "bad schema" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+    await expect(geminiCreate(hello, bad, 0)).rejects.toBeInstanceOf(Anthropic.BadRequestError);
+    expect(asked).toEqual(["gemini-3.8-flash"]);
+
+    vi.stubEnv("GEMINI_FALLBACK_MODELS", "none");
+    asked.length = 0;
+    await expect(geminiCreate(hello, fake, 0)).rejects.toBeInstanceOf(Anthropic.InternalServerError);
+    expect(asked).toEqual(["gemini-3.8-flash"]);
+  });
+
+  it("keeps a thought signature for the model that made it and gives another model the neutral one", () => {
+    const call = fromChat(
+      { choices: [{ finish_reason: "tool_calls", message: { content: null, tool_calls: [{ id: "c1", function: { name: "search_clients", arguments: "{}" }, extra_content: { google: { thought_signature: "sig" } } }] } }] },
+      "gemini-a",
+    );
+    const sentTo = (model: string) => {
+      const params = {
+        model,
+        max_tokens: 10,
+        messages: [
+          { role: "user", content: "Hi" },
+          { role: "assistant", content: call.content },
+          { role: "user", content: [{ type: "tool_result", tool_use_id: "c1", content: "[]" }] },
+        ],
+      } as unknown as Params;
+      return (toChat(params).messages as { tool_calls?: { extra_content?: unknown }[] }[])[1].tool_calls?.[0].extra_content;
+    };
+    expect(sentTo("gemini-a")).toEqual({ google: { thought_signature: "sig" } });
+    expect(sentTo("gemini-b")).toEqual({ google: { thought_signature: "skip_thought_signature_validator" } });
+  });
+});
