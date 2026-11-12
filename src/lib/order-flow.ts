@@ -11,7 +11,8 @@ import type { OrderStatus } from "./domain";
 export const CHANNELS = ["MANUAL", "PHONE", "EMAIL", "STORE", "MARKETPLACE", "SHOP"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const FULFILLMENT = ["UNFULFILLED", "RESERVED", "PICKING", "PACKED", "SHIPPED", "DELIVERED", "CANCELLED"] as const;
+/** AT_SUPPLIER: every good of the order comes straight from suppliers (src/lib/dropship.ts) and is with them. */
+export const FULFILLMENT = ["UNFULFILLED", "RESERVED", "PICKING", "PACKED", "AT_SUPPLIER", "SHIPPED", "DELIVERED", "CANCELLED"] as const;
 export type Fulfillment = (typeof FULFILLMENT)[number];
 
 export const PAYMENT = ["UNPAID", "PAID", "REFUNDED"] as const;
@@ -26,13 +27,16 @@ export const HOLDING: Fulfillment[] = ["RESERVED", "PICKING", "PACKED"];
 /** The steps of the goods, in order, as the page draws them. */
 export const STEPS: Fulfillment[] = ["RESERVED", "PICKING", "PACKED", "SHIPPED", "DELIVERED"];
 
+/** The steps of an order whose goods all come straight from suppliers. */
+export const DROP_STEPS: Fulfillment[] = ["AT_SUPPLIER", "SHIPPED", "DELIVERED"];
+
 const FROM: Record<Exclude<OrderAction, "markPaid" | "markUnpaid" | "refund">, Fulfillment[]> = {
   confirm: ["UNFULFILLED"],
   pick: ["RESERVED"],
   pack: ["RESERVED", "PICKING"],
-  ship: ["RESERVED", "PICKING", "PACKED"],
+  ship: ["RESERVED", "PICKING", "PACKED", "AT_SUPPLIER"],
   deliver: ["SHIPPED"],
-  cancel: ["UNFULFILLED", "RESERVED", "PICKING", "PACKED"],
+  cancel: ["UNFULFILLED", "RESERVED", "PICKING", "PACKED", "AT_SUPPLIER"],
 };
 
 export const FULFILLMENT_AFTER: Record<keyof typeof FROM, Fulfillment> = {

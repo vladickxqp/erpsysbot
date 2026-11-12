@@ -57,4 +57,4 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/((?!api/telegram|api/stripe|api/shop|api/health|landing/|_next/static|_next/image|favicon.ico).*)"] };
+export const config = { matcher: ["/((?!api/telegram|api/stripe|api/shop|api/suppliers|api/health|landing/|_next/static|_next/image|favicon.ico).*)"] };

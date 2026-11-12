@@ -3,7 +3,7 @@
 import { AlertTriangle, PackageCheck, Plus, Send, Trash2, Truck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/app/page";
 import { Badge } from "@/components/ui/badge";
@@ -67,8 +67,13 @@ export function PurchasingView({
   suppliers,
   products,
   lowStock,
+  dropship = null,
+  attention = 0,
 }: {
-  tab: "orders" | "suppliers";
+  tab: "orders" | "suppliers" | "dropship";
+  /** The supplier orders' queue, when that tab is open. */
+  dropship?: ReactNode;
+  attention?: number;
   canManage: boolean;
   orders: Order[];
   suppliers: Supplier[];
@@ -123,13 +128,14 @@ export function PurchasingView({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-2xl font-semibold tracking-tight">{t("inventory.title")}</h1>
         <div className="flex rounded-lg border bg-card p-0.5">
-          {(["orders", "suppliers"] as const).map((v) => (
+          {(["orders", "suppliers", "dropship"] as const).map((v) => (
             <Link
               key={v}
-              href={v === "orders" ? "/app/purchasing" : "/app/purchasing?tab=suppliers"}
+              href={v === "orders" ? "/app/purchasing" : `/app/purchasing?tab=${v}`}
               className={cn("rounded-md px-3 py-1.5 text-sm", tab === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
             >
-              {t(`inventory.${v}`)}
+              {v === "dropship" ? t("dropship.title") : t(`inventory.${v}`)}
+              {v === "dropship" && attention > 0 && <span className="ml-1.5 rounded-full bg-warning/20 px-1.5 text-xs tabular-nums">{attention}</span>}
             </Link>
           ))}
         </div>
@@ -144,6 +150,8 @@ export function PurchasingView({
           </Button>
         )}
       </div>
+
+      {tab === "dropship" && dropship}
 
       {tab === "orders" && lowStock.length > 0 && (
         <Card className="mb-4 border-warning/40">

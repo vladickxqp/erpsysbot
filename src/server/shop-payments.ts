@@ -20,6 +20,7 @@ import type { Context } from "./context";
 import { companyLeads, notify } from "./notifications";
 import { appUrl } from "./settings";
 import { storeSecrets } from "./stores";
+import { afterPayment, cancelSupplierOrdersOf } from "./dropship";
 import { findStore, mailBuyer, placeOrder, StorefrontError, type CheckoutInput, type PublicStore } from "./storefront";
 
 export class ShopPaymentError extends Error {
@@ -47,7 +48,9 @@ async function event(tx: Tx, organizationId: string, orderId: string, kind: stri
 /** The goods go back on the shelf: an unpaid order whose payment did not start or ran out. */
 async function cancelUnpaid(tx: Tx, organizationId: string, orderId: string, kind: string): Promise<boolean> {
   const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
-  if (!order || order.paymentStatus !== "UNPAID" || !["UNFULFILLED", "RESERVED"].includes(order.fulfillmentStatus)) return false;
+  if (!order || order.paymentStatus !== "UNPAID" || !["UNFULFILLED", "RESERVED", "AT_SUPPLIER"].includes(order.fulfillmentStatus)) return false;
+  // What is already with a supplier keeps the order: a person decides.
+  if (!(await cancelSupplierOrdersOf(tx, { organizationId, userId: null, ctx: null, via: "shop" }, orderId))) return false;
   const now = new Date();
   await tx.update(orders).set({ fulfillmentStatus: "CANCELLED", status: "CANCELLED", cancelledAt: now, updatedAt: now }).where(eq(orders.id, orderId));
   await event(tx, organizationId, orderId, kind);
@@ -163,6 +166,7 @@ export async function handleShopStripeWebhook(storeId: string, payload: string, 
         dedupeKey: `shop-payment:${stripeEvent.id}`,
       }).catch((e) => console.error("shop: notify failed", e instanceof Error ? e.message : e));
     }
+    if (after.paid) await afterPayment(row.organizationId, after.paid.orderId).catch((e) => console.error("shop: supplier orders failed", e instanceof Error ? e.message : e));
     if (after.paid?.email && store) {
       await mailBuyer(store, after.paid.email, "paid", after.paid).catch((e) => console.error("shop: mail failed", e instanceof Error ? e.message : e));
     }

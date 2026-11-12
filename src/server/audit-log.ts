@@ -15,7 +15,7 @@ export async function listAudit(ctx: Context, query: { page?: number; entity?: s
   const filters: SQL[] = [];
   if (query.entity && /^[a-z_]+$/.test(query.entity)) filters.push(like(auditLog.action, `${query.entity}.%`));
   if (query.userId && /^[0-9a-f-]{36}$/i.test(query.userId)) filters.push(eq(auditLog.userId, query.userId));
-  if (query.via === "web" || query.via === "telegram" || query.via === "ai" || query.via === "shop") filters.push(eq(auditLog.via, query.via));
+  if (query.via === "web" || query.via === "telegram" || query.via === "ai" || query.via === "shop" || query.via === "supplier") filters.push(eq(auditLog.via, query.via));
   const page = Math.max(1, Math.floor(query.page ?? 1));
   const where = filters.length ? and(...filters) : undefined;
   return withTenant(ctx.organization.id, async (tx) => {

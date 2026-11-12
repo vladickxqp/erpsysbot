@@ -208,6 +208,9 @@ const store: typeof de = {
     placedBody: "Gracias por su pedido {number} en {store}. Total: {amount}.",
     paidSubject: "Pago recibido: pedido {number}",
     paidBody: "Hemos recibido su pago del pedido {number} en {store}. Importe: {amount}.",
+    shippedSubject: "Su pedido {number} está en camino",
+    shippedBody: "Su pedido {number} en {store} ha sido enviado.",
+    tracking: "Seguimiento",
   },
 };
 

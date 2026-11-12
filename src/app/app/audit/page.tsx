@@ -40,6 +40,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             { value: "telegram", label: "Telegram" },
             { value: "ai", label: "AI" },
             { value: "shop", label: "Shop" },
+            { value: "supplier", label: "API" },
           ]}
         />
       </div>
@@ -70,7 +71,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                     line
                   )}
                 </span>
-                {r.via !== "web" && <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{r.via === "ai" ? "AI" : r.via === "shop" ? "Shop" : "Telegram"}</span>}
+                {r.via !== "web" && <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{r.via === "ai" ? "AI" : r.via === "shop" ? "Shop" : r.via === "supplier" ? "API" : "Telegram"}</span>}
               </div>
             );
           })}

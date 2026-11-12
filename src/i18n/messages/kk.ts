@@ -5,6 +5,7 @@ import industries from "./industries/kk";
 import catalog from "./catalog/kk";
 import orderFlow from "./orderFlow/kk";
 import store from "./store/kk";
+import dropship from "./dropship/kk";
 
 const kk: Messages = {
   hub,
@@ -13,6 +14,7 @@ const kk: Messages = {
   catalog,
   orderFlow,
   store,
+  dropship,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",
@@ -1198,6 +1200,8 @@ const kk: Messages = {
       social: "Арна",
       stock: "Қалдық",
       store: "Интернет-дүкен",
+      supplier: "Жеткізуші",
+      supplier_order: "Жеткізушіге тапсырыс",
       task: "Тапсырма",
       team: "Команда",
       transaction: "Жазба",

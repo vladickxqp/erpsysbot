@@ -322,6 +322,12 @@ const hub: HubMessages = {
   },
   n: {
     automation: "{message}",
+    supplierApproval: "Заказ поставщику {number} к заказу {order} ({supplier}) ждёт одобрения",
+    supplierReady: "Оформите заказ поставщику {number} у {supplier} (заказ {order})",
+    supplierFailed: "Заказ поставщику {number} для {supplier} не передан (заказ {order})",
+    supplierRejected: "{supplier} отклонил заказ поставщику {number} (заказ {order})",
+    supplierOutOfStock: "{supplier} не может поставить заказ {number} (заказ {order})",
+    supplierPrice: "{supplier}: новая закупочная цена на {product} ({from} → {to}, маржа {margin})",
     shopOrder: "Новый заказ из магазина {number} на {amount} ({store})",
     shopPayment: "Проверьте оплату заказа {number} ({store})",
     automationFailed: "Автоматизация «{name}» не выполнена",

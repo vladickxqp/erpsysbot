@@ -4,6 +4,7 @@ import industries from "./industries/de";
 import catalog from "./catalog/de";
 import orderFlow from "./orderFlow/de";
 import store from "./store/de";
+import dropship from "./dropship/de";
 
 const de = {
   hub,
@@ -12,6 +13,7 @@ const de = {
   catalog,
   orderFlow,
   store,
+  dropship,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
@@ -1197,6 +1199,8 @@ const de = {
       social: "Kanal",
       stock: "Bestand",
       store: "Onlineshop",
+      supplier: "Lieferant",
+      supplier_order: "Lieferantenbestellung",
       task: "Aufgabe",
       team: "Team",
       transaction: "Buchung",

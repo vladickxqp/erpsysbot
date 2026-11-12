@@ -8,13 +8,19 @@ import { OrderFlowError, runOrderAction, saveShipping, type ActionInput, type Sh
 import { ForbiddenError } from "@/server/permissions";
 import { requireContext } from "@/server/request";
 
-export type FlowResult = { ok?: boolean; error?: string; short?: { description: string; needed: number; available: number }[] };
+export type FlowResult = { ok?: boolean; error?: string; short?: { description: string; needed: number; available: number }[]; missing?: string[] };
 
 function failure(e: unknown): FlowResult {
   if (e instanceof ForbiddenError) return { error: "common.forbidden" };
   if (e instanceof NotFoundError) return { error: "common.error" };
   if (e instanceof ZodError) return { error: "auth.check" };
-  if (e instanceof OrderFlowError) return { error: `orderFlow.error.${e.code}`, short: e.lines.length ? e.lines : undefined };
+  if (e instanceof OrderFlowError) {
+    return {
+      error: `orderFlow.error.${e.code}`,
+      short: e.code === "SHORT" && e.lines.length ? e.lines : undefined,
+      missing: e.code === "NO_SUPPLIER" ? e.lines.map((l) => l.description) : undefined,
+    };
+  }
   throw e;
 }
 
@@ -22,6 +28,7 @@ const refresh = (id: string) => {
   revalidatePath(`/app/orders/${id}`);
   revalidatePath("/app/orders");
   revalidatePath("/app/products", "layout");
+  revalidatePath("/app/purchasing", "layout");
   revalidatePath("/app");
 };
 

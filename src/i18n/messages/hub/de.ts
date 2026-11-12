@@ -321,6 +321,12 @@ const hub = {
   },
   n: {
     automation: "{message}",
+    supplierApproval: "Lieferantenbestellung {number} zu Auftrag {order} ({supplier}) wartet auf Freigabe",
+    supplierReady: "Lieferantenbestellung {number} bei {supplier} bestellen (Auftrag {order})",
+    supplierFailed: "Lieferantenbestellung {number} an {supplier} fehlgeschlagen (Auftrag {order})",
+    supplierRejected: "{supplier} hat Lieferantenbestellung {number} abgelehnt (Auftrag {order})",
+    supplierOutOfStock: "{supplier} kann Lieferantenbestellung {number} nicht liefern (Auftrag {order})",
+    supplierPrice: "{supplier}: neuer Einkaufspreis für {product} ({from} → {to}, Marge {margin})",
     shopOrder: "Neue Shop-Bestellung {number} über {amount} ({store})",
     shopPayment: "Zahlung zu Bestellung {number} prüfen ({store})",
     automationFailed: "Automation „{name}“ ist fehlgeschlagen",

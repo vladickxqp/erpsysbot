@@ -454,6 +454,8 @@ export const products = pgTable(
     purchasePriceCents: integer("purchase_price_cents"),
     /** Stock is kept only for tracked products; it changes only through stock movements. */
     trackStock: boolean("track_stock").notNull().default(false),
+    /** STOCK: from the company's own stock; DROPSHIP: a supplier ships it straight to the customer (src/lib/dropship.ts). */
+    fulfillment: text("fulfillment").notNull().default("STOCK"),
     stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3 }).notNull().default("0"),
     minStock: numeric("min_stock", { precision: 12, scale: 3 }),
     weightGrams: integer("weight_grams"),
@@ -596,6 +598,23 @@ export const suppliers = pgTable(
     returnConditions: text("return_conditions"),
     /** ACTIVE or INACTIVE: an inactive supplier keeps its history. */
     status: text("status").notNull().default("ACTIVE"),
+    /** Ships straight to the company's customers (src/lib/dropship.ts). */
+    dropship: boolean("dropship").notNull().default(false),
+    /** MANUAL, EMAIL or API: how it takes an order. */
+    submitMethod: text("submit_method").notNull().default("MANUAL"),
+    orderEmail: text("order_email"),
+    apiUrl: text("api_url"),
+    /** The supplier's own key for its interface, encrypted (src/server/secret-box.ts). */
+    apiKey: text("api_key"),
+    apiKeyHint: text("api_key_hint"),
+    /** Signs what goes to the supplier and checks what comes back; encrypted. */
+    signingSecret: text("signing_secret"),
+    processingDays: integer("processing_days"),
+    dropshipRules: jsonb("dropship_rules").notNull().default({}),
+    /** The last time an order went out to it, and how. */
+    lastSubmitAt: timestamp("last_submit_at", { withTimezone: true }),
+    lastSubmitOk: boolean("last_submit_ok"),
+    lastError: text("last_error"),
     createdAt: createdAt(),
   },
   (t) => [index("suppliers_org_name_idx").on(t.organizationId, t.name)],
@@ -623,6 +642,12 @@ export const productSuppliers = pgTable(
     shippingCostCents: integer("shipping_cost_cents"),
     preferred: boolean("preferred").notNull().default(false),
     notes: text("notes"),
+    /** What the supplier last reported in stock, and when; null: never reported. Never the company's own stock. */
+    supplierStock: numeric("supplier_stock", { precision: 12, scale: 3 }),
+    stockReportedAt: timestamp("stock_reported_at", { withTimezone: true }),
+    /** The supplier changed the price and nobody confirmed it yet; the price before. */
+    priceChangedAt: timestamp("price_changed_at", { withTimezone: true }),
+    previousPriceCents: integer("previous_price_cents"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -842,6 +867,83 @@ export const orderEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("order_events_order_idx").on(t.orderId, t.createdAt)],
+);
+
+/** What a supplier is to ship straight to the customer of an order (src/lib/dropship.ts). */
+export const supplierOrders = pgTable(
+  "supplier_orders",
+  {
+    id: id(),
+    organizationId: orgId(),
+    number: integer("number").notNull(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("WAITING"),
+    /** How it goes to the supplier, as the supplier's setting was when it was made. */
+    method: text("method").notNull(),
+    /** Why it waits for a person. */
+    reasons: text("reasons").array().notNull().default(sql`'{}'::text[]`),
+    /** Net, in the offers' currency: what the supplier charges, shipping included. */
+    costCents: integer("cost_cents").notNull().default(0),
+    /** Net sale of its lines to the customer. */
+    saleCents: integer("sale_cents").notNull().default(0),
+    currency: text("currency").notNull(),
+    /** Sent with every try, so the supplier takes it once. */
+    idempotencyKey: text("idempotency_key").notNull(),
+    /** The supplier's own number for it. */
+    externalRef: text("external_ref"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    approvedBy: uuid("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    carrier: text("carrier"),
+    trackingNumber: text("tracking_number"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("supplier_orders_org_number_key").on(t.organizationId, t.number),
+    uniqueIndex("supplier_orders_key").on(t.idempotencyKey),
+    index("supplier_orders_order_idx").on(t.orderId),
+    index("supplier_orders_org_status_idx").on(t.organizationId, t.status),
+  ],
+);
+
+/** A line of a supplier order: the price is the offer's when the order was checked last. */
+export const supplierOrderItems = pgTable(
+  "supplier_order_items",
+  {
+    id: id(),
+    organizationId: orgId(),
+    supplierOrderId: uuid("supplier_order_id")
+      .notNull()
+      .references(() => supplierOrders.id, { onDelete: "cascade" }),
+    orderItemId: uuid("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    offerId: uuid("offer_id").references(() => productSuppliers.id, { onDelete: "set null" }),
+    supplierSku: text("supplier_sku"),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    unitCostCents: integer("unit_cost_cents").notNull(),
+    /** Per unit. */
+    shippingCostCents: integer("shipping_cost_cents").notNull().default(0),
+    /** Net sale of the customer's line. */
+    saleCents: integer("sale_cents").notNull().default(0),
+  },
+  (t) => [index("supplier_order_items_order_idx").on(t.supplierOrderId), index("supplier_order_items_offer_idx").on(t.offerId)],
 );
 
 /** An online store of a company (src/lib/store.ts); its address is unique across all companies. */
@@ -2073,6 +2175,8 @@ export const TENANT_TABLES = [
   "order_events",
   "stores",
   "shop_payment_events",
+  "supplier_orders",
+  "supplier_order_items",
   "invoices",
   "invoice_items",
   "payments",

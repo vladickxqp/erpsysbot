@@ -21,6 +21,7 @@ const orderFlow = {
     SHIPPED: "Versendet",
     DELIVERED: "Zugestellt",
     CANCELLED: "Storniert",
+    AT_SUPPLIER: "Beim Lieferanten",
   },
   payment: {
     UNPAID: "Unbezahlt",
@@ -81,6 +82,24 @@ const orderFlow = {
     paidAfterCancel: "Nach dem Storno bezahlt: bitte erstatten oder neu anlegen",
     expired: "Zahlungszeit abgelaufen, Reservierung frei",
     partialRefund: "Teilweise erstattet",
+    shipBySupplier: "Vom Lieferanten versendet",
+    deliverBySupplier: "Zugestellt",
+    supplier: {
+      created: "Lieferantenbestellung angelegt",
+      missing: "Kein Lieferant mit Direktversand",
+      approve: "Lieferantenbestellung freigegeben",
+      send: "Übermittlung angestoßen",
+      submitted: "An den Lieferanten übermittelt",
+      markSubmitted: "Beim Lieferanten bestellt",
+      confirm: "Lieferant hat bestätigt",
+      reject: "Lieferant hat abgelehnt",
+      outOfStock: "Lieferant: nicht lieferbar",
+      ship: "Lieferant hat versendet",
+      deliver: "Lieferung zugestellt",
+      retry: "Erneut zur Prüfung",
+      cancel: "Lieferantenbestellung storniert",
+      failed: "Übermittlung fehlgeschlagen",
+    },
   },
   filter: {
     toShip: "Zu versenden",
@@ -92,6 +111,9 @@ const orderFlow = {
     SHORT: "Nicht genug auf Lager",
     EMPTY: "Die Bestellung hat keine Positionen",
     LOCKED: "Ware ist reserviert oder versendet: Positionen bleiben unverändert",
+    NO_SUPPLIER: "Für diese Artikel liefert kein Lieferant direkt",
+    SUPPLIER_OPEN: "Lieferantenbestellungen sind noch offen",
+    AT_SUPPLIER: "Liegt beim Lieferanten: dort zuerst stornieren",
   },
 };
 

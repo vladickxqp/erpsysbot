@@ -322,6 +322,12 @@ const hub: HubMessages = {
   },
   n: {
     automation: "{message}",
+    supplierApproval: "Supplier order {number} for order {order} ({supplier}) needs approval",
+    supplierReady: "Place supplier order {number} with {supplier} (order {order})",
+    supplierFailed: "Supplier order {number} to {supplier} failed (order {order})",
+    supplierRejected: "{supplier} rejected supplier order {number} (order {order})",
+    supplierOutOfStock: "{supplier} cannot deliver supplier order {number} (order {order})",
+    supplierPrice: "{supplier}: new purchase price for {product} ({from} → {to}, margin {margin})",
     shopOrder: "New store order {number} for {amount} ({store})",
     shopPayment: "Check the payment of order {number} ({store})",
     automationFailed: "Automation “{name}” failed",

@@ -23,6 +23,7 @@ const orderFlow: typeof de = {
     SHIPPED: "Shipped",
     DELIVERED: "Delivered",
     CANCELLED: "Cancelled",
+    AT_SUPPLIER: "With supplier",
   },
   payment: {
     UNPAID: "Unpaid",
@@ -83,6 +84,24 @@ const orderFlow: typeof de = {
     paidAfterCancel: "Paid after cancellation: refund or re-create",
     expired: "Payment time ran out, reservation released",
     partialRefund: "Partly refunded",
+    shipBySupplier: "Shipped by the supplier",
+    deliverBySupplier: "Delivered",
+    supplier: {
+      created: "Supplier order created",
+      missing: "No supplier ships these directly",
+      approve: "Supplier order approved",
+      send: "Sending started",
+      submitted: "Sent to the supplier",
+      markSubmitted: "Ordered at the supplier",
+      confirm: "Supplier confirmed",
+      reject: "Supplier rejected",
+      outOfStock: "Supplier: out of stock",
+      ship: "Supplier shipped",
+      deliver: "Delivery arrived",
+      retry: "Back to review",
+      cancel: "Supplier order cancelled",
+      failed: "Sending failed",
+    },
   },
   filter: {
     toShip: "To ship",
@@ -94,6 +113,9 @@ const orderFlow: typeof de = {
     SHORT: "Not enough in stock",
     EMPTY: "The order has no lines",
     LOCKED: "Goods are reserved or shipped: the lines stay as they are",
+    NO_SUPPLIER: "No supplier ships these items directly",
+    SUPPLIER_OPEN: "Supplier orders are still open",
+    AT_SUPPLIER: "With the supplier: cancel it there first",
   },
 };
 

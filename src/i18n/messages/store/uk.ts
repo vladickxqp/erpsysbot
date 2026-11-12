@@ -208,6 +208,9 @@ const store: typeof de = {
     placedBody: "Дякуємо за замовлення {number} у {store}. Сума: {amount}.",
     paidSubject: "Оплату отримано: замовлення {number}",
     paidBody: "Оплату замовлення {number} у {store} отримано. Сума: {amount}.",
+    shippedSubject: "Ваше замовлення {number} в дорозі",
+    shippedBody: "Ваше замовлення {number} у {store} відправлено.",
+    tracking: "Відстеження",
   },
 };
 

@@ -35,6 +35,7 @@ import {
   saveVariantOptionsAction,
   type CatalogResult,
 } from "../catalog-actions";
+import { acknowledgePriceAction } from "../../purchasing/dropship-actions";
 
 export type EditorProduct = {
   id: string;
@@ -50,6 +51,7 @@ export type EditorProduct = {
   active: boolean;
   categoryId: string | null;
   trackStock: boolean;
+  fulfillment: "STOCK" | "DROPSHIP";
   stock: number;
   minStock: number | null;
   weightGrams: number | null;
@@ -80,6 +82,10 @@ type Offer = {
   shippingCostCents: number | null;
   preferred: boolean;
   notes: string | null;
+  supplierStock: number | null;
+  stockReportedAt: string | null;
+  priceChangedAt: string | null;
+  previousPriceCents: number | null;
   history: { priceCents: number; currency: string; at: string }[];
 };
 type Image = { id: string; documentId: string; position: number; alt: string | null; name: string };
@@ -125,6 +131,8 @@ export function ProductEditor(props: {
   images: Image[];
   offers: Offer[];
   bestOfferId: string | null;
+  /** A product the supplier ships: per offer, what the supplier reported and what open orders take. */
+  dropship?: { offerId: string; supplier: string; dropship: boolean; reported: number | null; reportedAt: string | null; reserved: number; openOrders: number; available: number | null }[] | null;
   movements: Movement[];
   margins: Margins | null;
   fees: { feePercent: number; feeFixedCents: number } | null;
@@ -210,6 +218,7 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
     active: product?.active ?? true,
     categoryId: product?.categoryId ?? "",
     trackStock: product?.trackStock ?? false,
+    fulfillment: (product?.fulfillment ?? "STOCK") as "STOCK" | "DROPSHIP",
     minStock: product?.minStock === null || product?.minStock === undefined ? "" : String(product.minStock).replace(".", ","),
     weightGrams: product?.weightGrams?.toString() ?? "",
     lengthMm: product?.lengthMm?.toString() ?? "",
@@ -253,7 +262,8 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
           vatRate: v.vatRate,
           active: v.active,
           categoryId: v.categoryId || null,
-          trackStock: v.kind === "PRODUCT" && v.trackStock,
+          trackStock: v.kind === "PRODUCT" && v.fulfillment === "STOCK" && v.trackStock,
+          fulfillment: v.kind === "PRODUCT" ? v.fulfillment : "STOCK",
           minStock,
           weightGrams: weightGrams === null ? null : Math.round(weightGrams),
           lengthMm: lengthMm === null ? null : Math.round(lengthMm),
@@ -350,7 +360,7 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={v.active} onCheckedChange={(c) => set({ active: c === true })} disabled={disabled} /> {t("products.active")}
             </label>
-            {v.kind === "PRODUCT" && (
+            {v.kind === "PRODUCT" && v.fulfillment === "STOCK" && (
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={v.trackStock} onCheckedChange={(c) => set({ trackStock: c === true })} disabled={disabled} /> {t("inventory.track")}
               </label>
@@ -365,6 +375,17 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
               <CardTitle className="text-base">{t("catalog.shipping")}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
+              <Field label={t("dropship.product.fulfillment")} className="col-span-2">
+                <Select value={v.fulfillment} onValueChange={(f) => set({ fulfillment: f as "STOCK" | "DROPSHIP" })} disabled={disabled}>
+                  <SelectTrigger className="w-full" aria-label={t("dropship.product.fulfillment")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="STOCK">{t("dropship.product.STOCK")}</SelectItem>
+                    <SelectItem value="DROPSHIP">{t("dropship.product.DROPSHIP")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label={t("catalog.weight")} className="col-span-2">
                 {input("weightGrams", { inputMode: "numeric" })}
               </Field>
@@ -600,12 +621,13 @@ function VariantDialog({ variant, product, onClose }: { variant: Variant; produc
 
 // --- Suppliers ---------------------------------------------------------------------------------
 
-function Suppliers({ product, offers, bestOfferId, suppliers, variants, can }: Parameters<typeof ProductEditor>[0] & { product: EditorProduct }) {
+function Suppliers({ product, offers, bestOfferId, suppliers, variants, can, dropship }: Parameters<typeof ProductEditor>[0] & { product: EditorProduct }) {
   const { t, locale, region } = useI18n();
   const { run } = useAction();
   const [editing, setEditing] = useState<Partial<Offer> | null>(null);
   const [removing, setRemoving] = useState<Offer | null>(null);
   const money = (c: number, currency: string) => formatMoney(c, locale, { ...region, currency });
+  const qty = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
   const variantName = (id: string | null) => (id ? choiceLabel(variants.find((x) => x.id === id)?.options ?? {}, product.variantOptions) : t("catalog.allVariants"));
   const sorted = [...offers].sort((a, b) => a.purchasePriceCents + (a.shippingCostCents ?? 0) - (b.purchasePriceCents + (b.shippingCostCents ?? 0)));
   return (
@@ -620,6 +642,40 @@ function Suppliers({ product, offers, bestOfferId, suppliers, variants, can }: P
           {t("inventory.newSupplier")}
         </Link>
       )}
+      {product.fulfillment === "DROPSHIP" && dropship && dropship.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("dropship.product.supplierStock")}</TableHead>
+                <TableHead className="text-right">{t("dropship.product.reported")}</TableHead>
+                <TableHead className="text-right">{t("dropship.product.reserved")}</TableHead>
+                <TableHead className="text-right">{t("dropship.product.openOrders")}</TableHead>
+                <TableHead className="text-right">{t("dropship.product.available")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dropship.map((d) => (
+                <TableRow key={d.offerId}>
+                  <TableCell className="font-medium">
+                    {d.supplier}
+                    {!d.dropship && (
+                      <Badge variant="outline" className="ml-2">
+                        {t("dropship.product.notDropship")}
+                      </Badge>
+                    )}
+                    {d.reportedAt && <div className="text-xs text-muted-foreground">{t("dropship.product.stockAt", { date: formatDate(d.reportedAt, locale, region) })}</div>}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{d.reported === null ? t("dropship.product.unknown") : qty.format(d.reported)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{qty.format(d.reserved)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{d.openOrders}</TableCell>
+                  <TableCell className="text-right tabular-nums">{d.available === null ? t("dropship.product.unknown") : qty.format(d.available)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       {sorted.length > 0 && (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
@@ -631,6 +687,7 @@ function Suppliers({ product, offers, bestOfferId, suppliers, variants, can }: P
                 <TableHead className="text-right">{t("catalog.shippingCost")}</TableHead>
                 <TableHead className="text-right">{t("catalog.leadTime")}</TableHead>
                 <TableHead className="text-right">{t("catalog.minOrder")}</TableHead>
+                <TableHead className="text-right">{t("dropship.product.supplierStock")}</TableHead>
                 <TableHead>{t("catalog.priceHistory")}</TableHead>
                 <TableHead className="w-20" />
               </TableRow>
@@ -651,10 +708,26 @@ function Suppliers({ product, offers, bestOfferId, suppliers, variants, can }: P
                     {o.supplierSku && <div className="text-xs text-muted-foreground">{o.supplierSku}</div>}
                   </TableCell>
                   {variants.length > 0 && <TableCell className="text-muted-foreground">{variantName(o.variantId)}</TableCell>}
-                  <TableCell className="text-right tabular-nums">{money(o.purchasePriceCents, o.currency)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {money(o.purchasePriceCents, o.currency)}
+                    {o.priceChangedAt && o.previousPriceCents !== null && (
+                      <div className="text-xs text-warning">
+                        {t("dropship.product.priceChanged", { from: money(o.previousPriceCents, o.currency), to: money(o.purchasePriceCents, o.currency) })}
+                        {can.stock && (
+                          <Button variant="link" size="sm" className="h-auto p-0 pl-1 text-xs" onClick={() => run(() => acknowledgePriceAction(o.id))}>
+                            {t("dropship.product.acceptPrice")}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{o.shippingCostCents === null ? "—" : money(o.shippingCostCents, o.currency)}</TableCell>
                   <TableCell className="text-right tabular-nums">{o.leadTimeDays === null ? "—" : t("catalog.days", { count: o.leadTimeDays })}</TableCell>
                   <TableCell className="text-right tabular-nums">{o.minOrderQty ?? "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {o.supplierStock === null ? <span className="text-muted-foreground">{t("dropship.product.unknown")}</span> : qty.format(o.supplierStock)}
+                    {o.stockReportedAt && <div className="text-xs text-muted-foreground">{t("dropship.product.stockAt", { date: formatDate(o.stockReportedAt, locale, region) })}</div>}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {o.history.length > 1
                       ? o.history
@@ -710,7 +783,9 @@ function OfferDialog({
 }) {
   const { t, region } = useI18n();
   const { pending, run } = useAction();
+  const initialStock = offer.supplierStock === null || offer.supplierStock === undefined ? "" : String(offer.supplierStock).replace(".", ",");
   const [v, setV] = useState({
+    stock: initialStock,
     supplierId: offer.supplierId ?? suppliers.find((s) => s.active)?.id ?? "",
     variantId: offer.variantId ?? "",
     supplierSku: offer.supplierSku ?? "",
@@ -737,7 +812,8 @@ function OfferDialog({
             const shipping = moneyOrNull(v.shipping);
             const lead = num(v.leadTime);
             const min = num(v.minOrder);
-            if (price === null || price < 0 || (v.shipping.trim() && shipping === null) || Number.isNaN(lead) || Number.isNaN(min)) return toast.error(t("auth.check"));
+            const stock = num(v.stock);
+            if (price === null || price < 0 || (v.shipping.trim() && shipping === null) || Number.isNaN(lead) || Number.isNaN(min) || Number.isNaN(stock) || (stock !== null && stock < 0)) return toast.error(t("auth.check"));
             run(
               () =>
                 saveOfferAction(product.id, offer.id ?? null, {
@@ -751,6 +827,7 @@ function OfferDialog({
                   minOrderQty: min,
                   preferred: v.preferred,
                   notes: v.notes,
+                  ...(v.stock !== initialStock ? { supplierStock: stock } : {}),
                 }),
               () => {
                 toast.success(t("common.saved"));
@@ -807,6 +884,9 @@ function OfferDialog({
           </Field>
           <Field label={t("catalog.minOrder")}>
             <Input inputMode="decimal" value={v.minOrder} onChange={(e) => setV({ ...v, minOrder: e.target.value })} />
+          </Field>
+          <Field label={t("dropship.product.supplierStock")}>
+            <Input inputMode="decimal" value={v.stock} onChange={(e) => setV({ ...v, stock: e.target.value })} />
           </Field>
           <Field label={t("inventory.note")} className="col-span-2">
             <Input value={v.notes} maxLength={1000} onChange={(e) => setV({ ...v, notes: e.target.value })} />

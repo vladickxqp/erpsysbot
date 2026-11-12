@@ -9,18 +9,19 @@
 import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type Tx } from "@/db/tenant";
-import { orderEvents, orderItems, orders, products, productVariants } from "@/db/schema";
+import { orderEvents, orderItems, orders, products, productVariants, supplierOrders } from "@/db/schema";
 import { canDo, CHANNELS, FULFILLMENT_AFTER, HOLDING, STATUS_AFTER, type Fulfillment, type OrderAction, type Payment } from "@/lib/order-flow";
 import { choiceLabel } from "@/lib/variants";
 import { audit, type Via } from "./audit";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
+import { actorOf, afterPayment, cancelSupplierOrdersOf, companyOf, createSupplierOrders, followUp, openSupplierOrders, ownGoodsCount, planDropship } from "./dropship";
 import { deductForOrder } from "./inventory";
 import { requirePermission } from "./permissions";
 
 export class OrderFlowError extends Error {
   constructor(
-    public readonly code: "STEP" | "SHORT" | "EMPTY" | "LOCKED",
+    public readonly code: "STEP" | "SHORT" | "EMPTY" | "LOCKED" | "NO_SUPPLIER" | "SUPPLIER_OPEN" | "AT_SUPPLIER",
     public readonly lines: { description: string; needed: number; available: number }[] = [],
   ) {
     super(code);
@@ -108,7 +109,7 @@ export async function availability(tx: Tx, orderId: string) {
     .from(orderItems)
     .innerJoin(products, eq(products.id, orderItems.productId))
     .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-    .where(and(eq(orderItems.orderId, orderId), isNotNull(orderItems.productId), eq(products.trackStock, true)))
+    .where(and(eq(orderItems.orderId, orderId), isNotNull(orderItems.productId), eq(products.trackStock, true), eq(products.fulfillment, "STOCK")))
     .orderBy(asc(orderItems.position));
   const held = await heldStock(tx, [...new Set(lines.map((l) => l.productId!))], orderId);
   // Several lines of one order can take from the same stock.
@@ -141,8 +142,10 @@ async function event(tx: Tx, ctx: Context, orderId: string, kind: string, data: 
 export async function runOrderAction(ctx: Context, id: string, action: OrderAction, raw: ActionInput = {}, via: Via = "web") {
   requirePermission(ctx.permissions, "orders.update");
   const input = actionInput.parse(raw);
+  const company = action === "confirm" ? await companyOf(ctx.organization.id) : null;
   const done = await withTenant(ctx.organization.id, async (tx) => {
     const order = await lockedOrder(tx, id);
+    let dropOnly = false;
     const state = { fulfillment: order.fulfillmentStatus as Fulfillment, payment: order.paymentStatus as Payment };
     if (!canDo(action, state)) throw new OrderFlowError("STEP");
     const now = new Date();
@@ -155,7 +158,15 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
       if (short.length && !input.allowShort) throw new OrderFlowError("SHORT", short.map((l) => ({ description: l.description, needed: l.needed, available: l.available })));
       if (short.length) data.short = short.map((l) => ({ line: l.id, needed: l.needed, available: l.available }));
       patch.confirmedAt = now;
+      // Goods a supplier ships go to supplier orders; an order of only such goods waits with the suppliers.
+      const plan = await planDropship(tx, id);
+      if (plan.missing.length) throw new OrderFlowError("NO_SUPPLIER", plan.missing.map((m) => ({ description: m.description, needed: 0, available: 0 })));
+      if (plan.groups.length) {
+        data.supplierOrders = (await createSupplierOrders(tx, actorOf(ctx, via), company!, id, plan)).length;
+        dropOnly = plan.ownGoods === 0;
+      }
     }
+    if (action === "ship" && (await openSupplierOrders(tx, id)) > 0) throw new OrderFlowError("SUPPLIER_OPEN");
     if (action === "ship") {
       patch.shippedAt = now;
       patch.carrier = input.carrier;
@@ -169,7 +180,11 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
       patch.deliveredAt = now;
       await deductForOrder(tx, ctx, id);
     }
-    if (action === "cancel") patch.cancelledAt = now;
+    if (action === "cancel") {
+      // What is with a supplier is cancelled there first; the rest goes with the order.
+      if (!(await cancelSupplierOrdersOf(tx, actorOf(ctx, via), id))) throw new OrderFlowError("AT_SUPPLIER");
+      patch.cancelledAt = now;
+    }
     if (action === "markPaid") {
       patch.paymentStatus = "PAID";
       patch.paidAt = now;
@@ -180,6 +195,7 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
     }
     if (action === "refund") patch.paymentStatus = "REFUNDED";
     if (action in FULFILLMENT_AFTER) patch.fulfillmentStatus = FULFILLMENT_AFTER[action as keyof typeof FULFILLMENT_AFTER];
+    if (dropOnly) patch.fulfillmentStatus = "AT_SUPPLIER";
     if (STATUS_AFTER[action]) patch.status = STATUS_AFTER[action];
     if (input.note) data.note = input.note;
     const [row] = await tx.update(orders).set(patch).where(eq(orders.id, id)).returning();
@@ -188,6 +204,9 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
     return row;
   });
   if (action === "deliver") await (await import("./automations")).fireAutomations(ctx, "order.completed", id);
+  const later = (e: unknown) => console.error("dropship: follow-up failed", e instanceof Error ? e.message : e);
+  if (action === "confirm") await followUp(ctx.organization.id, { orderId: id }).catch(later);
+  if (action === "markPaid") await afterPayment(ctx.organization.id, id).catch(later);
   return done;
 }
 
@@ -238,7 +257,10 @@ export async function getOrderFlow(ctx: Context, id: string) {
     if (!order) throw new NotFoundError();
     const events = await tx.select().from(orderEvents).where(eq(orderEvents.orderId, id)).orderBy(desc(orderEvents.createdAt)).limit(100);
     const lines = order.fulfillmentStatus === "UNFULFILLED" || HOLDING.includes(order.fulfillmentStatus as Fulfillment) ? await availability(tx, id) : [];
-    return { order, events, lines };
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(supplierOrders).where(eq(supplierOrders.orderId, id));
+    // Goods only from suppliers: the order shows the suppliers' steps.
+    const dropOnly = Number(n) > 0 && (await ownGoodsCount(tx, id)) === 0;
+    return { order, events, lines, dropOnly };
   });
 }
 

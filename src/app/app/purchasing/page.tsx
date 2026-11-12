@@ -1,7 +1,9 @@
 import { getT } from "@/i18n/server";
 import { getPurchaseOrder, listPurchaseOrders, listSuppliers, lowStock } from "@/server/inventory";
 import { listProducts } from "@/server/products";
+import { listSupplierOrders, supplierOrderCounts, SUPPLIER_FILTERS, type SupplierFilter } from "@/server/dropship";
 import { requirePageContext } from "@/server/request";
+import { DropshipQueue } from "./dropship-queue";
 import { PurchasingView } from "./purchasing-view";
 
 export async function generateMetadata() {
@@ -9,14 +11,20 @@ export async function generateMetadata() {
   return { title: t("inventory.title") };
 }
 
-export default async function PurchasingPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function PurchasingPage({ searchParams }: { searchParams: Promise<{ tab?: string; filter?: string }> }) {
   const ctx = await requirePageContext("orders.read");
   const sp = await searchParams;
+  const tab = sp.tab === "suppliers" ? "suppliers" : sp.tab === "dropship" ? "dropship" : "orders";
+  const filter: SupplierFilter = SUPPLIER_FILTERS.includes(sp.filter as SupplierFilter) ? (sp.filter as SupplierFilter) : "attention";
+  const counts = await supplierOrderCounts(ctx);
+  const dropshipOrders = tab === "dropship" ? await listSupplierOrders(ctx, filter) : [];
   const [orders, suppliers, products, low] = await Promise.all([listPurchaseOrders(ctx), listSuppliers(ctx), listProducts(ctx, { activeOnly: true }), lowStock(ctx)]);
   const details = await Promise.all(orders.filter((o) => o.status !== "RECEIVED" && o.status !== "CANCELLED").map((o) => getPurchaseOrder(ctx, o.id)));
   return (
     <PurchasingView
-      tab={sp.tab === "suppliers" ? "suppliers" : "orders"}
+      tab={tab}
+      attention={counts.attention}
+      dropship={tab === "dropship" ? <DropshipQueue filter={filter} orders={dropshipOrders} counts={counts} canManage={ctx.permissions.has("inventory.manage")} /> : null}
       canManage={ctx.permissions.has("inventory.manage")}
       orders={orders.map((o) => ({
         id: o.id,

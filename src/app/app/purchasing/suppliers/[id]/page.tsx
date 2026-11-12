@@ -3,6 +3,8 @@ import { getT } from "@/i18n/server";
 import { getSupplierDetail } from "@/server/catalog";
 import { NotFoundError } from "@/server/clients";
 import { requirePageContext } from "@/server/request";
+import { getDropshipSettings } from "@/server/dropship";
+import { DropshipSettings } from "./dropship-settings";
 import { SupplierView } from "./supplier-view";
 
 export async function generateMetadata() {
@@ -18,7 +20,9 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
     throw e;
   });
   const s = detail.supplier;
+  const dropship = await getDropshipSettings(ctx, id);
   return (
+    <>
     <SupplierView
       id={s.id}
       canManage={ctx.permissions.has("inventory.manage")}
@@ -53,5 +57,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
       }))}
       performance={detail.performance}
     />
+    <DropshipSettings supplierId={s.id} canManage={ctx.permissions.has("inventory.manage")} initial={{ ...dropship, lastSubmitAt: dropship.lastSubmitAt?.toISOString() ?? null }} />
+    </>
   );
 }

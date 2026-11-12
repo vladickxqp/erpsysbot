@@ -414,6 +414,14 @@ export const offerInput = z.object({
   shippingCostCents: cents.nullish().transform((v) => v ?? null),
   preferred: z.boolean().default(false),
   notes: text(1000),
+  /** What the supplier reports in stock; left out: stays, null: no report. */
+  supplierStock: z.coerce
+    .number()
+    .min(0)
+    .max(1_000_000_000)
+    .nullable()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === null ? null : String(v))),
 });
 export type OfferInput = z.input<typeof offerInput>;
 
@@ -439,7 +447,7 @@ export async function saveOffer(ctx: Context, productId: string, id: string | nu
         .where(and(eq(productSuppliers.productId, productId), input.variantId ? eq(productSuppliers.variantId, input.variantId) : isNull(productSuppliers.variantId), id ? ne(productSuppliers.id, id) : undefined));
     }
     try {
-      const values = { ...input, currency };
+      const values = { ...input, currency, ...(input.supplierStock !== undefined ? { stockReportedAt: input.supplierStock === null ? null : new Date() } : {}) };
       const [row] = id
         ? await tx.update(productSuppliers).set({ ...values, updatedAt: new Date() }).where(eq(productSuppliers.id, id)).returning()
         : await tx.insert(productSuppliers).values({ ...values, organizationId: ctx.organization.id, productId }).returning();

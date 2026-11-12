@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
-import { actionsFor, CHANNELS, STEPS, type Channel, type Fulfillment, type OrderAction, type Payment } from "@/lib/order-flow";
+import { actionsFor, CHANNELS, DROP_STEPS, STEPS, type Channel, type Fulfillment, type OrderAction, type Payment } from "@/lib/order-flow";
 import { cn } from "@/lib/utils";
 import { orderStepAction, saveShippingAction, type FlowResult } from "../flow-actions";
 
@@ -33,6 +33,8 @@ export type FlowPanelProps = {
   events: { id: string; kind: string; at: string; note: string | null; carrier: string | null; trackingNumber: string | null }[];
   hasLines: boolean;
   canUpdate: boolean;
+  /** Every good comes straight from suppliers: their steps. */
+  dropOnly?: boolean;
 };
 
 /** Buttons in the order the work happens; the money's own two at the end. */
@@ -48,7 +50,8 @@ export function OrderFlowPanel(p: FlowPanelProps) {
   const [editing, setEditing] = useState<(Address & { channel: Channel; externalRef: string }) | null>(null);
   const qty = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
   const actions = p.canUpdate ? actionsFor({ fulfillment: p.fulfillment, payment: p.payment }) : [];
-  const stepAt = STEPS.indexOf(p.fulfillment);
+  const steps = p.dropOnly || p.fulfillment === "AT_SUPPLIER" ? DROP_STEPS : STEPS;
+  const stepAt = steps.indexOf(p.fulfillment);
   const sent = p.fulfillment === "SHIPPED" || p.fulfillment === "DELIVERED";
 
   const step = (action: OrderAction, input: Parameters<typeof orderStepAction>[2] = {}, done?: () => void) =>
@@ -59,7 +62,7 @@ export function OrderFlowPanel(p: FlowPanelProps) {
         done?.();
         router.refresh();
       } else if (result.short) setShort(result.short);
-      else toast.error(t(result.error ?? "common.error"));
+      else toast.error([t(result.error ?? "common.error"), result.missing?.join(", ")].filter(Boolean).join(": "));
     });
 
   const press = (action: OrderAction) => {
@@ -90,8 +93,8 @@ export function OrderFlowPanel(p: FlowPanelProps) {
             {t("orderFlow.fulfillment.CANCELLED")}
           </Badge>
         ) : (
-          <ol className="grid grid-cols-5 gap-1" aria-label={t("orderFlow.title")}>
-            {STEPS.map((s, i) => (
+          <ol className={cn("grid gap-1", steps.length === 3 ? "grid-cols-3" : "grid-cols-5")} aria-label={t("orderFlow.title")}>
+            {steps.map((s, i) => (
               <li key={s} className="grid gap-1.5" aria-current={i === stepAt ? "step" : undefined}>
                 <span className={cn("h-1.5 rounded-full bg-muted", i <= stepAt && "bg-primary")} />
                 <span className={cn("truncate text-xs", i === stepAt ? "font-medium" : "text-muted-foreground")}>{t(`orderFlow.fulfillment.${s}`)}</span>

@@ -52,6 +52,8 @@ export const ACTIVITY_ENTITIES = [
   "sponsor",
   "stock",
   "store",
+  "supplier",
+  "supplier_order",
   "task",
   "team",
   "transaction",

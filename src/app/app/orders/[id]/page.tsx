@@ -6,6 +6,9 @@ import { asLines, getOrder } from "@/server/orders";
 import { requirePageContext } from "@/server/request";
 import type { Channel, Fulfillment, Payment } from "@/lib/order-flow";
 import { getOrderFlow } from "@/server/order-flow";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supplierOrdersOf } from "@/server/dropship";
+import { SupplierOrderList } from "../../purchasing/supplier-orders";
 import { OrderDetail } from "./order-detail";
 import { OrderFlowPanel } from "./order-flow-panel";
 
@@ -27,6 +30,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const sum = totals(asLines(items), ctx.organization.smallBusiness);
   // Companies that sell goods see the way of the goods; service companies keep the plain order.
   const flow = [...ctx.disabledModules].includes("products") ? null : await getOrderFlow(ctx, id);
+  const supplierOrders = flow ? await supplierOrdersOf(ctx, id) : [];
+  const { t } = await getT();
   return (
     <OrderDetail
       order={{
@@ -43,7 +48,9 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       locked={order.fulfillmentStatus !== "UNFULFILLED" && order.fulfillmentStatus !== "CANCELLED"}
       flow={
         flow && (
+          <>
           <OrderFlowPanel
+            dropOnly={flow.dropOnly}
             orderId={order.id}
             fulfillment={order.fulfillmentStatus as Fulfillment}
             payment={order.paymentStatus as Payment}
@@ -66,6 +73,17 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             hasLines={items.length > 0}
             canUpdate={ctx.permissions.has("orders.update")}
           />
+          {supplierOrders.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-base">{t("dropship.panel.title")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SupplierOrderList orders={supplierOrders} canManage={ctx.permissions.has("inventory.manage")} />
+              </CardContent>
+            </Card>
+          )}
+          </>
         )
       }
       items={items.map((i) => ({

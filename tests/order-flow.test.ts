@@ -26,6 +26,7 @@ describe("order flow rules", () => {
     expect(actionsFor({ fulfillment: "UNFULFILLED", payment: "UNPAID" })).toEqual(["confirm", "cancel", "markPaid"]);
     expect(actionsFor({ fulfillment: "RESERVED", payment: "PAID" })).toEqual(["pick", "pack", "ship", "cancel", "markUnpaid", "refund"]);
     expect(actionsFor({ fulfillment: "SHIPPED", payment: "UNPAID" })).toEqual(["deliver", "markPaid"]);
+    expect(actionsFor({ fulfillment: "AT_SUPPLIER", payment: "PAID" })).toEqual(["ship", "cancel", "markUnpaid", "refund"]);
     expect(canDo("cancel", { fulfillment: "SHIPPED", payment: "UNPAID" })).toBe(false);
     expect(canDo("markPaid", { fulfillment: "CANCELLED", payment: "UNPAID" })).toBe(false);
     expect(canDo("refund", { fulfillment: "CANCELLED", payment: "PAID" })).toBe(true);

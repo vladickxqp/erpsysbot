@@ -22,6 +22,7 @@ import { grossCents, MAX_CART_LINES, MAX_QUANTITY, netOfGross, shippingCents, ty
 import { choiceLabel, type VariantChoice, type VariantOption } from "@/lib/variants";
 import { audit } from "./audit";
 import { companyContext } from "./automations";
+import { companyOf, createSupplierOrders, dropshipAvailable, followUp, planDropship } from "./dropship";
 import type { Context } from "./context";
 import { uploadDir } from "./documents";
 import { mailAvailable, sendMail, takeMailBudget } from "./mail";
@@ -210,10 +211,17 @@ export async function storeProducts(store: PublicStore, query: CatalogQuery = {}
     const variants = await tx.select().from(productVariants).where(and(inArray(productVariants.productId, ids), eq(productVariants.active, true)));
     const holdings = await heldStock(tx, ids);
     const images = await firstImages(tx, ids);
+    // Goods the supplier ships: what the supplier reported less what open supplier orders take; unknown counts as available.
+    const supplierLeft = await dropshipAvailable(tx, rows.filter((r) => r.fulfillment === "DROPSHIP").map((r) => r.id));
     const list = rows.map((p): ShopProduct => {
       const own = variants.filter((v) => v.productId === p.id);
       const prices = own.length ? own.map((v) => v.priceCents ?? p.priceCents) : [p.priceCents];
-      const available = !p.trackStock || (own.length ? own.some((v) => free(v.stockQuantity, heldOf(holdings, p.id, v.id)) > 0) : free(p.stockQuantity, heldOf(holdings, p.id, null)) > 0);
+      const available =
+        p.fulfillment === "DROPSHIP"
+          ? own.length
+            ? own.some((v) => supplierLeft(p.id, v.id) !== 0)
+            : supplierLeft(p.id, null) !== 0
+          : !p.trackStock || (own.length ? own.some((v) => free(v.stockQuantity, heldOf(holdings, p.id, v.id)) > 0) : free(p.stockQuantity, heldOf(holdings, p.id, null)) > 0);
       return {
         id: p.id,
         name: p.name,
@@ -276,6 +284,8 @@ export async function storeProduct(store: PublicStore, productId: string): Promi
       .where(and(eq(productVariants.productId, productId), eq(productVariants.active, true)))
       .orderBy(asc(productVariants.position), asc(productVariants.createdAt));
     const holdings = await heldStock(tx, [productId]);
+    const dropship = p.fulfillment === "DROPSHIP";
+    const supplierLeft = await dropshipAvailable(tx, dropship ? [productId] : []);
     const options = (p.variantOptions ?? []) as VariantOption[];
     return {
       ...base,
@@ -286,9 +296,9 @@ export async function storeProduct(store: PublicStore, productId: string): Promi
         label: choiceLabel(v.options as VariantChoice, options),
         options: v.options as VariantChoice,
         priceCents: grossCents(v.priceCents ?? p.priceCents, p.vatRate, store.smallBusiness),
-        available: p.trackStock ? free(v.stockQuantity, heldOf(holdings, p.id, v.id)) : null,
+        available: dropship ? supplierLeft(p.id, v.id) : p.trackStock ? free(v.stockQuantity, heldOf(holdings, p.id, v.id)) : null,
       })),
-      stock: p.trackStock && !variantRows.length ? free(p.stockQuantity, heldOf(holdings, p.id, null)) : null,
+      stock: variantRows.length ? null : dropship ? supplierLeft(p.id, null) : p.trackStock ? free(p.stockQuantity, heldOf(holdings, p.id, null)) : null,
       attributes: Object.fromEntries(Object.entries((p.attributes ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
       shippingNote: p.shippingNote,
       returnable: p.returnable,
@@ -355,6 +365,7 @@ async function priceIn(tx: Tx, store: PublicStore, raw: CartInput, shippingId: s
   const variantRows = ids.length ? await tx.select().from(productVariants).where(and(inArray(productVariants.productId, ids), eq(productVariants.active, true))) : [];
   const holdings = await heldStock(tx, ids);
   const images = await firstImages(tx, ids);
+  const supplierLeft = await dropshipAvailable(tx, productRows.filter((r) => r.fulfillment === "DROPSHIP").map((r) => r.id));
 
   const lines: PricedLine[] = [];
   const orderLines: Line[] = [];
@@ -369,7 +380,7 @@ async function priceIn(tx: Tx, store: PublicStore, raw: CartInput, shippingId: s
     }
     const net = variant?.priceCents ?? p.priceCents;
     const stock: StockRow = { trackStock: p.trackStock, stockQuantity: variant ? variant.stockQuantity : p.stockQuantity };
-    const available = stock.trackStock ? free(stock.stockQuantity, heldOf(holdings, p.id, variant?.id ?? null)) : null;
+    const available = p.fulfillment === "DROPSHIP" ? supplierLeft(p.id, variant?.id ?? null) : stock.trackStock ? free(stock.stockQuantity, heldOf(holdings, p.id, variant?.id ?? null)) : null;
     const label = variant ? choiceLabel(variant.options as VariantChoice, (p.variantOptions ?? []) as VariantOption[]) : null;
     const unitPrice = grossCents(net, p.vatRate, store.smallBusiness);
     lines.push({
@@ -495,6 +506,7 @@ export async function placeOrder(store: PublicStore, raw: CheckoutInput, visitor
   if (!takeOrderSlot(`${store.id}:${visitor}`)) throw new StorefrontError("BUSY");
   const ctx = await companyContext(store.organizationId);
   if (!ctx) throw new StorefrontError("CLOSED");
+  const company = await companyOf(store.organizationId);
 
   const token = randomBytes(24).toString("base64url");
   const placed = await withTenant(store.organizationId, async (tx) => {
@@ -566,6 +578,10 @@ export async function placeOrder(store: PublicStore, raw: CheckoutInput, visitor
       })
       .returning();
     await tx.insert(orderItems).values(lineRows(store.organizationId, cart.orderLines).map((l) => ({ ...l, orderId: order.id })));
+    // Goods suppliers ship go to supplier orders; an order of only such goods waits with the suppliers.
+    const plan = await planDropship(tx, order.id);
+    if (plan.groups.length || plan.missing.length) await createSupplierOrders(tx, { organizationId: store.organizationId, userId: null, ctx, via: "shop" }, company, order.id, plan);
+    if (plan.groups.length && !plan.ownGoods && !plan.missing.length) await tx.update(orders).set({ fulfillmentStatus: "AT_SUPPLIER" }).where(eq(orders.id, order.id));
     await tx.update(clients).set({ lastInteractionAt: now }).where(eq(clients.id, clientId));
     await event(tx, store.organizationId, order.id, "checkout", { store: store.name, payment: input.payment, shipping: cart.shipping.option.name });
     await event(tx, store.organizationId, order.id, "confirm");
@@ -586,6 +602,7 @@ export async function placeOrder(store: PublicStore, raw: CheckoutInput, visitor
     dedupeKey: `shop-order:${placed.orderId}`,
   }).catch((e) => console.error("shop: notify failed", e instanceof Error ? e.message : e));
   await mailBuyer(store, input.email, "placed", placed).catch((e) => console.error("shop: mail failed", e instanceof Error ? e.message : e));
+  await followUp(store.organizationId, { orderId: placed.orderId }).catch((e) => console.error("shop: supplier orders failed", e instanceof Error ? e.message : e));
   return { orderId: placed.orderId, number: placed.number, token: placed.token, grossCents: placed.grossCents, payment: placed.payment };
 }
 
@@ -598,8 +615,8 @@ export function orderLink(store: Pick<PublicStore, "slug">, token: string): stri
 export async function mailBuyer(
   store: PublicStore,
   to: string,
-  kind: "placed" | "paid",
-  order: { number: number; token?: string; grossCents: number; payment?: PaymentMethod },
+  kind: "placed" | "paid" | "shipped",
+  order: { number: number; token?: string; grossCents: number; payment?: PaymentMethod; carrier?: string | null; trackingNumber?: string | null },
 ): Promise<void> {
   if (!mailAvailable() || !takeMailBudget(store.organizationId)) return;
   const t = translator(MESSAGES[store.locale]);
@@ -609,6 +626,7 @@ export async function mailBuyer(
     ...(kind === "placed" && order.payment === "bank" && store.company.iban
       ? ["", t("store.shop.bankTransfer"), `${t("store.shop.iban")}: ${store.company.iban}`, ...(store.company.bic ? [`BIC: ${store.company.bic}`] : []), `${t("store.shop.reference")}: ${store.slug}-${order.number}`, `${t("store.shop.amount")}: ${money}`]
       : []),
+    ...(kind === "shipped" && (order.carrier || order.trackingNumber) ? ["", `${t("store.mail.tracking")}: ${[order.carrier, order.trackingNumber].filter(Boolean).join(" ")}`] : []),
     ...(order.token ? ["", orderLink(store, order.token)] : []),
     "",
     store.company.legalName ?? store.company.name,

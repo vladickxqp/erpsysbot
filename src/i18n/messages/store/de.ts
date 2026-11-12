@@ -206,6 +206,9 @@ const store = {
     placedBody: "Vielen Dank für Ihre Bestellung {number} bei {store}. Gesamtbetrag: {amount}.",
     paidSubject: "Zahlung erhalten: Bestellung {number}",
     paidBody: "Ihre Zahlung für die Bestellung {number} bei {store} ist eingegangen. Betrag: {amount}.",
+    shippedSubject: "Ihre Bestellung {number} ist unterwegs",
+    shippedBody: "Ihre Bestellung {number} bei {store} wurde versandt.",
+    tracking: "Sendungsverfolgung",
   },
 };
 

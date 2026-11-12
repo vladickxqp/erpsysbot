@@ -4,6 +4,7 @@ import { allowedRates } from "@/lib/countries";
 import type { VariantOption } from "@/lib/variants";
 import { getProductDetail, listCategories } from "@/server/catalog";
 import { NotFoundError } from "@/server/clients";
+import { dropshipOverview } from "@/server/dropship";
 import { listSuppliers } from "@/server/inventory";
 import { heldForProduct } from "@/server/order-flow";
 import { requirePageContext } from "@/server/request";
@@ -28,6 +29,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         });
   const p = detail?.product;
   const held = p?.trackStock ? await heldForProduct(ctx, p.id) : { total: 0, byVariant: {} };
+  const dropship = p && p.fulfillment === "DROPSHIP" ? await dropshipOverview(ctx, p.id) : null;
   const product: EditorProduct | null = p
     ? {
         id: p.id,
@@ -43,6 +45,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         active: p.active,
         categoryId: p.categoryId,
         trackStock: p.trackStock,
+        fulfillment: p.fulfillment === "DROPSHIP" ? "DROPSHIP" : "STOCK",
         stock: Number(p.stockQuantity),
         minStock: p.minStock === null ? null : Number(p.minStock),
         weightGrams: p.weightGrams,
@@ -88,9 +91,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         shippingCostCents: o.shippingCostCents,
         preferred: o.preferred,
         notes: o.notes,
+        supplierStock: o.supplierStock === null ? null : Number(o.supplierStock),
+        stockReportedAt: o.stockReportedAt?.toISOString() ?? null,
+        priceChangedAt: o.priceChangedAt?.toISOString() ?? null,
+        previousPriceCents: o.previousPriceCents,
         history: o.history.map((h) => ({ priceCents: h.purchasePriceCents, currency: h.currency, at: h.recordedAt.toISOString() })),
       }))}
       bestOfferId={detail?.bestOfferId ?? null}
+      dropship={dropship}
       held={held}
       movements={(detail?.movements ?? []).map((m) => ({ id: m.id, type: m.type, quantity: Number(m.quantity), variantId: m.variantId, note: m.note, at: m.createdAt.toISOString() }))}
       margins={detail?.margins ?? null}

@@ -322,6 +322,12 @@ const hub: HubMessages = {
   },
   n: {
     automation: "{message}",
+    supplierApproval: "El pedido al proveedor {number} del pedido {order} ({supplier}) requiere aprobación",
+    supplierReady: "Haga el pedido al proveedor {number} en {supplier} (pedido {order})",
+    supplierFailed: "El pedido al proveedor {number} a {supplier} falló (pedido {order})",
+    supplierRejected: "{supplier} rechazó el pedido al proveedor {number} (pedido {order})",
+    supplierOutOfStock: "{supplier} no puede entregar el pedido al proveedor {number} (pedido {order})",
+    supplierPrice: "{supplier}: nuevo precio de compra de {product} ({from} → {to}, margen {margin})",
     shopOrder: "Nuevo pedido de la tienda {number} por {amount} ({store})",
     shopPayment: "Revise el pago del pedido {number} ({store})",
     automationFailed: "La automatización «{name}» falló",

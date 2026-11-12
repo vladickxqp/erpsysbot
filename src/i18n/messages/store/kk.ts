@@ -208,6 +208,9 @@ const store: typeof de = {
     placedBody: "{store} дүкеніндегі {number} тапсырысыңызға рахмет. Сома: {amount}.",
     paidSubject: "Төлем алынды: {number} тапсырыс",
     paidBody: "{store} дүкеніндегі {number} тапсырыстың төлемі алынды. Сома: {amount}.",
+    shippedSubject: "{number} тапсырысыңыз жолда",
+    shippedBody: "{store} дүкеніндегі {number} тапсырысыңыз жіберілді.",
+    tracking: "Бақылау",
   },
 };
 

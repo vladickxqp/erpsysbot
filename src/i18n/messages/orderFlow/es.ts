@@ -23,6 +23,7 @@ const orderFlow: typeof de = {
     SHIPPED: "Enviado",
     DELIVERED: "Entregado",
     CANCELLED: "Cancelado",
+    AT_SUPPLIER: "En el proveedor",
   },
   payment: {
     UNPAID: "Sin pagar",
@@ -83,6 +84,24 @@ const orderFlow: typeof de = {
     paidAfterCancel: "Pagado tras la cancelación: reembolsar o volver a crear",
     expired: "Tiempo de pago agotado, reserva liberada",
     partialRefund: "Reembolso parcial",
+    shipBySupplier: "Enviado por el proveedor",
+    deliverBySupplier: "Entregado",
+    supplier: {
+      created: "Pedido al proveedor creado",
+      missing: "Ningún proveedor con envío directo",
+      approve: "Pedido al proveedor aprobado",
+      send: "Envío iniciado",
+      submitted: "Enviado al proveedor",
+      markSubmitted: "Pedido en el proveedor",
+      confirm: "El proveedor confirmó",
+      reject: "El proveedor rechazó",
+      outOfStock: "Proveedor: sin existencias",
+      ship: "El proveedor envió",
+      deliver: "Entrega recibida",
+      retry: "De nuevo a revisión",
+      cancel: "Pedido al proveedor cancelado",
+      failed: "El envío falló",
+    },
   },
   filter: {
     toShip: "Por enviar",
@@ -94,6 +113,9 @@ const orderFlow: typeof de = {
     SHORT: "No hay suficiente stock",
     EMPTY: "El pedido no tiene líneas",
     LOCKED: "La mercancía está reservada o enviada: las líneas no cambian",
+    NO_SUPPLIER: "Ningún proveedor envía estos artículos directamente",
+    SUPPLIER_OPEN: "Todavía hay pedidos a proveedores abiertos",
+    AT_SUPPLIER: "Está en el proveedor: cancélelo allí primero",
   },
 };
 

@@ -322,6 +322,12 @@ const hub: HubMessages = {
   },
   n: {
     automation: "{message}",
+    supplierApproval: "{order} тапсырысына жеткізушіге {number} тапсырыс ({supplier}) мақұлдауды күтуде",
+    supplierReady: "{supplier} жеткізушісінен {number} тапсырыс беріңіз ({order} тапсырыс)",
+    supplierFailed: "{supplier} жеткізушісіне {number} тапсырыс жіберілмеді ({order} тапсырыс)",
+    supplierRejected: "{supplier} {number} тапсырысты қабылдамады ({order} тапсырыс)",
+    supplierOutOfStock: "{supplier} {number} тапсырысты жеткізе алмайды ({order} тапсырыс)",
+    supplierPrice: "{supplier}: {product} үшін жаңа сатып алу бағасы ({from} → {to}, маржа {margin})",
     shopOrder: "Дүкеннен жаңа тапсырыс {number}, {amount} ({store})",
     shopPayment: "{number} тапсырыстың төлемін тексеріңіз ({store})",
     automationFailed: "«{name}» автоматтандыруы сәтсіз аяқталды",
