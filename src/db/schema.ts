@@ -785,6 +785,35 @@ export const documentTemplates = pgTable(
   (t) => [index("document_templates_org_idx").on(t.organizationId)],
 );
 
+/**
+ * Videos of the studio: their scenes (src/lib/video.ts), music and voice,
+ * how far a render is and the file of the last one.
+ */
+export const videoProjects = pgTable(
+  "video_projects",
+  {
+    id: id(),
+    organizationId: orgId(),
+    title: text("title").notNull(),
+    format: text("format").notNull().default("portrait"),
+    transition: text("transition").notNull().default("fade"),
+    color: text("color").notNull().default("#111827"),
+    scenes: jsonb("scenes").notNull().default([]),
+    musicId: uuid("music_id").references(() => documents.id, { onDelete: "set null" }),
+    musicVolume: integer("music_volume").notNull().default(35),
+    voiceId: uuid("voice_id").references(() => documents.id, { onDelete: "set null" }),
+    /** DRAFT, RENDERING, READY or FAILED. */
+    status: text("status").notNull().default("DRAFT"),
+    progress: integer("progress").notNull().default(0),
+    error: text("error"),
+    outputId: uuid("output_id").references(() => documents.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("video_projects_org_idx").on(t.organizationId, t.updatedAt)],
+);
+
 // --- Orders ------------------------------------------------------------------------------------
 export const orderStatusEnum = pgEnum("order_status", [
   "DRAFT",

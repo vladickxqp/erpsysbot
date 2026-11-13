@@ -1,0 +1,65 @@
+import type de from "./de";
+
+const video: typeof de = {
+  title: "Відеостудія",
+  new: "Створити відео",
+  planAi: "Спланувати з ШІ",
+  name: "Назва або тема",
+  empty: "Відео ще немає",
+  format: "Формат",
+  formats: {
+    portrait: "Вертикальне 9:16",
+    landscape: "Горизонтальне 16:9",
+    square: "Квадрат 1:1",
+  },
+  addScene: "Додати сцену",
+  media: "Фото або кліп",
+  noMedia: "Без зображення",
+  seconds: "Секунди",
+  text: "Текст",
+  position: "Положення тексту",
+  positions: {
+    top: "Зверху",
+    center: "По центру",
+    bottom: "Знизу",
+  },
+  effect: "Рух",
+  effects: {
+    none: "Немає",
+    zoomIn: "Наближення",
+    zoomOut: "Віддалення",
+  },
+  sound: "Звук кліпу",
+  transition: "Перехід",
+  transitions: {
+    cut: "Склейка",
+    fade: "Затемнення",
+  },
+  color: "Колір карток",
+  music: "Музика",
+  noSound: "Немає",
+  volume: "Гучність",
+  voice: "Запис голосу",
+  render: "Зібрати відео",
+  rendering: "Відео збирається",
+  ready: "Відео готове",
+  failed: "Не вдалося зібрати відео",
+  lastRender: "Останнє відео",
+  download: "Завантажити",
+  deleteAsk: "Видалити відео?",
+  status: {
+    DRAFT: "Чернетка",
+    RENDERING: "Збирається",
+    READY: "Готово",
+    FAILED: "Помилка",
+  },
+  error: {
+    NOT_CONFIGURED: "На цьому сервері не налаштовано",
+    BUSY: "Відео зараз збирається",
+    TOO_LONG: "Не довше 3 хвилин",
+    MEDIA: "Лише власні фото, кліпи та аудіо",
+    EMPTY: "Немає сцен",
+  },
+};
+
+export default video;

@@ -1,0 +1,65 @@
+import type de from "./de";
+
+const video: typeof de = {
+  title: "Бейне студия",
+  new: "Бейне жасау",
+  planAi: "ЖИ-мен жоспарлау",
+  name: "Атауы немесе тақырыбы",
+  empty: "Әзірге бейнелер жоқ",
+  format: "Формат",
+  formats: {
+    portrait: "Тік 9:16",
+    landscape: "Көлденең 16:9",
+    square: "Шаршы 1:1",
+  },
+  addScene: "Көрініс қосу",
+  media: "Сурет немесе клип",
+  noMedia: "Суретсіз",
+  seconds: "Секунд",
+  text: "Мәтін",
+  position: "Мәтін орны",
+  positions: {
+    top: "Жоғарыда",
+    center: "Ортада",
+    bottom: "Төменде",
+  },
+  effect: "Қозғалыс",
+  effects: {
+    none: "Жоқ",
+    zoomIn: "Жақындату",
+    zoomOut: "Алыстату",
+  },
+  sound: "Клип дыбысы",
+  transition: "Ауысу",
+  transitions: {
+    cut: "Кесу",
+    fade: "Күңгірттеу",
+  },
+  color: "Карталар түсі",
+  music: "Музыка",
+  noSound: "Жоқ",
+  volume: "Дыбыс деңгейі",
+  voice: "Дауыс жазбасы",
+  render: "Бейнені жинау",
+  rendering: "Бейне жиналуда",
+  ready: "Бейне дайын",
+  failed: "Бейнені жинау сәтсіз аяқталды",
+  lastRender: "Соңғы бейне",
+  download: "Жүктеп алу",
+  deleteAsk: "Бейнені жою керек пе?",
+  status: {
+    DRAFT: "Жоба",
+    RENDERING: "Жиналуда",
+    READY: "Дайын",
+    FAILED: "Қате",
+  },
+  error: {
+    NOT_CONFIGURED: "Бұл серверде бапталмаған",
+    BUSY: "Бейне қазір жиналуда",
+    TOO_LONG: "3 минуттан аспайды",
+    MEDIA: "Тек өз суреттеріңіз, клиптеріңіз бен аудио",
+    EMPTY: "Көріністер жоқ",
+  },
+};
+
+export default video;

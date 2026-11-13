@@ -1,0 +1,65 @@
+import type de from "./de";
+
+const video: typeof de = {
+  title: "Видео-студия",
+  new: "Создать видео",
+  planAi: "Спланировать с ИИ",
+  name: "Название или тема",
+  empty: "Видео пока нет",
+  format: "Формат",
+  formats: {
+    portrait: "Вертикальное 9:16",
+    landscape: "Горизонтальное 16:9",
+    square: "Квадрат 1:1",
+  },
+  addScene: "Добавить сцену",
+  media: "Фото или клип",
+  noMedia: "Без картинки",
+  seconds: "Секунды",
+  text: "Текст",
+  position: "Положение текста",
+  positions: {
+    top: "Сверху",
+    center: "По центру",
+    bottom: "Снизу",
+  },
+  effect: "Движение",
+  effects: {
+    none: "Нет",
+    zoomIn: "Приближение",
+    zoomOut: "Отдаление",
+  },
+  sound: "Звук клипа",
+  transition: "Переход",
+  transitions: {
+    cut: "Склейка",
+    fade: "Затемнение",
+  },
+  color: "Цвет карточек",
+  music: "Музыка",
+  noSound: "Нет",
+  volume: "Громкость",
+  voice: "Запись голоса",
+  render: "Собрать видео",
+  rendering: "Видео собирается",
+  ready: "Видео готово",
+  failed: "Не удалось собрать видео",
+  lastRender: "Последнее видео",
+  download: "Скачать",
+  deleteAsk: "Удалить видео?",
+  status: {
+    DRAFT: "Черновик",
+    RENDERING: "Собирается",
+    READY: "Готово",
+    FAILED: "Ошибка",
+  },
+  error: {
+    NOT_CONFIGURED: "На этом сервере не настроено",
+    BUSY: "Видео сейчас собирается",
+    TOO_LONG: "Не длиннее 3 минут",
+    MEDIA: "Только свои фото, клипы и аудио",
+    EMPTY: "Нет сцен",
+  },
+};
+
+export default video;

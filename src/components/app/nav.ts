@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Globe, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Store, Users, UsersRound, Wallet, Undo2, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Film, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Globe, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Store, Users, UsersRound, Wallet, Undo2, type LucideIcon } from "lucide-react";
 import { sectionOf, type Area } from "@/lib/areas";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
@@ -33,6 +33,7 @@ export const NAV: NavItem[] = [
   { href: "/app/store", label: "store.title", icon: Store, needs: "products.manage", module: "store" },
   { href: "/app/sites", label: "sites.title", icon: Globe, needs: "sites.manage", module: "sites" },
   { href: "/app/content", label: "studio.title", icon: Clapperboard, needs: "content.read", module: "content" },
+  { href: "/app/video", label: "video.title", icon: Film, needs: "content.read", module: "content" },
   { href: "/app/social", label: "social.title", icon: Share2, needs: "content.read", module: "social" },
   { href: "/app/media", label: "media.title", icon: Images, needs: "documents.read", module: "media" },
   { href: "/app/documents", label: "documents.title", icon: FolderOpen, needs: "documents.read", module: "documents" },

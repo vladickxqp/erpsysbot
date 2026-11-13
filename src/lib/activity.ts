@@ -29,6 +29,10 @@ export const ACTIVITY_VERB: Record<string, string> = {
   template_create: "created",
   template_update: "changed",
   template_delete: "deleted",
+  video_create: "created",
+  video_update: "changed",
+  video_render: "changed",
+  video_delete: "deleted",
 };
 
 export const ACTIVITY_ENTITIES = [

@@ -1,0 +1,65 @@
+import type de from "./de";
+
+const video: typeof de = {
+  title: "Video studio",
+  new: "Create video",
+  planAi: "Plan with AI",
+  name: "Title or topic",
+  empty: "No videos yet",
+  format: "Format",
+  formats: {
+    portrait: "Portrait 9:16",
+    landscape: "Landscape 16:9",
+    square: "Square 1:1",
+  },
+  addScene: "Add scene",
+  media: "Picture or clip",
+  noMedia: "No picture",
+  seconds: "Seconds",
+  text: "Text",
+  position: "Text position",
+  positions: {
+    top: "Top",
+    center: "Middle",
+    bottom: "Bottom",
+  },
+  effect: "Motion",
+  effects: {
+    none: "None",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+  },
+  sound: "Clip sound",
+  transition: "Transition",
+  transitions: {
+    cut: "Cut",
+    fade: "Fade",
+  },
+  color: "Card colour",
+  music: "Music",
+  noSound: "None",
+  volume: "Volume",
+  voice: "Voice recording",
+  render: "Render",
+  rendering: "Rendering",
+  ready: "Video is ready",
+  failed: "Rendering failed",
+  lastRender: "Last video",
+  download: "Download",
+  deleteAsk: "Delete video?",
+  status: {
+    DRAFT: "Draft",
+    RENDERING: "Rendering",
+    READY: "Ready",
+    FAILED: "Failed",
+  },
+  error: {
+    NOT_CONFIGURED: "Not set up on this server",
+    BUSY: "The video is being rendered",
+    TOO_LONG: "At most 3 minutes",
+    MEDIA: "Only your own pictures, clips and audio files",
+    EMPTY: "No scenes",
+  },
+};
+
+export default video;

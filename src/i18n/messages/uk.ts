@@ -12,6 +12,7 @@ import sites from "./sites/uk";
 import aftersales from "./aftersales/uk";
 import look from "./look/uk";
 import docs from "./docs/uk";
+import video from "./video/uk";
 
 const uk: Messages = {
   hub,
@@ -27,6 +28,7 @@ const uk: Messages = {
   aftersales,
   look,
   docs,
+  video,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Увесь ваш бізнес. Уся ваша робота." },
   common: {
     save: "Зберегти",

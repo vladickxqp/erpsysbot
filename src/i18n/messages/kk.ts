@@ -12,6 +12,7 @@ import sites from "./sites/kk";
 import aftersales from "./aftersales/kk";
 import look from "./look/kk";
 import docs from "./docs/kk";
+import video from "./video/kk";
 
 const kk: Messages = {
   hub,
@@ -27,6 +28,7 @@ const kk: Messages = {
   aftersales,
   look,
   docs,
+  video,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",

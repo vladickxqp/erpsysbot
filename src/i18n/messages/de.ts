@@ -11,6 +11,7 @@ import sites from "./sites/de";
 import aftersales from "./aftersales/de";
 import look from "./look/de";
 import docs from "./docs/de";
+import video from "./video/de";
 
 const de = {
   hub,
@@ -26,6 +27,7 @@ const de = {
   aftersales,
   look,
   docs,
+  video,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",

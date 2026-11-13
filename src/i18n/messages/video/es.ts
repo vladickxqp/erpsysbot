@@ -1,0 +1,65 @@
+import type de from "./de";
+
+const video: typeof de = {
+  title: "Estudio de vídeo",
+  new: "Crear vídeo",
+  planAi: "Planificar con IA",
+  name: "Título o tema",
+  empty: "Aún no hay vídeos",
+  format: "Formato",
+  formats: {
+    portrait: "Vertical 9:16",
+    landscape: "Horizontal 16:9",
+    square: "Cuadrado 1:1",
+  },
+  addScene: "Añadir escena",
+  media: "Imagen o clip",
+  noMedia: "Sin imagen",
+  seconds: "Segundos",
+  text: "Texto",
+  position: "Posición del texto",
+  positions: {
+    top: "Arriba",
+    center: "Centro",
+    bottom: "Abajo",
+  },
+  effect: "Movimiento",
+  effects: {
+    none: "Ninguno",
+    zoomIn: "Acercar",
+    zoomOut: "Alejar",
+  },
+  sound: "Sonido del clip",
+  transition: "Transición",
+  transitions: {
+    cut: "Corte",
+    fade: "Fundido",
+  },
+  color: "Color de las tarjetas",
+  music: "Música",
+  noSound: "Ninguna",
+  volume: "Volumen",
+  voice: "Grabación de voz",
+  render: "Renderizar",
+  rendering: "Renderizando",
+  ready: "El vídeo está listo",
+  failed: "Error al renderizar",
+  lastRender: "Último vídeo",
+  download: "Descargar",
+  deleteAsk: "¿Eliminar el vídeo?",
+  status: {
+    DRAFT: "Borrador",
+    RENDERING: "Renderizando",
+    READY: "Listo",
+    FAILED: "Fallido",
+  },
+  error: {
+    NOT_CONFIGURED: "No está configurado en este servidor",
+    BUSY: "El vídeo se está renderizando",
+    TOO_LONG: "Como máximo 3 minutos",
+    MEDIA: "Solo tus propias imágenes, clips y audios",
+    EMPTY: "Sin escenas",
+  },
+};
+
+export default video;

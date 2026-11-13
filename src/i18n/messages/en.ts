@@ -12,6 +12,7 @@ import sites from "./sites/en";
 import aftersales from "./aftersales/en";
 import look from "./look/en";
 import docs from "./docs/en";
+import video from "./video/en";
 
 const en: Messages = {
   hub,
@@ -27,6 +28,7 @@ const en: Messages = {
   aftersales,
   look,
   docs,
+  video,
   brand: { name: "NEXORA ONE", tagline: "One platform. All your business. All your work." },
   common: {
     save: "Save",
