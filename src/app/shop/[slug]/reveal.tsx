@@ -1,13 +1,30 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { AnimationName, Speed } from "@/lib/site";
 
 /**
- * A section that floats in the first time it scrolls into view. What is on
- * screen when the page opens stays as it is, and without JavaScript or with
- * reduced motion everything is simply shown.
+ * A section that comes into view the first time it scrolls in: faded,
+ * from a side, zoomed, blurred or tilted (site.css), at its speed and
+ * after its delay; with `stagger` its entries follow one after another.
+ * What is on screen when the page opens stays as it is, and without
+ * JavaScript or with reduced motion everything is simply shown.
  */
-export function Reveal({ children }: { children: React.ReactNode }) {
+export function Reveal({
+  children,
+  animation = "up",
+  speed = "normal",
+  delay = 0,
+  stagger = false,
+  className,
+}: {
+  children: React.ReactNode;
+  animation?: Exclude<AnimationName, "none">;
+  speed?: Speed;
+  delay?: number;
+  stagger?: boolean;
+  className?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -18,6 +35,7 @@ export function Reveal({ children }: { children: React.ReactNode }) {
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
         el.removeAttribute("data-hidden");
+        el.setAttribute("data-shown", "");
         observer.disconnect();
       },
       { rootMargin: "0px 0px -8% 0px" },
@@ -29,7 +47,14 @@ export function Reveal({ children }: { children: React.ReactNode }) {
     };
   }, []);
   return (
-    <div ref={ref} className="site-reveal">
+    <div
+      ref={ref}
+      className={className ? `site-reveal ${className}` : "site-reveal"}
+      data-anim={animation}
+      data-speed={speed}
+      data-stagger={stagger ? "" : undefined}
+      style={delay ? ({ "--site-delay": `${delay}ms` } as React.CSSProperties) : undefined}
+    >
       {children}
     </div>
   );

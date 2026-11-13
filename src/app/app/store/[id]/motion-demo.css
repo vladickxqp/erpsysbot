@@ -1,0 +1,60 @@
+/* The small squares in the editor that show each entrance, played while the pointer is over its button. */
+
+.motion-demo[data-anim="fade"] {
+  --demo-from: none;
+}
+
+.motion-demo[data-anim="up"] {
+  --demo-from: translateY(10px);
+}
+
+.motion-demo[data-anim="down"] {
+  --demo-from: translateY(-10px);
+}
+
+.motion-demo[data-anim="left"] {
+  --demo-from: translateX(-12px);
+}
+
+.motion-demo[data-anim="right"] {
+  --demo-from: translateX(12px);
+}
+
+.motion-demo[data-anim="zoom"] {
+  --demo-from: scale(0.4);
+}
+
+.motion-demo[data-anim="blur"] {
+  --demo-from: scale(1.25);
+  --demo-blur: blur(4px);
+}
+
+.motion-demo[data-anim="flip"] {
+  --demo-from: perspective(60px) rotateX(55deg);
+}
+
+.group:hover .motion-demo[data-anim],
+.group:focus-visible .motion-demo[data-anim] {
+  animation: motion-demo 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+}
+
+@keyframes motion-demo {
+  0% {
+    opacity: 0;
+    transform: var(--demo-from);
+    filter: var(--demo-blur, none);
+  }
+  55%,
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .motion-demo[data-anim],
+  .group:focus-visible .motion-demo[data-anim] {
+    animation: none;
+  }
+}

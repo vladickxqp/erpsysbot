@@ -24,7 +24,7 @@ export default async function SitePageView({ params }: { params: Promise<{ slug:
     <>
       {/* Every page has its main heading: a hero brings it, otherwise the page's title does. */}
       {first?.type !== "hero" && (
-        <header className="mx-auto w-full max-w-6xl px-4 pb-2 pt-14 sm:pt-20">
+        <header className="mx-auto w-full max-w-[var(--site-container)] px-4 pb-2 pt-14 sm:pt-20">
           <h1 className="text-4xl font-bold tracking-tight text-balance sm:text-5xl">{page.title}</h1>
         </header>
       )}

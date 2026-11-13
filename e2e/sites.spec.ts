@@ -50,6 +50,25 @@ test("a company website is built, published, and a visitor's message becomes a l
   await page.getByRole("button", { name: /Titelbereich/ }).click();
   await page.getByRole("textbox", { name: "Text", exact: true }).fill("Elektrik und Photovoltaik aus Hamburg");
   await page.locator('[data-slot="card"]').filter({ hasText: "Leistungen" }).getByRole("button", { name: "Ausblenden" }).click();
+
+  // The title area zooms in and ends in a wave; the contact form is dragged above the services.
+  await page.getByRole("tab", { name: "Animation" }).click();
+  await page.getByRole("button", { name: "Zoom", exact: true }).click();
+  await page.getByRole("tab", { name: "Gestaltung" }).click();
+  await page.getByRole("button", { name: "Welle", exact: true }).click();
+  await page.getByRole("button", { name: /Titelbereich/ }).click();
+  const cards = page.locator("[data-section-card]");
+  await expect(cards).toHaveCount(3);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const grip = await cards.nth(2).getByRole("button", { name: "Verschieben" }).boundingBox();
+  const above = await cards.nth(1).boundingBox();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2, above!.y + 4, { steps: 12 });
+  await page.mouse.up();
+  await expect(cards.nth(1)).toContainText("Kontakt");
+  await expect(cards.nth(2)).toContainText("Leistungen");
+
   await page.getByRole("button", { name: "Speichern" }).click();
   await expect(page.getByText("Gespeichert").first()).toBeVisible();
 
@@ -77,6 +96,8 @@ test("a company website is built, published, and a visitor's message becomes a l
   await expect(visitor.getByRole("img", { name: "E2E Elektro" }).first()).toBeVisible();
   await expect(visitor.getByText("Elektrik und Photovoltaik aus Hamburg")).toBeVisible();
   await expect(visitor.getByText("[Leistung 1]")).toHaveCount(0);
+  await expect(visitor.locator('[data-anim="zoom"]')).toHaveCount(1);
+  await expect(visitor.locator("[data-section-id] > svg")).toHaveCount(1);
   await expect(visitor.getByRole("link", { name: "Warenkorb" })).toHaveCount(0);
   await visitor.getByLabel("Name").fill("Eva Muster");
   await visitor.getByLabel("E-Mail").fill("eva.muster@example.org");

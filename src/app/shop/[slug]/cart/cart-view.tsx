@@ -28,7 +28,7 @@ export function CartView({ storeId, slug, shipping, smallBusiness }: { storeId: 
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[1fr_340px]">
+    <div className="mx-auto grid w-full max-w-[var(--site-container)] gap-8 px-4 py-8 lg:grid-cols-[1fr_340px]">
       <div className="grid content-start gap-4">
         <h1 className="text-2xl font-semibold">{t("store.shop.cart")}</h1>
         <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white" aria-busy={loading}>

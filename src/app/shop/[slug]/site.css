@@ -9,16 +9,107 @@
   letter-spacing: -0.015em;
 }
 
-/* Sections float in once as they come into view, unless the visitor asked for less motion. */
-.site-reveal {
-  transition:
-    opacity 0.7s ease,
-    transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+/* Headings as the theme sets them: their weight, in capitals. */
+[data-site][data-weight="medium"] :is(h1, h2, h3, .site-heading) {
+  font-weight: 500;
 }
 
-.site-reveal[data-hidden] {
+[data-site][data-weight="black"] :is(h1, h2, .site-heading) {
+  font-weight: 900;
+}
+
+[data-site][data-upper] :is(h1, h2) {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* A section's own heading size. */
+[data-site] [data-title="small"] :is(h1, h2) {
+  zoom: 0.8;
+}
+
+[data-site] [data-title="large"] :is(h1, h2) {
+  zoom: 1.2;
+}
+
+[data-site] [data-title="huge"] :is(h1, h2) {
+  zoom: 1.45;
+}
+
+/*
+ * Sections come in once as they scroll into view: faded, from a side,
+ * zoomed, blurred or tilted, at their speed and after their delay. With
+ * "stagger" the section fades in and its entries follow one after another.
+ */
+.site-reveal {
+  --site-speed: 0.7s;
+  --site-from: translateY(28px);
+  transition:
+    opacity var(--site-speed) ease,
+    transform var(--site-speed) cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter var(--site-speed) ease;
+  transition-delay: var(--site-delay, 0ms);
+}
+
+.site-reveal[data-speed="slow"] {
+  --site-speed: 1.2s;
+}
+
+.site-reveal[data-speed="fast"] {
+  --site-speed: 0.4s;
+}
+
+.site-reveal[data-anim="fade"] {
+  --site-from: none;
+}
+
+.site-reveal[data-anim="down"] {
+  --site-from: translateY(-28px);
+}
+
+.site-reveal[data-anim="left"] {
+  --site-from: translateX(-56px);
+}
+
+.site-reveal[data-anim="right"] {
+  --site-from: translateX(56px);
+}
+
+.site-reveal[data-anim="zoom"] {
+  --site-from: scale(0.9);
+}
+
+.site-reveal[data-anim="blur"] {
+  --site-from: scale(1.03);
+  --site-blur: blur(14px);
+}
+
+.site-reveal[data-anim="flip"] {
+  --site-from: perspective(1000px) rotateX(16deg) translateY(24px);
+}
+
+.site-reveal[data-hidden]:not([data-stagger]) {
   opacity: 0;
-  transform: translateY(28px);
+  transform: var(--site-from);
+  filter: var(--site-blur, none);
+}
+
+.site-reveal[data-stagger][data-hidden],
+.site-reveal[data-stagger][data-hidden] .site-item {
+  opacity: 0;
+}
+
+.site-reveal[data-stagger][data-shown] .site-item {
+  animation: site-in var(--site-speed) cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--site-delay, 0ms) + var(--i, 0) * 90ms);
+}
+
+@keyframes site-in {
+  from {
+    opacity: 0;
+    transform: var(--site-from);
+    filter: var(--site-blur, none);
+  }
 }
 
 .site-gradient {
@@ -44,10 +135,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .site-reveal,
-  .site-reveal[data-hidden] {
+  .site-reveal[data-hidden],
+  .site-reveal[data-hidden] .site-item {
     opacity: 1;
     transform: none;
+    filter: none;
     transition: none;
+  }
+
+  .site-reveal[data-shown] .site-item {
+    animation: none;
   }
 
   .site-gradient {

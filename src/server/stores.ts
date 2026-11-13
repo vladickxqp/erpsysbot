@@ -17,32 +17,49 @@ import { documents, organizations, productCategories, products, stores } from "@
 import { withTenant, type Tx } from "@/db/tenant";
 import { isLocale, MESSAGES, translator } from "@/i18n";
 import {
+  ALIGNS,
+  ANCHOR,
+  ANIMATIONS,
   BACKGROUNDS,
+  BUTTON_STYLES,
   CHECKS_OF,
+  CONTAINERS,
   embedOf,
   FEATURE_ICONS,
   FONT_PAIRS,
+  HEADER_STYLES,
+  HEADING_WEIGHTS,
+  HOVERS,
   isSiteKind,
+  MAX_DELAY,
   MAX_ITEMS,
   MAX_PAGES,
   MAX_SECTIONS,
   PLACEHOLDER,
   PRESET_NAMES,
+  presetTheme,
   RADII,
   REQUIRED_LEGAL_OF,
   safeLink,
   SECTION_TYPES,
+  sectionImages,
   sectionTexts,
+  SHAPES,
   siteModule,
   slugifyPage,
+  SPACINGS,
+  SPEEDS,
   STARTER_PRESET,
   starterSections,
   STORE_ONLY,
-  THEME_PRESETS,
   themeOf,
+  TITLE_SIZES,
+  TONES,
   validPageSlug,
   VARIANTS,
+  WIDTHS,
   type Section,
+  type SectionStyle,
   type SiteKind,
   type SitePage,
   type Theme,
@@ -197,7 +214,7 @@ export async function createStore(ctx: Context, raw: { name: string; kind?: Site
           name: storeName,
           slug,
           locale,
-          design: { ...DEFAULT_DESIGN, ...themeOf({ preset: STARTER_PRESET[kind] }) },
+          design: { ...DEFAULT_DESIGN, ...themeOf({ preset: STARTER_PRESET[kind], ...presetTheme(STARTER_PRESET[kind]) }) },
           blocks: starterSections(kind, storeName, randomUUID, translator(MESSAGES[locale])),
           customPages: [],
           pages: EMPTY_PAGES,
@@ -281,7 +298,16 @@ const themeInput = z.object({
   mode: z.enum(["light", "dark"]),
   font: z.enum(FONT_PAIRS),
   radius: z.enum(RADII),
-  animate: z.boolean(),
+  /** The old switch: false is the same as the animation "none". */
+  animate: z.boolean().optional(),
+  animation: z.enum(ANIMATIONS).optional(),
+  speed: z.enum(SPEEDS).optional(),
+  buttons: z.enum(BUTTON_STYLES).optional(),
+  headingWeight: z.enum(HEADING_WEIGHTS).optional(),
+  uppercase: z.boolean().optional(),
+  header: z.enum(HEADER_STYLES).optional(),
+  hover: z.enum(HOVERS).optional(),
+  container: z.enum(CONTAINERS).optional(),
   primary: z.string().regex(HEX),
   accent: z.string().regex(HEX),
   logoId: z.string().uuid().nullish().transform((v) => v ?? null),
@@ -289,16 +315,19 @@ const themeInput = z.object({
 });
 export type ThemeInput = z.input<typeof themeInput>;
 
-/** The look: a preset with the company's colours, fonts and corners, its logo and tagline. */
+/** The look: a preset with the company's colours, fonts and corners, its details, its logo and tagline; details not sent stay as they were. */
 export async function saveTheme(ctx: Context, id: string, raw: ThemeInput): Promise<void> {
   allow(ctx, await kindOf(ctx, id));
-  const input = themeInput.parse(raw);
+  const { animate, ...input } = themeInput.parse(raw);
+  const sent = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
   await withTenant(ctx.organization.id, async (tx) => {
     const row = await storeOf(tx, id);
     await assertImages(tx, [input.logoId]);
+    const before = themeOf(row.design).animation;
+    const animation = input.animation ?? (animate === false ? "none" : animate === true && before === "none" ? "up" : before);
     await tx
       .update(stores)
-      .set({ design: { ...((row.design ?? {}) as object), ...input }, updatedAt: new Date() })
+      .set({ design: { ...((row.design ?? {}) as object), ...sent, animation, animate: animation !== "none" }, updatedAt: new Date() })
       .where(eq(stores.id, id));
     await audit(tx, ctx, "store.theme", "store", id, { preset: input.preset });
   });
@@ -325,6 +354,47 @@ const itemInput = z.object({
   highlight: z.boolean().optional().default(false),
 });
 
+/** Each part of a section's own look is checked by itself: what is not known or out of bounds is dropped, never trusted. */
+const styleInput = z
+  .object({
+    animation: z.enum(ANIMATIONS).optional().catch(undefined),
+    speed: z.enum(SPEEDS).optional().catch(undefined),
+    delay: z.number().int().min(0).max(MAX_DELAY).optional().catch(undefined),
+    stagger: z.boolean().optional().catch(undefined),
+    paddingTop: z.enum(SPACINGS).optional().catch(undefined),
+    paddingBottom: z.enum(SPACINGS).optional().catch(undefined),
+    width: z.enum(WIDTHS).optional().catch(undefined),
+    align: z.enum(ALIGNS).optional().catch(undefined),
+    columns: z.number().int().min(1).max(4).optional().catch(undefined),
+    bgColor: z.string().regex(HEX).optional().catch(undefined),
+    bgColor2: z.string().regex(HEX).optional().catch(undefined),
+    angle: z.number().int().min(0).max(360).optional().catch(undefined),
+    bgImageId: z.string().uuid().optional().catch(undefined),
+    overlay: z.number().int().min(0).max(90).optional().catch(undefined),
+    parallax: z.boolean().optional().catch(undefined),
+    tone: z.enum(TONES).optional().catch(undefined),
+    titleSize: z.enum(TITLE_SIZES).optional().catch(undefined),
+    shape: z.enum(SHAPES).optional().catch(undefined),
+    hideOn: z.enum(["mobile", "desktop"]).optional().catch(undefined),
+    anchor: z.string().trim().toLowerCase().regex(ANCHOR).optional().catch(undefined),
+  })
+  .optional()
+  .catch(undefined)
+  .transform((style): SectionStyle | undefined => {
+    if (!style) return undefined;
+    const kept = Object.fromEntries(Object.entries(style).filter(([, v]) => v !== undefined)) as SectionStyle;
+    // A gradient needs its first colour, tinting and parallax need the picture.
+    if (!kept.bgColor) {
+      delete kept.bgColor2;
+      delete kept.angle;
+    }
+    if (!kept.bgImageId) {
+      delete kept.overlay;
+      delete kept.parallax;
+    }
+    return Object.keys(kept).length ? kept : undefined;
+  });
+
 const sectionInput = z
   .object({
     id: z.string().min(1).max(64),
@@ -348,6 +418,7 @@ const sectionInput = z
       .transform((v) => (v && embedOf(v) ? v : "")),
     hidden: z.boolean().optional().default(false),
     items: z.array(itemInput).max(MAX_ITEMS).default([]),
+    style: styleInput,
   })
   .transform((s): Section => ({ ...s, variant: VARIANTS[s.type]?.includes(s.variant ?? "") ? s.variant : VARIANTS[s.type]?.[0] }));
 
@@ -361,7 +432,7 @@ const sectionsOf = (kind: SiteKind, raw: unknown): Section[] =>
 
 /** What is not the company's own is refused (pictures) or dropped (products, categories), not trusted. */
 async function cleanSections(tx: Tx, list: Section[]): Promise<Section[]> {
-  await assertImages(tx, list.flatMap((s) => [s.imageId, ...(s.items ?? []).map((i) => i.imageId)]));
+  await assertImages(tx, sectionImages(list));
   const productIds = [...new Set(list.flatMap((s) => s.productIds ?? []))];
   const known = productIds.length ? new Set((await tx.select({ id: products.id }).from(products).where(inArray(products.id, productIds))).map((p) => p.id)) : new Set<string>();
   const categoryIds = [...new Set(list.map((s) => s.categoryId).filter((v): v is string => !!v))];
@@ -477,7 +548,7 @@ export async function applySite(ctx: Context, id: string, raw: ApplyInput): Prom
     const pages: SitePage[] = [];
     for (const d of drafts) pages.push({ id: randomUUID(), title: d.title, slug: d.slug, inMenu: true, sections: await cleanSections(tx, d.sections) });
     // A new preset brings its own colours and fonts unless the proposal names them.
-    const design = { ...((row.design ?? {}) as object), ...(theme.preset ? THEME_PRESETS[theme.preset] : {}), ...theme, ...(input.tagline ? { tagline: input.tagline } : {}) };
+    const design = { ...((row.design ?? {}) as object), ...(theme.preset ? presetTheme(theme.preset) : {}), ...theme, ...(input.tagline ? { tagline: input.tagline } : {}) };
     await tx
       .update(stores)
       .set({ design, blocks: await cleanSections(tx, home), customPages: pages, updatedAt: new Date() })

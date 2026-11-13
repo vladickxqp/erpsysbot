@@ -10,6 +10,7 @@ import aichat from "./aichat/es";
 import areas from "./areas/es";
 import sites from "./sites/es";
 import aftersales from "./aftersales/es";
+import look from "./look/es";
 
 const es: Messages = {
   hub,
@@ -23,6 +24,7 @@ const es: Messages = {
   areas,
   sites,
   aftersales,
+  look,
   brand: { name: "NEXORA ONE", tagline: "Una plataforma. Todo tu negocio. Todo tu trabajo." },
   common: {
     save: "Guardar",

@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowDown,
   ArrowUp,
   BarChart3,
@@ -12,16 +15,20 @@ import {
   EyeOff,
   FileText,
   FolderTree,
+  GripVertical,
   ImageIcon,
   Images as ImagesIcon,
   LayoutGrid,
   Link2,
+  Loader2,
   Mail,
   MapPin,
   MessageSquare,
   Minus,
   Package,
+  Play,
   Plus,
+  RotateCcw,
   Send,
   Sparkles,
   Star,
@@ -34,7 +41,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,12 +52,41 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/client";
-import { BACKGROUNDS, embedOf, FEATURE_ICONS, MAX_ITEMS, MAX_SECTIONS, SECTION_GROUPS, STORE_ONLY, VARIANTS, type Section, type SectionItem, type SectionType, type SiteKind } from "@/lib/site";
+import {
+  ALIGNS,
+  ANCHOR,
+  ANIMATIONS,
+  BACKGROUNDS,
+  COLUMN_SECTIONS,
+  embedOf,
+  FEATURE_ICONS,
+  ITEM_SECTIONS,
+  MAX_DELAY,
+  MAX_ITEMS,
+  MAX_SECTIONS,
+  SECTION_GROUPS,
+  SHAPE_PATHS,
+  SHAPES,
+  SPACINGS,
+  SPEEDS,
+  STORE_ONLY,
+  TITLE_SIZES,
+  VARIANTS,
+  WIDTHS,
+  type Background,
+  type Section,
+  type SectionItem,
+  type SectionStyle,
+  type SectionType,
+  type SiteKind,
+} from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { rewriteSectionAction, saveSectionsAction } from "../actions";
-import { Field, ImagePick, newId, Preview, useSave, type Images } from "./editor-ui";
+import { ColorField, DropLine, Field, ImagePick, newId, Preview, RangeField, Segmented, useDragSort, type Images } from "./editor-ui";
+import "./motion-demo.css";
 
 export const TYPE_ICON: Record<SectionType, LucideIcon> = {
   hero: Sparkles,
@@ -115,6 +152,17 @@ const NAMED = new Set(["stats.value", "stats.title", "testimonials.text", "testi
 
 const STYLES = ["better", "shorter", "longer", "formal", "friendly", "selling"] as const;
 
+/** The parts of a section's style each tab looks after; "reset" there clears only its own. */
+const DESIGN_KEYS: (keyof SectionStyle)[] = ["paddingTop", "paddingBottom", "width", "align", "columns", "bgColor", "bgColor2", "angle", "bgImageId", "overlay", "parallax", "tone", "titleSize", "shape", "hideOn", "anchor"];
+const MOTION_KEYS: (keyof SectionStyle)[] = ["animation", "speed", "delay", "stagger"];
+const COUNTS = ["1", "2", "3", "4"] as const;
+
+/** A style without the parts left at "automatic"; nothing at all when nothing is left. */
+function tidy(style: SectionStyle): SectionStyle | undefined {
+  const kept = Object.fromEntries(Object.entries(style).filter(([, v]) => v !== undefined && v !== null && v !== "")) as SectionStyle;
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 /** A new section with a sensible layout and empty entries to fill in. */
 export function newSection(type: SectionType): Section {
   const base: Section = { id: newId(), type, variant: VARIANTS[type]?.[0], title: "", text: "" };
@@ -157,27 +205,44 @@ type Props = {
   ai: boolean;
 };
 
+/**
+ * The sections of a page: dragged into order, each with its content, its
+ * look and its entrance. Changes are saved by themselves a moment after the
+ * last one (on a published site as a draft) and the preview follows; a
+ * click on a section in the preview opens it here.
+ */
 export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links, images, categories, products, ai }: Props) {
   const { t } = useI18n();
-  const { pending, run } = useSave();
+  const router = useRouter();
   const [sections, setSections] = useState<Section[]>(initial);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [version, setVersion] = useState(0);
+  const [replay, setReplay] = useState(0);
   // Steps back and forward; quick typing in one field counts as one step.
   const [past, setPast] = useState<Section[][]>([]);
   const [future, setFuture] = useState<Section[][]>([]);
   const lastStep = useRef(0);
+  // Every change counts up: a save that ends with no newer change leaves nothing unsaved.
+  const edits = useRef(0);
+  const latest = useRef(sections);
+  const busy = useRef(false);
+  const queued = useRef<"auto" | "manual" | null>(null);
   const linkList = `site-links-${page}`;
 
+  const edited = () => {
+    edits.current += 1;
+    setDirty(true);
+  };
   const change = (next: Section[]) => {
     const now = Date.now();
     if (now - lastStep.current > 700) setPast((p) => [...p.slice(-49), sections]);
     lastStep.current = now;
     setFuture([]);
     setSections(next);
-    setDirty(true);
+    edited();
   };
   const undo = () => {
     if (!past.length) return;
@@ -185,7 +250,7 @@ export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links
     setSections(past[past.length - 1]);
     setPast((p) => p.slice(0, -1));
     lastStep.current = 0;
-    setDirty(true);
+    edited();
   };
   const redo = () => {
     if (!future.length) return;
@@ -193,7 +258,7 @@ export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links
     setSections(future[0]);
     setFuture((f) => f.slice(1));
     lastStep.current = 0;
-    setDirty(true);
+    edited();
   };
   const keys = (e: React.KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
@@ -207,31 +272,68 @@ export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links
     }
   };
   const set = (id: string, patch: Partial<Section>) => change(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const move = (index: number, by: number) => {
+  const moveTo = (from: number, to: number) => {
     const next = [...sections];
-    const [item] = next.splice(index, 1);
-    next.splice(index + by, 0, item);
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
     change(next);
   };
+  const sort = useDragSort(moveTo);
   const add = (type: SectionType) => {
     const section = newSection(type);
     change([...sections, section]);
     setOpen(section.id);
     setAdding(false);
   };
-  const save = () =>
-    run(
-      () => saveSectionsAction(storeId, page, sections),
-      () => {
-        toast.success(t("common.saved"));
-        setDirty(false);
-        setVersion((v) => v + 1);
-      },
-    );
+
+  const persist = async (how: "auto" | "manual"): Promise<void> => {
+    if (busy.current) {
+      if (queued.current !== "manual") queued.current = how;
+      return;
+    }
+    busy.current = true;
+    setSaving(true);
+    const at = edits.current;
+    const result = await saveSectionsAction(storeId, page, latest.current);
+    busy.current = false;
+    setSaving(false);
+    if (result.ok) {
+      if (edits.current === at) setDirty(false);
+      if (how === "manual") toast.success(t("common.saved"));
+      setVersion((v) => v + 1);
+      router.refresh();
+    } else {
+      toast.error([t(result.error ?? "common.error"), ...(result.failed ?? []).map((c) => t(`store.check.${c}`))].join(" · "));
+    }
+    const next = queued.current;
+    queued.current = null;
+    if (next) await persist(next);
+  };
+  const persistRef = useRef(persist);
+  useEffect(() => {
+    latest.current = sections;
+    persistRef.current = persist;
+  });
+  // A moment after the last change, it is saved by itself.
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => void persistRef.current("auto"), 1500);
+    return () => clearTimeout(timer);
+  }, [sections, dirty]);
+
+  /** The preview shows what is saved: save first, then play the section's entrance there. */
+  const playEntrance = async () => {
+    if (dirty) await persist("auto");
+    setReplay((n) => n + 1);
+  };
+  const pick = (id: string) => {
+    setOpen(id);
+    document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <div className="grid min-w-0 content-start gap-3" onKeyDown={keys}>
+      <div className={cn("grid min-w-0 content-start gap-3", sort.dragging && "select-none")} onKeyDown={keys}>
         <datalist id={linkList}>
           {links.map((l) => (
             <option key={l.value} value={l.value}>
@@ -242,67 +344,102 @@ export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links
         {sections.map((s, i) => {
           const Icon = TYPE_ICON[s.type];
           const expanded = open === s.id;
+          const drag = sort.item(i);
           return (
-            <Card key={s.id} className={cn("gap-0 py-0 transition", s.hidden && "opacity-60", expanded && "ring-2 ring-primary/25")}>
-              <div className="flex items-center gap-2 px-3 py-2">
-                <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : s.id)}>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="grid min-w-0">
-                    <span className="truncate text-sm font-medium">{s.title || t(`sites.type.${s.type}`)}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {t(`sites.type.${s.type}`)}
-                      {s.variant ? ` · ${t(`sites.variant.${s.variant}`)}` : ""}
-                    </span>
-                  </span>
-                  <ChevronDown className={cn("ml-auto size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-                </button>
-                <div className="flex shrink-0 items-center">
-                  <Button type="button" variant="ghost" size="icon" aria-label={t("catalog.moveUp")} disabled={i === 0} onClick={() => move(i, -1)}>
-                    <ArrowUp className="size-4" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" aria-label={t("catalog.moveDown")} disabled={i === sections.length - 1} onClick={() => move(i, 1)}>
-                    <ArrowDown className="size-4" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" aria-label={t(s.hidden ? "sites.show" : "sites.hide")} onClick={() => set(s.id, { hidden: !s.hidden })}>
-                    {s.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </Button>
-                  <Button
+            <Fragment key={s.id}>
+              {sort.lineBefore === i && <DropLine />}
+              <Card
+                id={`section-${s.id}`}
+                data-section-card=""
+                ref={drag.ref}
+                style={drag.style}
+                className={cn("gap-0 py-0 transition-shadow", s.hidden && "opacity-60", expanded && "ring-2 ring-primary/25", drag["data-dragging"] !== undefined && "shadow-2xl ring-2 ring-primary/40")}
+              >
+                <div className="flex items-center gap-1 px-2 py-2 sm:gap-2">
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("sites.duplicate")}
-                    disabled={sections.length >= MAX_SECTIONS}
-                    onClick={() => {
-                      const copy = { ...s, id: newId(), items: (s.items ?? []).map((item) => ({ ...item, id: newId() })) };
-                      change([...sections.slice(0, i + 1), copy, ...sections.slice(i + 1)]);
-                    }}
+                    aria-label={t("look.drag")}
+                    title={t("look.drag")}
+                    className="grid size-8 shrink-0 cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-accent active:cursor-grabbing"
+                    {...sort.handle(i)}
                   >
-                    <Copy className="size-4" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" aria-label={t("common.delete")} onClick={() => change(sections.filter((x) => x.id !== s.id))}>
-                    <Trash2 className="size-4" />
-                  </Button>
+                    <GripVertical className="size-4" />
+                  </button>
+                  <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : s.id)}>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                      <Icon className="size-4" />
+                    </span>
+                    <span className="grid min-w-0">
+                      <span className="truncate text-sm font-medium">{s.title || t(`sites.type.${s.type}`)}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {t(`sites.type.${s.type}`)}
+                        {s.variant ? ` · ${t(`sites.variant.${s.variant}`)}` : ""}
+                      </span>
+                    </span>
+                    <ChevronDown className={cn("ml-auto size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+                  </button>
+                  <div className="flex shrink-0 items-center">
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("catalog.moveUp")} disabled={i === 0} onClick={() => moveTo(i, i - 1)}>
+                      <ArrowUp className="size-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("catalog.moveDown")} disabled={i === sections.length - 1} onClick={() => moveTo(i, i + 1)}>
+                      <ArrowDown className="size-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t(s.hidden ? "sites.show" : "sites.hide")} onClick={() => set(s.id, { hidden: !s.hidden })}>
+                      {s.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("sites.duplicate")}
+                      disabled={sections.length >= MAX_SECTIONS}
+                      onClick={() => {
+                        const copy = { ...s, id: newId(), items: (s.items ?? []).map((item) => ({ ...item, id: newId() })) };
+                        change([...sections.slice(0, i + 1), copy, ...sections.slice(i + 1)]);
+                      }}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("common.delete")} onClick={() => change(sections.filter((x) => x.id !== s.id))}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              {expanded && (
-                <CardContent className="border-t px-4 pb-4 pt-4">
-                  <SectionFields
-                    storeId={storeId}
-                    section={s}
-                    onChange={(patch) => set(s.id, patch)}
-                    linkList={linkList}
-                    images={images}
-                    categories={categories}
-                    products={products}
-                    ai={ai}
-                  />
-                </CardContent>
-              )}
-            </Card>
+                {expanded && (
+                  <CardContent className="border-t px-4 pb-4 pt-3">
+                    <Tabs defaultValue="content" className="gap-4">
+                      <TabsList>
+                        <TabsTrigger value="content">{t("look.tab.content")}</TabsTrigger>
+                        <TabsTrigger value="design">{t("look.tab.design")}</TabsTrigger>
+                        <TabsTrigger value="motion">{t("look.tab.motion")}</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="content">
+                        <SectionFields
+                          storeId={storeId}
+                          section={s}
+                          onChange={(patch) => set(s.id, patch)}
+                          linkList={linkList}
+                          images={images}
+                          categories={categories}
+                          products={products}
+                          ai={ai}
+                        />
+                      </TabsContent>
+                      <TabsContent value="design">
+                        <StyleFields section={s} onChange={(patch) => set(s.id, patch)} images={images} />
+                      </TabsContent>
+                      <TabsContent value="motion">
+                        <MotionFields section={s} onChange={(patch) => set(s.id, patch)} onPlay={() => void playEntrance()} />
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                )}
+              </Card>
+            </Fragment>
           );
         })}
+        {sort.lineBefore === sections.length && <DropLine />}
 
         <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur">
           <Button type="button" variant="outline" disabled={sections.length >= MAX_SECTIONS} onClick={() => setAdding(true)}>
@@ -314,15 +451,21 @@ export function SectionsEditor({ storeId, kind, page, initial, previewSrc, links
           <Button type="button" variant="ghost" size="icon" aria-label={t("sites.redo")} disabled={!future.length} onClick={redo}>
             <Undo2 className="size-4 -scale-x-100" />
           </Button>
-          {dirty && <Badge variant="outline">{t("sites.unsaved")}</Badge>}
-          <Button type="button" className="ml-auto" disabled={pending} onClick={save}>
+          {saving ? (
+            <Badge variant="outline" className="gap-1">
+              <Loader2 className="size-3 animate-spin" /> {t("look.saving")}
+            </Badge>
+          ) : (
+            dirty && <Badge variant="outline">{t("sites.unsaved")}</Badge>
+          )}
+          <Button type="button" className="ml-auto" disabled={saving} onClick={() => void persist("manual")}>
             {t("common.save")}
           </Button>
         </div>
       </div>
 
       <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-        <Preview src={previewSrc} version={version} />
+        <Preview src={previewSrc} version={version} picked={open} onPick={pick} play={replay} />
       </div>
 
       <Dialog open={adding} onOpenChange={setAdding}>
@@ -403,7 +546,7 @@ function SectionFields({
 
   return (
     <div className="grid gap-4">
-      {(variants || s.type !== "divider") && (
+      {(variants || (ai && hasText)) && (
         <div className="flex flex-wrap items-end gap-3">
           {variants && (
             <Field label={t("sites.field.variant")} className="min-w-40 flex-1">
@@ -415,23 +558,6 @@ function SectionFields({
                   {variants.map((v) => (
                     <SelectItem key={v} value={v}>
                       {t(`sites.variant.${v}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
-          {s.type !== "divider" && (
-            <Field label={t("sites.field.background")} className="min-w-40 flex-1">
-              <Select value={s.background ?? "auto"} onValueChange={(v) => onChange({ background: v === "auto" ? undefined : (v as Section["background"]) })}>
-                <SelectTrigger className="w-full" aria-label={t("sites.field.background")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">{t("sites.bg.auto")}</SelectItem>
-                  {BACKGROUNDS.map((b) => (
-                    <SelectItem key={b} value={b}>
-                      {t(`sites.bg.${b}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -507,92 +633,341 @@ function SectionFields({
   );
 }
 
+/** A choice from a list, or "automatic" (undefined): what the section's layout and the theme give. */
+function Choice<T extends string>({ label, value, options, words, onChange }: { label: string; value: T | undefined; options: readonly T[]; words: string; onChange: (v: T | undefined) => void }) {
+  const { t } = useI18n();
+  return (
+    <Field label={label}>
+      <Select value={value ?? "auto"} onValueChange={(v) => onChange(v === "auto" ? undefined : (v as T))}>
+        <SelectTrigger className="w-full" aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="auto">{t("look.auto")}</SelectItem>
+          {options.map((o) => (
+            <SelectItem key={o} value={o}>
+              {t(`${words}.${o}`)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+/** A section's look: space, width, alignment, columns, background, text, heading, lower edge, where it shows, its address. */
+function StyleFields({ section: s, onChange, images }: { section: Section; onChange: (patch: Partial<Section>) => void; images: Images }) {
+  const { t } = useI18n();
+  const st = s.style ?? {};
+  const set = (patch: Partial<SectionStyle>) => onChange({ style: tidy({ ...st, ...patch }) });
+  const own = !!(st.bgColor || st.bgImageId);
+  const reset = () => onChange({ background: undefined, style: tidy(Object.fromEntries(Object.entries(st).filter(([k]) => !DESIGN_KEYS.includes(k as keyof SectionStyle))) as SectionStyle) });
+
+  return (
+    <div className="grid gap-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Choice label={t("look.spaceTop")} value={st.paddingTop} options={SPACINGS} words="look.space" onChange={(paddingTop) => set({ paddingTop })} />
+        <Choice label={t("look.spaceBottom")} value={st.paddingBottom} options={SPACINGS} words="look.space" onChange={(paddingBottom) => set({ paddingBottom })} />
+        <Choice label={t("look.width")} value={st.width} options={WIDTHS} words="look.widths" onChange={(width) => set({ width })} />
+      </div>
+
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+        <Segmented label={t("look.align")} value={st.align} options={ALIGNS} words="look.aligns" icons={{ left: AlignLeft, center: AlignCenter, right: AlignRight }} clearable onChange={(align) => set({ align })} />
+        {COLUMN_SECTIONS.includes(s.type) && (
+          <Segmented
+            label={t("look.columns")}
+            value={st.columns ? (String(st.columns) as (typeof COUNTS)[number]) : undefined}
+            options={COUNTS}
+            words="look.count"
+            clearable
+            onChange={(c) => set({ columns: c ? Number(c) : undefined })}
+          />
+        )}
+        <Segmented
+          label={t("look.titleSize")}
+          value={st.titleSize ?? "normal"}
+          options={TITLE_SIZES}
+          words="look.titleSizes"
+          clearable
+          onChange={(titleSize) => set({ titleSize: titleSize === "normal" ? undefined : titleSize })}
+        />
+      </div>
+
+      <fieldset className="grid gap-4 rounded-lg border p-3">
+        <legend className="px-1 text-sm font-medium">{t("look.background")}</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t("look.preset")}>
+            <Select value={s.background ?? "auto"} disabled={own} onValueChange={(v) => onChange({ background: v === "auto" ? undefined : (v as Background) })}>
+              <SelectTrigger className="w-full" aria-label={t("look.preset")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{t("sites.bg.auto")}</SelectItem>
+                {BACKGROUNDS.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    {t(`sites.bg.${b}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Choice label={t("look.tone")} value={st.tone === "auto" ? undefined : st.tone} options={["light", "dark"] as const} words="look.tones" onChange={(tone) => set({ tone })} />
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex h-9 items-center gap-2 text-sm">
+            <Checkbox checked={!!st.bgColor} onCheckedChange={(c) => set(c === true ? { bgColor: st.bgColor ?? "#0f172a" } : { bgColor: undefined, bgColor2: undefined, angle: undefined })} /> {t("look.ownColor")}
+          </label>
+          {st.bgColor && <ColorField label={t("look.color")} value={st.bgColor} onChange={(bgColor) => set({ bgColor })} />}
+          {st.bgColor && (
+            <label className="flex h-9 items-center gap-2 text-sm">
+              <Checkbox checked={!!st.bgColor2} onCheckedChange={(c) => set(c === true ? { bgColor2: st.bgColor2 ?? "#2563eb", angle: st.angle ?? 135 } : { bgColor2: undefined, angle: undefined })} /> {t("look.gradient")}
+            </label>
+          )}
+          {st.bgColor && st.bgColor2 && <ColorField label={t("look.color2")} value={st.bgColor2} onChange={(bgColor2) => set({ bgColor2 })} />}
+        </div>
+        {st.bgColor && st.bgColor2 && <RangeField label={t("look.angle")} value={st.angle ?? 135} min={0} max={360} step={15} format={(v) => `${v}°`} onChange={(angle) => set({ angle })} />}
+        <Field label={t("look.bgImage")}>
+          <ImagePick
+            small
+            value={st.bgImageId ?? null}
+            onChange={(id) => set(id ? { bgImageId: id } : { bgImageId: undefined, overlay: undefined, parallax: undefined })}
+            images={images}
+            label={t("look.bgImage")}
+          />
+        </Field>
+        {st.bgImageId && (
+          <div className="flex flex-wrap items-end gap-4">
+            <RangeField label={t("look.overlay")} value={st.overlay ?? 45} min={0} max={90} step={5} format={(v) => `${v} %`} onChange={(overlay) => set({ overlay })} />
+            <label className="flex h-9 items-center gap-2 text-sm">
+              <Checkbox checked={!!st.parallax} onCheckedChange={(c) => set({ parallax: c === true ? true : undefined })} /> {t("look.parallax")}
+            </label>
+          </div>
+        )}
+      </fieldset>
+
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-medium">{t("look.shape")}</legend>
+        <div className="flex flex-wrap gap-2">
+          {SHAPES.map((shape) => {
+            const on = (st.shape ?? "none") === shape;
+            return (
+              <button
+                key={shape}
+                type="button"
+                aria-pressed={on}
+                onClick={() => set({ shape: shape === "none" ? undefined : shape })}
+                className={cn("grid w-24 justify-items-center gap-1 rounded-lg border p-2 text-xs transition hover:bg-accent", on && "border-primary ring-2 ring-primary/30")}
+              >
+                <svg aria-hidden viewBox="0 0 1440 80" preserveAspectRatio="none" className="h-6 w-full rounded-sm bg-muted text-primary">
+                  <path d={shape === "none" ? "M0,40 L1440,40 L1440,80 L0,80 Z" : SHAPE_PATHS[shape]} fill="currentColor" />
+                </svg>
+                {t(`look.shapes.${shape}`)}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t("look.visible")}>
+          <Select value={st.hideOn ?? "all"} onValueChange={(v) => set({ hideOn: v === "all" ? undefined : (v as "mobile" | "desktop") })}>
+            <SelectTrigger className="w-full" aria-label={t("look.visible")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["all", "mobile", "desktop"] as const).map((v) => (
+                <SelectItem key={v} value={v}>
+                  {t(`look.visibility.${v}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={t("look.anchor")}>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">#</span>
+            <Input
+              value={st.anchor ?? ""}
+              onChange={(e) => set({ anchor: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40) || undefined })}
+              maxLength={40}
+              aria-invalid={!!st.anchor && !ANCHOR.test(st.anchor)}
+            />
+          </div>
+        </Field>
+      </div>
+
+      <div>
+        <Button type="button" variant="ghost" size="sm" onClick={reset}>
+          <RotateCcw className="size-4" /> {t("look.reset")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A section's entrance: the effect, its speed and delay, entries one after another; played in the preview on request. */
+function MotionFields({ section: s, onChange, onPlay }: { section: Section; onChange: (patch: Partial<Section>) => void; onPlay: () => void }) {
+  const { t, locale } = useI18n();
+  const st = s.style ?? {};
+  const set = (patch: Partial<SectionStyle>) => onChange({ style: tidy({ ...st, ...patch }) });
+  const reset = () => onChange({ style: tidy(Object.fromEntries(Object.entries(st).filter(([k]) => !MOTION_KEYS.includes(k as keyof SectionStyle))) as SectionStyle) });
+  const seconds = (ms: number) => `${(ms / 1000).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+
+  return (
+    <div className="grid gap-5">
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-medium">{t("look.animation")}</legend>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(["theme", ...ANIMATIONS] as const).map((a) => {
+            const on = (st.animation ?? "theme") === a;
+            return (
+              <button
+                key={a}
+                type="button"
+                aria-pressed={on}
+                onClick={() => set({ animation: a === "theme" ? undefined : a })}
+                className={cn("group grid justify-items-center gap-2 rounded-lg border px-2 py-3 text-xs transition hover:bg-accent", on && "border-primary ring-2 ring-primary/30")}
+              >
+                <span aria-hidden data-anim={a === "theme" || a === "none" ? undefined : a} className="motion-demo size-6 rounded-md bg-primary/80" />
+                {t(`look.animations.${a}`)}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+        <Segmented label={t("look.speed")} value={st.speed} options={SPEEDS} words="look.speeds" clearable onChange={(speed) => set({ speed })} />
+        <RangeField label={t("look.delay")} value={st.delay ?? 0} min={0} max={MAX_DELAY} step={100} format={seconds} onChange={(delay) => set({ delay: delay || undefined })} />
+      </div>
+
+      {ITEM_SECTIONS.includes(s.type) && (
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={!!st.stagger} onCheckedChange={(c) => set({ stagger: c === true ? true : undefined })} /> {t("look.stagger")}
+        </label>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onPlay}>
+          <Play className="size-4" /> {t("look.play")}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={reset}>
+          <RotateCcw className="size-4" /> {t("look.reset")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ItemsEditor({ section: s, fields, onChange, linkList, images }: { section: Section; fields: ItemField[]; onChange: (patch: Partial<Section>) => void; linkList: string; images: Images }) {
   const { t } = useI18n();
   const items = s.items ?? [];
   const setItem = (id: string, patch: Partial<SectionItem>) => onChange({ items: items.map((item) => (item.id === id ? { ...item, ...patch } : item)) });
-  const moveItem = (index: number, by: number) => {
+  const moveItem = (from: number, to: number) => {
     const next = [...items];
-    const [item] = next.splice(index, 1);
-    next.splice(index + by, 0, item);
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
     onChange({ items: next });
   };
+  const sort = useDragSort(moveItem);
   const label = (field: ItemField) => t(NAMED.has(`${s.type}.${field}`) ? `sites.item.${s.type}.${field}` : `sites.field.${field}`);
 
   return (
-    <div className="grid gap-2">
+    <div className={cn("grid gap-2", sort.dragging && "select-none")}>
       <span className="text-sm font-medium">{t("sites.items")}</span>
-      {items.map((item, i) => (
-        <div key={item.id} className="grid gap-3 rounded-lg border bg-muted/30 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-muted-foreground">{i + 1}</span>
-            <div className="flex">
-              <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("catalog.moveUp")} disabled={i === 0} onClick={() => moveItem(i, -1)}>
-                <ArrowUp className="size-3.5" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("catalog.moveDown")} disabled={i === items.length - 1} onClick={() => moveItem(i, 1)}>
-                <ArrowDown className="size-3.5" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("common.delete")} onClick={() => onChange({ items: items.filter((x) => x.id !== item.id) })}>
-                <X className="size-3.5" />
-              </Button>
+      {items.map((item, i) => {
+        const drag = sort.item(i);
+        return (
+          <Fragment key={item.id}>
+            {sort.lineBefore === i && <DropLine />}
+            <div
+              ref={drag.ref}
+              style={drag.style}
+              className={cn("grid gap-3 rounded-lg border bg-muted/30 p-3", drag["data-dragging"] !== undefined && "bg-background shadow-xl ring-2 ring-primary/40")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={t("look.drag")}
+                    title={t("look.drag")}
+                    className="grid size-7 cursor-grab place-items-center rounded text-muted-foreground hover:bg-accent active:cursor-grabbing"
+                    {...sort.handle(i)}
+                  >
+                    <GripVertical className="size-3.5" />
+                  </button>
+                  <span className="text-xs font-medium text-muted-foreground">{i + 1}</span>
+                </div>
+                <div className="flex">
+                  <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("catalog.moveUp")} disabled={i === 0} onClick={() => moveItem(i, i - 1)}>
+                    <ArrowUp className="size-3.5" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("catalog.moveDown")} disabled={i === items.length - 1} onClick={() => moveItem(i, i + 1)}>
+                    <ArrowDown className="size-3.5" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("common.delete")} onClick={() => onChange({ items: items.filter((x) => x.id !== item.id) })}>
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {fields.includes("icon") && (
+                  <Field label={label("icon")}>
+                    <Select value={item.icon ?? "sparkles"} onValueChange={(icon) => setItem(item.id, { icon })}>
+                      <SelectTrigger className="w-full" aria-label={label("icon")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FEATURE_ICONS.map((icon) => (
+                          <SelectItem key={icon} value={icon}>
+                            {t(`sites.icon.${icon}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+                {fields.includes("image") && (
+                  <Field label={label("image")} className={fields.includes("icon") ? undefined : "sm:col-span-2"}>
+                    <ImagePick small value={item.imageId ?? null} onChange={(imageId) => setItem(item.id, { imageId })} images={images} label={label("image")} />
+                  </Field>
+                )}
+                {fields.includes("title") && (
+                  <Field label={label("title")}>
+                    <Input value={item.title ?? ""} onChange={(e) => setItem(item.id, { title: e.target.value })} maxLength={160} />
+                  </Field>
+                )}
+                {fields.includes("value") && (
+                  <Field label={label("value")}>
+                    <Input value={item.value ?? ""} onChange={(e) => setItem(item.id, { value: e.target.value })} maxLength={60} />
+                  </Field>
+                )}
+                {fields.includes("label") && (
+                  <Field label={label("label")}>
+                    <Input value={item.label ?? ""} onChange={(e) => setItem(item.id, { label: e.target.value })} maxLength={120} />
+                  </Field>
+                )}
+                {fields.includes("link") && (
+                  <Field label={label("link")}>
+                    <Input list={linkList} value={item.link ?? ""} onChange={(e) => setItem(item.id, { link: e.target.value })} maxLength={500} placeholder="https://…" />
+                  </Field>
+                )}
+                {fields.includes("text") && (
+                  <Field label={label("text")} className="sm:col-span-2">
+                    <Textarea rows={s.type === "testimonials" || s.type === "pricing" ? 3 : 2} value={item.text ?? ""} onChange={(e) => setItem(item.id, { text: e.target.value })} maxLength={1200} />
+                  </Field>
+                )}
+                {fields.includes("highlight") && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={!!item.highlight} onCheckedChange={(c) => setItem(item.id, { highlight: c === true })} /> {label("highlight")}
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {fields.includes("icon") && (
-              <Field label={label("icon")}>
-                <Select value={item.icon ?? "sparkles"} onValueChange={(icon) => setItem(item.id, { icon })}>
-                  <SelectTrigger className="w-full" aria-label={label("icon")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FEATURE_ICONS.map((icon) => (
-                      <SelectItem key={icon} value={icon}>
-                        {t(`sites.icon.${icon}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
-            {fields.includes("image") && (
-              <Field label={label("image")} className={fields.includes("icon") ? undefined : "sm:col-span-2"}>
-                <ImagePick small value={item.imageId ?? null} onChange={(imageId) => setItem(item.id, { imageId })} images={images} label={label("image")} />
-              </Field>
-            )}
-            {fields.includes("title") && (
-              <Field label={label("title")}>
-                <Input value={item.title ?? ""} onChange={(e) => setItem(item.id, { title: e.target.value })} maxLength={160} />
-              </Field>
-            )}
-            {fields.includes("value") && (
-              <Field label={label("value")}>
-                <Input value={item.value ?? ""} onChange={(e) => setItem(item.id, { value: e.target.value })} maxLength={60} />
-              </Field>
-            )}
-            {fields.includes("label") && (
-              <Field label={label("label")}>
-                <Input value={item.label ?? ""} onChange={(e) => setItem(item.id, { label: e.target.value })} maxLength={120} />
-              </Field>
-            )}
-            {fields.includes("link") && (
-              <Field label={label("link")}>
-                <Input list={linkList} value={item.link ?? ""} onChange={(e) => setItem(item.id, { link: e.target.value })} maxLength={500} placeholder="https://…" />
-              </Field>
-            )}
-            {fields.includes("text") && (
-              <Field label={label("text")} className="sm:col-span-2">
-                <Textarea rows={s.type === "testimonials" || s.type === "pricing" ? 3 : 2} value={item.text ?? ""} onChange={(e) => setItem(item.id, { text: e.target.value })} maxLength={1200} />
-              </Field>
-            )}
-            {fields.includes("highlight") && (
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={!!item.highlight} onCheckedChange={(c) => setItem(item.id, { highlight: c === true })} /> {label("highlight")}
-              </label>
-            )}
-          </div>
-        </div>
-      ))}
+          </Fragment>
+        );
+      })}
+      {sort.lineBefore === items.length && <DropLine />}
       <div>
         <Button type="button" variant="outline" size="sm" disabled={items.length >= MAX_ITEMS} onClick={() => onChange({ items: [...items, { id: newId(), ...(s.type === "features" ? { icon: "sparkles" } : {}) }] })}>
           <Plus className="size-4" /> {t("sites.addItem")}

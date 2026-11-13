@@ -91,6 +91,74 @@ export type SectionItem = {
   highlight?: boolean;
 };
 
+// --- A section's own look --------------------------------------------------------------------------
+
+/** How a section comes into view as the visitor scrolls ("none": it is simply there). */
+export const ANIMATIONS = ["none", "fade", "up", "down", "left", "right", "zoom", "blur", "flip"] as const;
+export type AnimationName = (typeof ANIMATIONS)[number];
+export const SPEEDS = ["slow", "normal", "fast"] as const;
+export type Speed = (typeof SPEEDS)[number];
+/** Space above and below a section. */
+export const SPACINGS = ["none", "small", "normal", "large", "huge"] as const;
+export type Spacing = (typeof SPACINGS)[number];
+export const WIDTHS = ["narrow", "normal", "wide", "full"] as const;
+export type Width = (typeof WIDTHS)[number];
+export const ALIGNS = ["left", "center", "right"] as const;
+export type Align = (typeof ALIGNS)[number];
+export const TITLE_SIZES = ["small", "normal", "large", "huge"] as const;
+export type TitleSize = (typeof TITLE_SIZES)[number];
+/** The lower edge of a section, cut into the next one. */
+export const SHAPES = ["none", "wave", "curve", "slant", "zigzag"] as const;
+export type Shape = (typeof SHAPES)[number];
+/** Light or dark text; "auto" reads the background. */
+export const TONES = ["auto", "light", "dark"] as const;
+export type Tone = (typeof TONES)[number];
+/** The lower edges as paths in a 1440×80 box, filled with the next section's colour. */
+export const SHAPE_PATHS: Record<Exclude<Shape, "none">, string> = {
+  wave: "M0,48 C240,88 480,8 720,40 C960,72 1200,16 1440,48 L1440,80 L0,80 Z",
+  curve: "M0,0 Q720,96 1440,0 L1440,80 L0,80 Z",
+  slant: "M0,80 L1440,0 L1440,80 Z",
+  zigzag: `M0,80 ${Array.from({ length: 25 }, (_, i) => `L${i * 60},${i % 2 ? 44 : 72}`).join(" ")} L1440,80 Z`,
+};
+export const MAX_DELAY = 2000;
+/** An address of a section's own for links: "#angebot". */
+export const ANCHOR = /^[a-z][a-z0-9-]{0,39}$/;
+
+/** What a section looks like beyond its layout; whatever is left out follows the layout and the theme. */
+export type SectionStyle = {
+  animation?: AnimationName;
+  speed?: Speed;
+  /** Milliseconds before the section comes in, up to MAX_DELAY. */
+  delay?: number;
+  /** Its entries come in one after another. */
+  stagger?: boolean;
+  paddingTop?: Spacing;
+  paddingBottom?: Spacing;
+  width?: Width;
+  align?: Align;
+  /** Entries side by side on wide screens, 1–4. */
+  columns?: number;
+  /** A colour of its own (#rrggbb); with a second one, a gradient at `angle` degrees. */
+  bgColor?: string;
+  bgColor2?: string;
+  angle?: number;
+  /** A picture behind the section, tinted by `overlay` percent; `parallax` keeps it still while the page scrolls. */
+  bgImageId?: string;
+  overlay?: number;
+  parallax?: boolean;
+  tone?: Tone;
+  titleSize?: TitleSize;
+  shape?: Shape;
+  /** "mobile": not on phones; "desktop": only on phones. */
+  hideOn?: "mobile" | "desktop";
+  anchor?: string;
+};
+
+/** Sections whose entries stand in columns a person may set. */
+export const COLUMN_SECTIONS: readonly SectionType[] = ["features", "stats", "gallery", "testimonials", "pricing", "team", "links"];
+/** Sections whose entries can come in one after another. */
+export const ITEM_SECTIONS: readonly SectionType[] = ["features", "stats", "gallery", "testimonials", "pricing", "faq", "logos", "team", "links"];
+
 /** A section: the old store block, with a layout, a background and entries. */
 export type Section = Omit<Block, "type"> & {
   type: SectionType;
@@ -104,7 +172,12 @@ export type Section = Omit<Block, "type"> & {
   videoUrl?: string;
   /** Hidden sections stay in the editor and are not shown. */
   hidden?: boolean;
+  style?: SectionStyle;
 };
+
+/** The pictures sections show: their own, their entries' and their backgrounds. */
+export const sectionImages = (sections: readonly Section[]): string[] =>
+  sections.flatMap((s) => [s.imageId, s.style?.bgImageId, ...(s.items ?? []).map((i) => i.imageId)]).filter((v): v is string => !!v);
 
 export const MAX_SECTIONS = 30;
 export const MAX_ITEMS = 24;
@@ -182,32 +255,71 @@ export type FontPair = (typeof FONT_PAIRS)[number];
 export const RADII = ["none", "small", "medium", "large"] as const;
 export type Radius = (typeof RADII)[number];
 
+export const BUTTON_STYLES = ["solid", "pill", "outline", "sharp"] as const;
+export type ButtonStyle = (typeof BUTTON_STYLES)[number];
+export const HEADING_WEIGHTS = ["medium", "bold", "black"] as const;
+export type HeadingWeight = (typeof HEADING_WEIGHTS)[number];
+export const HEADER_STYLES = ["sticky", "static", "centered", "floating"] as const;
+export type HeaderStyle = (typeof HEADER_STYLES)[number];
+/** What cards do under the pointer. */
+export const HOVERS = ["lift", "glow", "zoom", "none"] as const;
+export type Hover = (typeof HOVERS)[number];
+/** How wide the content of a page runs. */
+export const CONTAINERS = ["narrow", "normal", "wide"] as const;
+export type Container = (typeof CONTAINERS)[number];
+export const CONTAINER_WIDTH: Record<Container, string> = { narrow: "64rem", normal: "72rem", wide: "80rem" };
+
 export type Theme = {
   preset: string;
   mode: "light" | "dark";
   font: FontPair;
   radius: Radius;
-  /** Sections float in gently as the visitor scrolls. */
+  /** Sections come into view as the visitor scrolls: false when `animation` is "none". */
   animate: boolean;
+  /** The entrance of every section that does not choose its own. */
+  animation: AnimationName;
+  speed: Speed;
+  buttons: ButtonStyle;
+  headingWeight: HeadingWeight;
+  /** Headings in capitals. */
+  uppercase: boolean;
+  header: HeaderStyle;
+  hover: Hover;
+  container: Container;
   /** #rrggbb */
   primary: string;
   accent: string;
 };
 
-/** Ready-made looks; a person may change every part afterwards. */
-export const THEME_PRESETS: Record<string, Omit<Theme, "preset" | "animate">> = {
+/** The details of a theme (buttons, headings, header, width) as a site has them until someone chooses. */
+export const DETAIL_DEFAULTS: Pick<Theme, "buttons" | "headingWeight" | "uppercase" | "header" | "hover" | "container"> = {
+  buttons: "solid",
+  headingWeight: "bold",
+  uppercase: false,
+  header: "sticky",
+  hover: "lift",
+  container: "normal",
+};
+
+type Preset = Pick<Theme, "mode" | "font" | "radius" | "primary" | "accent"> & Partial<typeof DETAIL_DEFAULTS>;
+
+/** Ready-made looks; a person may change every part afterwards. Their details apply when one is chosen. */
+export const THEME_PRESETS: Record<string, Preset> = {
   minimal: { mode: "light", font: "modern", radius: "small", primary: "#0f172a", accent: "#2563eb" },
-  luxury: { mode: "dark", font: "elegant", radius: "none", primary: "#0b0b0f", accent: "#c8a24a" },
-  fresh: { mode: "light", font: "friendly", radius: "large", primary: "#065f46", accent: "#10b981" },
-  bold: { mode: "light", font: "tech", radius: "medium", primary: "#111827", accent: "#f43f5e" },
-  editorial: { mode: "light", font: "editorial", radius: "none", primary: "#1c1917", accent: "#b45309" },
-  midnight: { mode: "dark", font: "tech", radius: "medium", primary: "#020617", accent: "#8b5cf6" },
-  ocean: { mode: "light", font: "modern", radius: "large", primary: "#0c4a6e", accent: "#0ea5e9" },
-  classic: { mode: "light", font: "classic", radius: "small", primary: "#1e3a5f", accent: "#b91c1c" },
+  luxury: { mode: "dark", font: "elegant", radius: "none", primary: "#0b0b0f", accent: "#c8a24a", buttons: "sharp", headingWeight: "medium", uppercase: true, header: "centered" },
+  fresh: { mode: "light", font: "friendly", radius: "large", primary: "#065f46", accent: "#10b981", buttons: "pill" },
+  bold: { mode: "light", font: "tech", radius: "medium", primary: "#111827", accent: "#f43f5e", headingWeight: "black", hover: "glow" },
+  editorial: { mode: "light", font: "editorial", radius: "none", primary: "#1c1917", accent: "#b45309", buttons: "outline", headingWeight: "medium", header: "centered" },
+  midnight: { mode: "dark", font: "tech", radius: "medium", primary: "#020617", accent: "#8b5cf6", hover: "glow", header: "floating" },
+  ocean: { mode: "light", font: "modern", radius: "large", primary: "#0c4a6e", accent: "#0ea5e9", buttons: "pill", header: "floating" },
+  classic: { mode: "light", font: "classic", radius: "small", primary: "#1e3a5f", accent: "#b91c1c", header: "static" },
 };
 export const PRESET_NAMES = Object.keys(THEME_PRESETS);
 
-export const DEFAULT_THEME: Theme = { preset: "minimal", animate: true, ...THEME_PRESETS.minimal };
+/** A preset as it is chosen: its colours, fonts and corners, and its details where it has its own. */
+export const presetTheme = (name: string): Omit<Theme, "preset" | "animate" | "animation" | "speed"> => ({ ...DETAIL_DEFAULTS, ...(THEME_PRESETS[name] ?? THEME_PRESETS.minimal) });
+
+export const DEFAULT_THEME: Theme = { preset: "minimal", animate: true, animation: "up", speed: "normal", ...presetTheme("minimal") };
 
 /** The look a new site starts with. */
 export const STARTER_PRESET: Record<SiteKind, string> = { store: "minimal", creator: "midnight", company: "ocean" };
@@ -235,21 +347,38 @@ export function themeVars(theme: Theme): Record<string, string> {
     "--site-card": dark ? "#121621" : "#ffffff",
     "--site-border": dark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0",
     "--site-radius": RADIUS_PX[theme.radius],
+    "--site-container": CONTAINER_WIDTH[theme.container],
   };
 }
 
-/** The theme of a site: what was saved, completed from its preset and the defaults. */
+/** One of `list`, or `fallback` for anything else. */
+const oneOf = <T extends string>(list: readonly T[], value: unknown, fallback: T): T => ((list as readonly string[]).includes(value as string) ? (value as T) : fallback);
+
+/**
+ * The theme of a site: what was saved, completed from its preset and the
+ * defaults. Details a site never chose keep the plain defaults, so a site
+ * made before they existed looks as it did.
+ */
 export function themeOf(raw: unknown): Theme {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Theme> & { template?: string };
   const preset = typeof r.preset === "string" && THEME_PRESETS[r.preset] ? r.preset : r.template === "bold" ? "bold" : r.template === "soft" ? "fresh" : "minimal";
   const base = THEME_PRESETS[preset];
   const hex = (v: unknown, fallback: string) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback);
+  const animation = oneOf(ANIMATIONS, r.animation, r.animate === false ? "none" : "up");
   return {
     preset,
     mode: r.mode === "dark" || r.mode === "light" ? r.mode : base.mode,
-    font: (FONT_PAIRS as readonly string[]).includes(r.font as string) ? (r.font as FontPair) : base.font,
-    radius: (RADII as readonly string[]).includes(r.radius as string) ? (r.radius as Radius) : base.radius,
-    animate: typeof r.animate === "boolean" ? r.animate : true,
+    font: oneOf(FONT_PAIRS, r.font, base.font),
+    radius: oneOf(RADII, r.radius, base.radius),
+    animate: animation !== "none",
+    animation,
+    speed: oneOf(SPEEDS, r.speed, "normal"),
+    buttons: oneOf(BUTTON_STYLES, r.buttons, DETAIL_DEFAULTS.buttons),
+    headingWeight: oneOf(HEADING_WEIGHTS, r.headingWeight, DETAIL_DEFAULTS.headingWeight),
+    uppercase: typeof r.uppercase === "boolean" ? r.uppercase : DETAIL_DEFAULTS.uppercase,
+    header: oneOf(HEADER_STYLES, r.header, DETAIL_DEFAULTS.header),
+    hover: oneOf(HOVERS, r.hover, DETAIL_DEFAULTS.hover),
+    container: oneOf(CONTAINERS, r.container, DETAIL_DEFAULTS.container),
     primary: hex(r.primary, base.primary),
     accent: hex(r.accent, base.accent),
   };

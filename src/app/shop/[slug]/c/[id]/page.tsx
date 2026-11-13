@@ -25,7 +25,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const parent = categories.find((c) => c.id === category.parentId);
   const products = await storeProducts(store, { categoryId: category.id, limit: 120 });
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8">
+    <div className="mx-auto grid w-full max-w-[var(--site-container)] gap-6 px-4 py-8">
       <div className="grid gap-2">
         {parent && (
           <Link href={`/shop/${store.slug}/c/${parent.id}`} className="w-fit text-sm text-slate-500 hover:underline">

@@ -18,7 +18,7 @@ import { withTenant, type Tx } from "@/db/tenant";
 import { formatMoney, isLocale, MESSAGES, translator, type Locale } from "@/i18n";
 import { allowedRates } from "@/lib/countries";
 import { withDependents } from "@/lib/modules";
-import { siteModule, type Section, type SiteKind, type SitePage, type Theme } from "@/lib/site";
+import { sectionImages, siteModule, type Section, type SiteKind, type SitePage, type Theme } from "@/lib/site";
 import { grossCents, MAX_CART_LINES, MAX_QUANTITY, netOfGross, shippingCents, type Design, type Pages, type PaymentMethod, type ShippingOption } from "@/lib/store";
 import { choiceLabel, type VariantChoice, type VariantOption } from "@/lib/variants";
 import { audit } from "./audit";
@@ -704,7 +704,7 @@ export async function storeImage(store: PublicStore, documentId: string): Promis
     if (!doc || !/^image\/(png|jpeg|webp|gif)$/.test(doc.mimeType)) return null;
     let shown =
       store.design.logoId === documentId ||
-      [...store.blocks, ...store.customPages.flatMap((p) => p.sections)].some((s) => s.imageId === documentId || (s.items ?? []).some((i) => i.imageId === documentId));
+      sectionImages([...store.blocks, ...store.customPages.flatMap((p) => p.sections)]).includes(documentId);
     if (!shown && store.kind === "store") {
       const filter = await visibleProductFilter(tx, store.categoryIds);
       const [hit] = await tx

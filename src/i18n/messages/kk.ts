@@ -10,6 +10,7 @@ import aichat from "./aichat/kk";
 import areas from "./areas/kk";
 import sites from "./sites/kk";
 import aftersales from "./aftersales/kk";
+import look from "./look/kk";
 
 const kk: Messages = {
   hub,
@@ -23,6 +24,7 @@ const kk: Messages = {
   areas,
   sites,
   aftersales,
+  look,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",

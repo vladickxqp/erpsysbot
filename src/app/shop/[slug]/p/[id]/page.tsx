@@ -28,7 +28,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const [main, ...more] = product.images;
   const facts = Object.entries(product.attributes).filter(([k, v]) => k.trim() && v.trim());
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 md:grid-cols-2">
+    <div className="mx-auto grid w-full max-w-[var(--site-container)] gap-8 px-4 py-8 md:grid-cols-2">
       <div className="grid content-start gap-3">
         <ShopImage slug={store.slug} id={main ?? null} alt={product.name} className={cn("aspect-square w-full", look.radius)} />
         {more.length > 0 && (

@@ -122,7 +122,7 @@ export function CheckoutForm(props: Props) {
 
   return (
     <form
-      className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[1fr_360px]"
+      className="mx-auto grid w-full max-w-[var(--site-container)] gap-8 px-4 py-8 lg:grid-cols-[1fr_360px]"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
