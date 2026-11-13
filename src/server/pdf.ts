@@ -46,7 +46,8 @@ function accentOf(hex: string) {
 
 
 let fonts: Promise<[Uint8Array, Uint8Array]> | null = null;
-function loadFonts() {
+/** DejaVu Sans, regular and bold, read once. */
+export function loadFonts() {
   const dir = path.join(process.env.ERP_ROOT ?? process.cwd(), "assets", "fonts");
   fonts ??= Promise.all([readFile(path.join(dir, "DejaVuSans.ttf")), readFile(path.join(dir, "DejaVuSans-Bold.ttf"))]);
   return fonts;

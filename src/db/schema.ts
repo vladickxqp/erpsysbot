@@ -764,6 +764,27 @@ export const documents = pgTable(
   (t) => [index("documents_org_created_idx").on(t.organizationId, t.createdAt), index("documents_client_idx").on(t.clientId)],
 );
 
+/**
+ * Templates for documents: a text with {{placeholders}} (src/lib/doc-text.ts)
+ * or the company's own Word file (source_document_id); `fields` lists the
+ * placeholders it asks for, noted when it is saved.
+ */
+export const documentTemplates = pgTable(
+  "document_templates",
+  {
+    id: id(),
+    organizationId: orgId(),
+    name: text("name").notNull(),
+    body: text("body").notNull().default(""),
+    sourceDocumentId: uuid("source_document_id").references(() => documents.id, { onDelete: "set null" }),
+    fields: text("fields").array().notNull().default(sql`'{}'::text[]`),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("document_templates_org_idx").on(t.organizationId)],
+);
+
 // --- Orders ------------------------------------------------------------------------------------
 export const orderStatusEnum = pgEnum("order_status", [
   "DRAFT",

@@ -1,5 +1,9 @@
+import { FileCog } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/app/page";
+import { Button } from "@/components/ui/button";
 import { getT } from "@/i18n/server";
+import { assistantAvailable } from "@/server/assistant/run";
 import { clientOptions } from "@/server/clients";
 import { listDocuments } from "@/server/documents";
 import { requirePageContext } from "@/server/request";
@@ -21,10 +25,22 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   ]);
   return (
     <>
-      <PageHeader title={t("documents.title")} />
+      <PageHeader
+        title={t("documents.title")}
+        actions={
+          ctx.permissions.has("documents.manage") ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/documents/tools">
+                <FileCog className="size-4" /> {t("docs.title")}
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
       <DocumentsView
         archived={archived}
         canManage={ctx.permissions.has("documents.manage")}
+        ai={ctx.permissions.has("ai.use") && assistantAvailable()}
         clients={clients}
         client={sp.client ?? null}
         docs={docs.map((d) => ({

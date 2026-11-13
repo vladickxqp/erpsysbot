@@ -19,11 +19,11 @@ import { cn } from "@/lib/utils";
 import { deleteAutomationAction, saveAutomationAction } from "./actions";
 
 const TRIGGERS = ["client.created", "client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "order.created", "order.completed", "invoice.overdue", "task.overdue", "stock.low"] as const;
-const ACTIONS = ["task.create", "inbox.notify", "telegram.notify", "client.assign"] as const;
+const ACTIONS = ["task.create", "inbox.notify", "telegram.notify", "client.assign", "document.create"] as const;
 const NEW_LABELS = ["client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "inbox.notify", "client.assign"];
 const CLIENT_STATUSES = ["LEAD", "ACTIVE", "INACTIVE"];
 const DEAL_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"];
-const labelOf = (kind: "t" | "a", key: string) => `${NEW_LABELS.includes(key) ? "hub.automation" : "automation"}.${kind}_${key.replace(".", "_")}`;
+const labelOf = (kind: "t" | "a", key: string) => (key === "document.create" ? "docs.automation" : `${NEW_LABELS.includes(key) ? "hub.automation" : "automation"}.${kind}_${key.replace(".", "_")}`);
 type Trigger = (typeof TRIGGERS)[number];
 type Action = (typeof ACTIONS)[number];
 
@@ -41,6 +41,8 @@ type Draft = {
   message: string;
   dueInDays: string;
   to: string;
+  templateId: string;
+  format: "pdf" | "docx";
   enabled: boolean;
 };
 
@@ -62,17 +64,19 @@ export function AutomationsView({
   rules,
   runs,
   members,
+  templates,
 }: {
   rules: Rule[];
   runs: { id: string; name: string; subject: string; ok: boolean; message: string | null; attempts: number; createdAt: string }[];
   members: { id: string; name: string }[];
+  templates: { id: string; name: string }[];
 }) {
   const { t, locale, region } = useI18n();
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, start] = useTransition();
 
-  const blank: Draft = { id: null, name: "", trigger: "invoice.overdue", action: "task.create", minAmount: "", minDays: "7", clientStatus: "", toStatus: "", title: "", message: "", dueInDays: "1", to: "owner", enabled: true };
+  const blank: Draft = { id: null, name: "", trigger: "invoice.overdue", action: "task.create", minAmount: "", minDays: "7", clientStatus: "", toStatus: "", title: "", message: "", dueInDays: "1", to: "owner", templateId: "", format: "pdf", enabled: true };
   const open = (r: Rule) =>
     setDraft({
       id: r.id,
@@ -87,6 +91,8 @@ export function AutomationsView({
       message: String(r.params.message ?? ""),
       dueInDays: String(r.params.dueInDays ?? "1"),
       to: String(r.params.to ?? "owner"),
+      templateId: String(r.params.templateId ?? ""),
+      format: r.params.format === "docx" ? "docx" : "pdf",
       enabled: r.enabled,
     });
 
@@ -106,6 +112,7 @@ export function AutomationsView({
       message: d.message || undefined,
       dueInDays: d.action === "task.create" ? Number(d.dueInDays || "1") : undefined,
       to: d.to,
+      ...(d.action === "document.create" ? { templateId: d.templateId || undefined, format: d.format } : {}),
     },
   });
 
@@ -287,6 +294,38 @@ export function AutomationsView({
                     </Select>
                   </div>
                 )}
+                {draft.action === "document.create" && (
+                  <>
+                    <div className="grid gap-1.5">
+                      <Label>{t("docs.template")}</Label>
+                      <Select value={draft.templateId || undefined} onValueChange={(v) => setDraft({ ...draft, templateId: v })}>
+                        <SelectTrigger className="w-full" aria-label={t("docs.template")}>
+                          <SelectValue placeholder={t("docs.chooseTemplate")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((tpl) => (
+                            <SelectItem key={tpl.id} value={tpl.id}>
+                              {tpl.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>{t("docs.format")}</Label>
+                      <Select value={draft.format} onValueChange={(v) => setDraft({ ...draft, format: v as "pdf" | "docx" })}>
+                        <SelectTrigger className="w-full" aria-label={t("docs.format")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                          <SelectItem value="docx">Word</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                {draft.action !== "document.create" && (
                 <div className="grid gap-1.5">
                   <Label>{t("automation.to")}</Label>
                   <Select value={draft.to} onValueChange={(v) => setDraft({ ...draft, to: v })}>
@@ -306,6 +345,7 @@ export function AutomationsView({
                     </SelectContent>
                   </Select>
                 </div>
+                )}
                 {draft.action === "task.create" && (
                   <label className="grid gap-1.5">
                     <span className="text-sm font-medium">{t("automation.dueInDays")}</span>
@@ -319,15 +359,17 @@ export function AutomationsView({
                   <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder={VARS[draft.trigger]} maxLength={300} />
                 </label>
               )}
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium">{t("automation.message")}</span>
-                <Textarea rows={2} value={draft.message} onChange={(e) => setDraft({ ...draft, message: e.target.value })} placeholder={VARS[draft.trigger]} maxLength={2000} />
-              </label>
+              {draft.action !== "document.create" && (
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-medium">{t("automation.message")}</span>
+                  <Textarea rows={2} value={draft.message} onChange={(e) => setDraft({ ...draft, message: e.target.value })} placeholder={VARS[draft.trigger]} maxLength={2000} />
+                </label>
+              )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDraft(null)}>
                   {t("common.cancel")}
                 </Button>
-                <Button type="submit" disabled={pending}>
+                <Button type="submit" disabled={pending || (draft.action === "document.create" && !draft.templateId)}>
                   {t("common.save")}
                 </Button>
               </DialogFooter>

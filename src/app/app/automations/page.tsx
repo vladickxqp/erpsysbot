@@ -1,5 +1,6 @@
 import { getT } from "@/i18n/server";
 import { listAutomations } from "@/server/automations";
+import { listTemplates } from "@/server/doc-tools";
 import { requirePageContext } from "@/server/request";
 import { memberOptions } from "@/server/team";
 import { AutomationsView } from "./automations-view";
@@ -11,10 +12,15 @@ export async function generateMetadata() {
 
 export default async function AutomationsPage() {
   const ctx = await requirePageContext("automation.manage");
-  const [{ rules, runs }, members] = await Promise.all([listAutomations(ctx), memberOptions(ctx)]);
+  const [{ rules, runs }, members, templates] = await Promise.all([
+    listAutomations(ctx),
+    memberOptions(ctx),
+    ctx.permissions.has("documents.read") ? listTemplates(ctx) : Promise.resolve([]),
+  ]);
   return (
     <AutomationsView
       members={members}
+      templates={templates.map((tpl) => ({ id: tpl.id, name: tpl.name }))}
       rules={rules.map((r) => ({
         id: r.id,
         name: r.name,

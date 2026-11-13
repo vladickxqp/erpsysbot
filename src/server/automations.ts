@@ -29,7 +29,7 @@ import { escapeHtml, sendMessage } from "./telegram/api";
 export const EVENT_TRIGGERS = ["client.created", "client.status_changed", "deal.stage_changed", "appointment.completed", "project.created", "project.completed", "order.created", "order.completed"] as const;
 export const SCHEDULED_TRIGGERS = ["invoice.overdue", "task.overdue", "stock.low"] as const;
 export const TRIGGERS = [...EVENT_TRIGGERS, ...SCHEDULED_TRIGGERS] as const;
-export const ACTIONS = ["task.create", "telegram.notify", "inbox.notify", "client.assign"] as const;
+export const ACTIONS = ["task.create", "telegram.notify", "inbox.notify", "client.assign", "document.create"] as const;
 export type Trigger = (typeof TRIGGERS)[number];
 export type Automation = typeof automations.$inferSelect;
 
@@ -57,6 +57,9 @@ export const automationInput = z.object({
       priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
       /** "owner", "admins", "assignee" (of the subject), "least_busy" or a user id. */
       to: z.string().trim().max(60).optional(),
+      /** document.create: the template, and PDF or Word. */
+      templateId: z.string().uuid().optional(),
+      format: z.enum(["pdf", "docx"]).optional(),
     })
     .default({}),
   enabled: z.boolean().default(true),
@@ -174,6 +177,13 @@ async function perform(ctx: Context, rule: Automation, subject: Subject): Promis
       projectId: subject.projectId ?? null,
     });
     return `task ${task.id}`;
+  }
+  if (rule.action === "document.create") {
+    if (!p.templateId) throw new Error("no template");
+    // Loaded here: the document tools reach far into the app, the automations stay light.
+    const { createFromTemplate } = await import("./doc-tools");
+    const doc = await createFromTemplate(ctx, { templateId: p.templateId, clientId: subject.clientId ?? null, orderId: subject.orderId ?? null, format: p.format ?? "pdf" });
+    return `document ${doc.id}`;
   }
   if (rule.action === "client.assign") {
     if (!subject.clientId) throw new Error("no client");

@@ -26,6 +26,9 @@ export const ACTIVITY_VERB: Record<string, string> = {
   logout: "signedOut",
   export: "exported",
   password: "changed",
+  template_create: "created",
+  template_update: "changed",
+  template_delete: "deleted",
 };
 
 export const ACTIVITY_ENTITIES = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Download, FileImage, FileSpreadsheet, FileText, FolderOpen, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Download, FileImage, FileSpreadsheet, FileText, FolderOpen, Repeat, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -10,11 +10,16 @@ import { SearchBox } from "@/components/app/list-controls";
 import { EmptyState } from "@/components/app/page";
 import { UploadButton } from "@/components/app/upload-button";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
 import { archiveDocumentAction, deleteDocumentAction } from "./actions";
+import { convertDocumentAction } from "./tools/actions";
+
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const IMAGES = new Set(["image/png", "image/jpeg"]);
 
 type Doc = { id: string; name: string; mimeType: string; sizeBytes: number; category: string | null; clientId: string | null; clientName: string | null; createdAt: string };
 
@@ -25,16 +30,48 @@ export function FileIcon({ mimeType }: { mimeType: string }) {
   return <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
+/** PDF from Word, text or a picture; Word from text, or from a PDF or picture read by the AI: a new file next to the old one. */
+function Convert({ doc, ai }: { doc: Doc; ai: boolean }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const toPdf = doc.mimeType === DOCX || doc.mimeType === "text/plain" || IMAGES.has(doc.mimeType);
+  const toWord = doc.mimeType === "text/plain" || (ai && (doc.mimeType === "application/pdf" || IMAGES.has(doc.mimeType)));
+  if (!toPdf && !toWord) return null;
+  const convert = (to: "pdf" | "docx") =>
+    start(async () => {
+      const result = await convertDocumentAction(doc.id, to);
+      if (!result.ok) toast.error(t(result.error ?? "common.error"));
+      else toast.success(t("docs.done", { name: result.name ?? "" }));
+      router.refresh();
+    });
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" disabled={pending} aria-label={t("docs.convert")}>
+          <Repeat className={pending ? "size-4 animate-spin" : "size-4"} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {toPdf && <DropdownMenuItem onSelect={() => convert("pdf")}>{t("docs.toPdf")}</DropdownMenuItem>}
+        {toWord && <DropdownMenuItem onSelect={() => convert("docx")}>{t("docs.toWord")}</DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function DocumentsView({
   docs,
   archived,
   canManage,
+  ai = false,
   clients,
   client,
 }: {
   docs: Doc[];
   archived: boolean;
   canManage: boolean;
+  ai?: boolean;
   clients: { id: string; name: string }[];
   client: string | null;
 }) {
@@ -97,7 +134,7 @@ export function DocumentsView({
                 <TableHead className="hidden md:table-cell">{t("orders.client")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("documents.size")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("invoices.issueDate")}</TableHead>
-                <TableHead className="w-28" />
+                <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -127,6 +164,7 @@ export function DocumentsView({
                           <Download className="size-4" />
                         </a>
                       </Button>
+                      {canManage && !archived && <Convert doc={d} ai={ai} />}
                       {canManage && (
                         <>
                           <Button variant="ghost" size="icon" disabled={pending} aria-label={t("documents.archive")} onClick={() => run(() => archiveDocumentAction(d.id, !archived))}>

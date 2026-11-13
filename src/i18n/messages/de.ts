@@ -10,6 +10,7 @@ import areas from "./areas/de";
 import sites from "./sites/de";
 import aftersales from "./aftersales/de";
 import look from "./look/de";
+import docs from "./docs/de";
 
 const de = {
   hub,
@@ -24,6 +25,7 @@ const de = {
   sites,
   aftersales,
   look,
+  docs,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
