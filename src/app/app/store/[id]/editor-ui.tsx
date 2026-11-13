@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Monitor, RotateCcw, Smartphone, Tablet } from "lucide-react";
+import { ExternalLink, Loader2, Monitor, RotateCcw, Smartphone, Tablet, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -41,10 +41,48 @@ export const newId = () => (typeof crypto !== "undefined" && "randomUUID" in cry
 
 export type Images = { id: string; name: string }[];
 
+const IMAGE_TYPES = /^image\/(png|jpeg|webp|gif)$/;
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+/** A picture from the company's images, or a new one uploaded here (button or drop) and chosen at once. */
 export function ImagePick({ value, onChange, images, label, small }: { value: string | null | undefined; onChange: (id: string | null) => void; images: Images; label: string; small?: boolean }) {
   const { t } = useI18n();
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [added, setAdded] = useState<Images>([]);
+  const all = [...added.filter((a) => !images.some((i) => i.id === a.id)), ...images];
+
+  const upload = async (file: File) => {
+    if (!IMAGE_TYPES.test(file.type)) return void toast.error(t("documents.TYPE"));
+    if (file.size > MAX_IMAGE_BYTES) return void toast.error(t("documents.TOO_LARGE"));
+    const form = new FormData();
+    form.append("file", file);
+    form.append("category", "Website");
+    setBusy(true);
+    try {
+      const res = await fetch("/app/documents/upload", { method: "POST", body: form });
+      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; ids?: string[]; error?: string };
+      const id = body.ok ? body.ids?.[0] : undefined;
+      if (!id) return void toast.error(t(`documents.${body.error ?? "TYPE"}`));
+      setAdded((list) => [{ id, name: file.name }, ...list]);
+      onChange(id);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="flex min-w-0 items-center gap-3">
+    <div
+      className="flex min-w-0 items-center gap-2"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files?.[0];
+        if (file) void upload(file);
+      }}
+    >
       {value ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={thumb(value)} alt="" className={cn("shrink-0 rounded-md border object-cover", small ? "size-10" : "size-14")} />
@@ -57,13 +95,27 @@ export function ImagePick({ value, onChange, images, label, small }: { value: st
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">{t("store.noImage")}</SelectItem>
-          {images.map((img) => (
+          {all.map((img) => (
             <SelectItem key={img.id} value={img.id}>
               {img.name}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void upload(file);
+        }}
+      />
+      <Button type="button" variant="outline" size="icon" className="shrink-0" aria-label={t("documents.upload")} title={t("documents.upload")} disabled={busy} onClick={() => input.current?.click()}>
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+      </Button>
     </div>
   );
 }

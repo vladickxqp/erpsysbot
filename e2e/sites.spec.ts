@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const email = `e2e-sites-${Date.now()}@example.org`;
 const password = "Tq7-vexo-Lumen-92!";
+/** A one-pixel PNG. */
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 async function signUp(page: Page) {
   await page.goto("/register");
@@ -57,6 +59,13 @@ test("a company website is built, published, and a visitor's message becomes a l
   await page.getByRole("button", { name: "Speichern" }).click();
   await expect(page.getByText("Gespeichert").first()).toBeVisible();
 
+  // A logo uploaded right where it is chosen.
+  await page.getByRole("tab", { name: "Design" }).click();
+  await page.locator('input[type="file"][accept^="image/png"]').first().setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: Buffer.from(PNG, "base64") });
+  await expect(page.getByRole("combobox", { name: "Logo" })).toContainText("logo.png");
+  await page.getByRole("button", { name: "Speichern" }).click();
+  await expect(page.getByText("Gespeichert").first()).toBeVisible();
+
   await page.getByRole("tab", { name: "Veröffentlichen" }).click();
   await page.getByRole("button", { name: "Veröffentlichen", exact: true }).click();
   await expect(page.getByText("Online", { exact: true }).first()).toBeVisible();
@@ -65,6 +74,7 @@ test("a company website is built, published, and a visitor's message becomes a l
   const visitor = await page.context().browser()!.newPage({ baseURL: new URL(page.url()).origin, locale: "de-DE" });
   await visitor.goto(siteHref!);
   await expect(visitor.getByRole("heading", { level: 1, name: "E2E Elektro" })).toBeVisible();
+  await expect(visitor.getByRole("img", { name: "E2E Elektro" }).first()).toBeVisible();
   await expect(visitor.getByText("Elektrik und Photovoltaik aus Hamburg")).toBeVisible();
   await expect(visitor.getByText("[Leistung 1]")).toHaveCount(0);
   await expect(visitor.getByRole("link", { name: "Warenkorb" })).toHaveCount(0);
