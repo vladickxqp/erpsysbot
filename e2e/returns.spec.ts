@@ -77,8 +77,11 @@ test("a parcel is tracked, the buyer returns a lamp and gets the money back", as
   // A visitor orders the lamp and keeps the link to the order.
   const visitor = await page.context().browser()!.newPage({ baseURL: new URL(page.url()).origin, locale: "de-DE" });
   await visitor.goto(shopHref!);
+  // Each click waits for its page: the home page lists the lamp too, and two navigations in a row could cross.
   await visitor.getByRole("link", { name: "Alle Produkte" }).first().click();
+  await visitor.waitForURL(/\/products$/);
   await visitor.getByRole("link", { name: /Lampe/ }).first().click();
+  await visitor.waitForURL(/\/p\/[0-9a-f-]{36}$/);
   await visitor.getByRole("button", { name: "In den Warenkorb" }).click();
   await visitor.getByRole("link", { name: "Zum Warenkorb" }).click();
   await visitor.getByRole("link", { name: "Zur Kasse" }).click();

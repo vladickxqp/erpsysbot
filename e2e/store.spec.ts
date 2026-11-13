@@ -84,8 +84,11 @@ test("a store is set up, published, and a visitor orders from it", async ({ page
   // A visitor without an account: product, cart, checkout.
   const visitor = await page.context().browser()!.newPage({ baseURL: new URL(page.url()).origin, locale: "de-DE" });
   await visitor.goto(shopHref!);
+  // Each click waits for its page: the home page lists the lamp too, and two navigations in a row could cross.
   await visitor.getByRole("link", { name: "Alle Produkte" }).first().click();
+  await visitor.waitForURL(/\/products$/);
   await visitor.getByRole("link", { name: /Lampe/ }).first().click();
+  await visitor.waitForURL(/\/p\/[0-9a-f-]{36}$/);
   await expect(visitor.getByText(/11,90/).first()).toBeVisible();
   await visitor.getByRole("button", { name: "In den Warenkorb" }).click();
   await visitor.getByRole("link", { name: "Zum Warenkorb" }).click();
