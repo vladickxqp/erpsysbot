@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/i18n";
 import { useI18n } from "@/i18n/client";
+import { AREAS, isArea } from "@/lib/areas";
 import { companyCountryAction, companyPlanAction, inviteCompanyAction, planAction, suspendAction } from "./actions";
 
 type Company = {
@@ -29,7 +30,7 @@ type Company = {
   review: boolean;
   mine: boolean;
 };
-type Plan = { id: string; name: string; priceCents: number; maxUsers: number; aiPerDay: number; modules: string[]; stripePriceId: string | null; active: boolean };
+type Plan = { id: string; name: string; priceCents: number; maxUsers: number; aiPerDay: number; modules: string[]; areas: string[]; stripePriceId: string | null; active: boolean };
 
 export function AdminView({
   billing,
@@ -224,6 +225,21 @@ export function AdminView({
                   Stripe Price ID
                   <Input value={draft.stripePriceId ?? ""} onChange={(e) => set({ stripePriceId: e.target.value || null })} placeholder="price_…" />
                 </label>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {AREAS.map((a) => (
+                    <label key={a} className="flex items-center gap-2">
+                      <Checkbox
+                        checked={draft.areas.includes(a)}
+                        onCheckedChange={(c) => set({ areas: c === true ? [...draft.areas, a] : draft.areas.filter((x) => x !== a) })}
+                      />
+                      {t(`areas.${a}`)}
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={draft.active} onCheckedChange={(c) => set({ active: c === true })} />
+                    {t("areas.planActive")}
+                  </label>
+                </div>
                 <div className="grid grid-cols-2 gap-1">
                   {modules.map((m) => (
                     <label key={m} className="flex items-center gap-2">
@@ -240,7 +256,7 @@ export function AdminView({
                     disabled={pending}
                     onClick={() =>
                       run(
-                        () => planAction(p.id, { name: draft.name, priceCents: draft.priceCents, maxUsers: draft.maxUsers, aiPerDay: draft.aiPerDay, modules: draft.modules, stripePriceId: draft.stripePriceId, active: draft.active }),
+                        () => planAction(p.id, { name: draft.name, priceCents: draft.priceCents, maxUsers: draft.maxUsers, aiPerDay: draft.aiPerDay, modules: draft.modules, areas: draft.areas.filter(isArea), stripePriceId: draft.stripePriceId, active: draft.active }),
                         () => {
                           const next = { ...editing };
                           delete next[p.id];

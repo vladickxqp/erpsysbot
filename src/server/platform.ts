@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { assistantMessages, auditLog, invoices, memberships, organizations, plans, platformInvites, sessions, subscriptions, suspensions, users } from "@/db/schema";
+import { AREAS } from "@/lib/areas";
 import { countryProfile, isBlockedCountry, isCountry } from "@/lib/countries";
 import type { SessionUser } from "./auth/sessions";
 
@@ -165,6 +166,7 @@ export const planInput = z.object({
   maxUsers: z.coerce.number().int().min(1).max(10_000),
   aiPerDay: z.coerce.number().int().min(0).max(100_000),
   modules: z.array(z.string().trim().min(1).max(30)).max(40),
+  areas: z.array(z.enum(AREAS)).max(AREAS.length).default([]),
   stripePriceId: z
     .string()
     .trim()

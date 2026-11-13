@@ -7,6 +7,7 @@ import { getT } from "@/i18n/server";
 import { billingEnabled, entitlementsOf, paymentHistory } from "@/server/billing";
 import { listPlans } from "@/server/platform";
 import { requireContext } from "@/server/request";
+import { groupPlans } from "@/lib/areas";
 import { cn } from "@/lib/utils";
 import { PlanButton, PortalButton } from "./billing-buttons";
 
@@ -53,8 +54,11 @@ export default async function BillingPage() {
               )}
             </CardContent>
           </Card>
+          {groupPlans(plans).map((group) => (
+          <div key={group.key} className="grid gap-3">
+            {group.key !== "all" && <h2 className="text-lg font-semibold">{t(`areas.plan_${group.key}`)}</h2>}
           <div className="grid gap-4 md:grid-cols-3">
-            {plans.map((plan) => {
+            {group.plans.map((plan) => {
               const current = ent.plan?.id === plan.id && ent.active;
               return (
                 <Card key={plan.id} className={cn(current && "border-primary")}>
@@ -74,9 +78,9 @@ export default async function BillingPage() {
                       <li className="flex gap-2">
                         <Check className="size-4 text-success" /> {t("billing.ai", { count: plan.aiPerDay })}
                       </li>
-                      {plan.modules.map((m) => (
-                        <li key={m} className="flex gap-2">
-                          <Check className="size-4 text-success" /> {t(`billing.module_${m}`)}
+                      {(plan.areas.length ? [...plan.areas.map((a) => t(`areas.${a}`)), t("areas.core")] : plan.modules.map((m) => t(`billing.module_${m}`))).map((line) => (
+                        <li key={line} className="flex gap-2">
+                          <Check className="size-4 text-success" /> {line}
                         </li>
                       ))}
                     </ul>
@@ -87,6 +91,8 @@ export default async function BillingPage() {
               );
             })}
           </div>
+          </div>
+          ))}
           {history.length > 0 && (
             <Card>
               <CardHeader>

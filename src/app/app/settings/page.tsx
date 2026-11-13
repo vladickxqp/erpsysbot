@@ -20,6 +20,8 @@ import { PreferencesCard } from "./preferences-card";
 import { PrivacyCard } from "./privacy-card";
 import { SecurityCard } from "./security-card";
 import { CalendarLinkCard, LogoCard } from "./extras-card";
+import { allowedAreas, companyAreas } from "@/server/areas";
+import { AreasCard } from "./areas-card";
 import { ModulesCard } from "./modules-card";
 import { BusinessProfileCard } from "./business-profile-card";
 import { FeesCard } from "./fees-card";
@@ -84,6 +86,7 @@ export default async function SettingsPage() {
           <PreferencesCard initial={await myPreferences(ctx)} hasTelegram={!!telegram} hasMail={mailAvailable()} quickKeys={quickActions(ctx).map((a) => a.key)} />
           {ctx.permissions.has("settings.manage") && <BusinessProfileCard industries={cleanIndustries(o.industries)} t={t} />}
           {ctx.permissions.has("settings.manage") && <FeesCard percent={Number(o.paymentFeePercent ?? 0)} fixedCents={o.paymentFeeFixedCents ?? 0} />}
+          {ctx.permissions.has("settings.manage") && o.workspaceType !== "PERSONAL" && <AreasCard initial={companyAreas(ctx)} allowed={await allowedAreas(ctx.organization.id)} />}
           <ModulesCard companyOff={[...ctx.disabledModules]} myOff={[...ctx.hiddenModules]} canManage={ctx.permissions.has("settings.manage")} />
         </div>
         <div className="grid h-fit gap-4">

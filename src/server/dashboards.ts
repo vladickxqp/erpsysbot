@@ -196,6 +196,26 @@ export async function createDashboard(ctx: Context, name: string, template: "emp
   });
 }
 
+/** The board an area opens with: made on the first visit, with the area's first widgets. */
+export async function areaDashboard(ctx: Context, area: string, name: string, widgets: readonly string[]): Promise<Dashboard> {
+  return withTenant(ctx.organization.id, async (tx) => {
+    const [found] = await tx
+      .select()
+      .from(dashboards)
+      .where(and(eq(dashboards.userId, ctx.user.userId), eq(dashboards.area, area)))
+      .limit(1);
+    if (found) return { id: found.id, name: found.name, widgets: cleanWidgets(found.widgets) };
+    const allowed = availableWidgets(ctx);
+    const list = widgets.filter((w): w is WidgetType => (WIDGET_TYPES as readonly string[]).includes(w) && allowed.includes(w as WidgetType)).map(newWidget);
+    const [last] = await tx.select({ position: dashboards.position }).from(dashboards).where(eq(dashboards.userId, ctx.user.userId)).orderBy(desc(dashboards.position)).limit(1);
+    const [row] = await tx
+      .insert(dashboards)
+      .values({ organizationId: ctx.organization.id, userId: ctx.user.userId, name: nameSchema.parse(name.slice(0, 60)), position: (last?.position ?? -1) + 1, widgets: list, area })
+      .returning();
+    return { id: row.id, name: row.name, widgets: list };
+  });
+}
+
 /** Saves name and widgets of one's own dashboard; widgets one may not see are dropped. */
 export async function saveDashboard(ctx: Context, id: string, patch: { name?: string; widgets?: unknown }): Promise<Dashboard> {
   const allowed = new Set(availableWidgets(ctx));

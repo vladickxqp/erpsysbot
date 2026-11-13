@@ -10,6 +10,7 @@ import Stripe from "stripe";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { billingEvents, memberships, organizations, plans, subscriptions, suspensions } from "@/db/schema";
+import { AREAS, cleanAreas, modulesOfAreas, type Area } from "@/lib/areas";
 import { isBlockedCountry } from "@/lib/countries";
 import type { Context } from "./context";
 import { requirePermission } from "./permissions";
@@ -85,16 +86,19 @@ export const PLAN_MODULE_OF: Record<string, string> = {
   automation: "automation",
 };
 
-export type Entitlements = { active: boolean; unlimited: boolean; modules: Set<string>; maxUsers: number; aiPerDay: number; plan: Plan | null; sub: Subscription | null };
+export type Entitlements = { active: boolean; unlimited: boolean; modules: Set<string>; areas: Area[]; maxUsers: number; aiPerDay: number; plan: Plan | null; sub: Subscription | null };
 
 export async function entitlementsOf(organizationId: string): Promise<Entitlements> {
-  if (!billingEnabled()) return { active: true, unlimited: true, modules: new Set(MODULES), maxUsers: Infinity, aiPerDay: Infinity, plan: null, sub: null };
+  if (!billingEnabled()) return { active: true, unlimited: true, modules: new Set(MODULES), areas: [...AREAS], maxUsers: Infinity, aiPerDay: Infinity, plan: null, sub: null };
   const { sub, plan } = await subscriptionOf(organizationId);
   const active = isActive(sub);
+  const areas = plan?.areas?.length ? cleanAreas(plan.areas) : [...AREAS];
   return {
     active,
     unlimited: false,
-    modules: new Set(active ? (plan?.modules ?? []) : []),
+    // A plan by area brings the modules of its areas besides those it lists.
+    modules: new Set(active ? [...(plan?.modules ?? []), ...(plan?.areas?.length ? modulesOfAreas(areas) : [])] : []),
+    areas,
     maxUsers: plan?.maxUsers ?? 1,
     aiPerDay: active ? (plan?.aiPerDay ?? 0) : 0,
     plan,

@@ -25,7 +25,9 @@ import { cn } from "@/lib/utils";
 import { CommandPalette, openPalette } from "./command-palette";
 import { LocaleSwitch } from "./locale-switch";
 import { Logo } from "./logo";
-import { NAV, isActive, type Feature, type NavItem } from "./nav";
+import type { Area } from "@/lib/areas";
+import { AreaMenu, AreaSwitcher } from "./area-switcher";
+import { NAV, isActive, navSections, type Feature, type NavItem } from "./nav";
 import { NotificationBell } from "./notification-bell";
 import { openQuickTask, QuickTaskDialog } from "./quick-task";
 import { ThemeToggle } from "./theme-toggle";
@@ -41,6 +43,9 @@ export type ShellProps = {
   /** Modules switched off for the company or hidden by this person. */
   offModules: string[];
   favorites: string[];
+  /** The company's areas the menu offers, and the one shown (src/lib/areas.ts). */
+  areas: Area[];
+  area: Area | null;
   children: React.ReactNode;
 };
 
@@ -167,7 +172,7 @@ function UserMenu({ user }: Pick<ShellProps, "user">) {
   );
 }
 
-export function Shell({ user, company, companies, permissions, features, offModules, favorites, children }: ShellProps) {
+export function Shell({ user, company, companies, permissions, features, offModules, favorites, areas, area, children }: ShellProps) {
   const { t } = useI18n();
   const pathname = usePathname();
   const items = NAV.filter(
@@ -176,6 +181,8 @@ export function Shell({ user, company, companies, permissions, features, offModu
       (!item.feature || features.includes(item.feature)) &&
       (!item.module || !offModules.includes(item.module)),
   );
+  const sections = navSections(items, area, areas);
+  const ordered = sections.flatMap((s) => s.items);
   return (
     <div className="min-h-dvh bg-background">
       {/* Desktop: fixed sidebar */}
@@ -188,6 +195,11 @@ export function Shell({ user, company, companies, permissions, features, offModu
         <div className="px-3">
           <CompanySwitcher company={company} companies={companies} />
         </div>
+        {areas.length > 1 && (
+          <div className="px-3 pt-3">
+            <AreaSwitcher areas={areas} area={area} />
+          </div>
+        )}
         <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4" aria-label="Main">
           {favorites.length > 0 && (
             <div className="mb-2 space-y-1 border-b border-sidebar-border pb-2">
@@ -202,19 +214,26 @@ export function Shell({ user, company, companies, permissions, features, offModu
                 ))}
             </div>
           )}
-          {items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={isActive(pathname, href) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white",
-                isActive(pathname, href) && "bg-sidebar-accent text-white",
+          {sections.map((section) => (
+            <div key={section.key} className={cn("space-y-1", section.key !== "top" && "pt-3")}>
+              {area && (section.key === "area" || section.key === "core" || section.key === "more") && (
+                <div className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-sidebar-foreground/50 uppercase">{t(section.key === "area" ? `areas.${area}` : `areas.${section.key}`)}</div>
               )}
-            >
-              <Icon className="size-4" aria-hidden />
-              {t(label)}
-            </Link>
+              {section.items.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isActive(pathname, href) ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white",
+                    isActive(pathname, href) && "bg-sidebar-accent text-white",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {t(label)}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
@@ -224,6 +243,11 @@ export function Shell({ user, company, companies, permissions, features, offModu
           <Link href="/app" className="lg:hidden">
             <Logo />
           </Link>
+          {areas.length > 1 && (
+            <div className="lg:hidden">
+              <AreaMenu areas={areas} area={area} />
+            </div>
+          )}
           <GlobalSearch />
           <div className="ml-auto flex items-center gap-1">
             {permissions.includes("tasks.manage") && !offModules.includes("tasks") && (
@@ -241,7 +265,7 @@ export function Shell({ user, company, companies, permissions, features, offModu
       </div>
 
       {/* Mobile: bottom navigation */}
-      <MobileNav items={items} pathname={pathname} />
+      <MobileNav items={ordered} pathname={pathname} />
       <QuickTaskDialog />
       <CommandPalette items={items} permissions={permissions} offModules={offModules} favorites={favorites} assistant={features.includes("assistant") && permissions.includes("ai.use") && !offModules.includes("assistant")} />
     </div>

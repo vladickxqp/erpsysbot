@@ -1,4 +1,5 @@
 import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Store, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
+import { sectionOf, type Area } from "@/lib/areas";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
 
@@ -52,4 +53,29 @@ export const MODULE_LABEL: Record<AppModule, string> = Object.fromEntries(
 
 export function isActive(pathname: string, href: string): boolean {
   return href === "/app" ? pathname === "/app" : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Always at the top, whatever the area. */
+const TOP = new Set(["/app", "/app/today", "/app/inbox", "/app/assistant"]);
+
+export type NavSection = { key: "top" | "area" | "core" | "more" | "system"; items: NavItem[] };
+
+/**
+ * The menu while an area is shown: its own modules, then the core, then what
+ * is on but in none of the company's areas, then settings and the rest.
+ * Modules of the company's other areas wait one switch away.
+ */
+export function navSections(items: NavItem[], area: Area | null, areas: readonly Area[]): NavSection[] {
+  if (!area) return [{ key: "top", items }];
+  const by: Record<NavSection["key"], NavItem[]> = { top: [], area: [], core: [], more: [], system: [] };
+  for (const item of items) {
+    if (TOP.has(item.href)) {
+      by.top.push(item);
+      continue;
+    }
+    const section = sectionOf(item.module, area, areas);
+    if (section === "hidden") continue;
+    by[section === "none" ? "system" : section].push(item);
+  }
+  return (["top", "area", "core", "more", "system"] as const).map((key) => ({ key, items: by[key] })).filter((s) => s.items.length);
 }

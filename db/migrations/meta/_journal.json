@@ -169,6 +169,13 @@
       "when": 1794513994548,
       "tag": "0023_dropship",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794553326340,
+      "tag": "0024_areas",
+      "breakpoints": true
     }
   ]
 }

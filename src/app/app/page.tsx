@@ -1,6 +1,9 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AREA_COOKIE, AREA_WIDGETS } from "@/lib/areas";
+import { currentArea, shownAreas } from "@/server/areas";
 import { getT } from "@/i18n/server";
-import { availableWidgets, listDashboards, suggestedWidget, WIDGETS } from "@/server/dashboards";
+import { areaDashboard, availableWidgets, listDashboards, suggestedWidget, WIDGETS } from "@/server/dashboards";
 import { myInsights } from "@/server/insights";
 import { today, addDays } from "@/server/money";
 import { moduleOn } from "@/server/modules";
@@ -22,8 +25,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (!ctx.organization.workspaceType && ctx.permissions.has("settings.manage")) redirect("/app/welcome");
   const { t } = await getT();
   const sp = await searchParams;
+  // Several areas: each opens with a board of its own.
+  const areas = ctx.organization.workspaceType === "PERSONAL" ? [] : shownAreas(ctx);
+  const area = areas.length > 1 && !sp.d ? currentArea(areas, (await cookies()).get(AREA_COOKIE)?.value) : null;
+  const own = area ? await areaDashboard(ctx, area, t(`areas.${area}`), AREA_WIDGETS[area]) : null;
   const boards = await listDashboards(ctx, t("dashboard.title"));
-  const active = boards.find((b) => b.id === sp.d) ?? boards[0];
+  const active = boards.find((b) => b.id === (own?.id ?? sp.d)) ?? boards[0];
   const allowed = availableWidgets(ctx);
   const widgets = active.widgets.filter((w) => allowed.includes(w.type));
   const data = await loadWidgetData(ctx, new Set(widgets.map((w) => w.type)));

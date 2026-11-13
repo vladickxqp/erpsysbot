@@ -7,7 +7,8 @@
  */
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { cleanModules, withDependents, type AppModule } from "@/lib/modules";
+import { AREAS, modulesOfAreas } from "@/lib/areas";
+import { APP_MODULES, cleanModules, withDependents, type AppModule } from "@/lib/modules";
 import { customRoles, memberships, organizations } from "@/db/schema";
 import { entitlementsOf, PLAN_MODULE_OF } from "./billing";
 import { permissionsFor, type Permission, type Role } from "./permissions";
@@ -64,14 +65,19 @@ export async function contextFor(user: SessionUser): Promise<Context | null> {
   const active = rows.find((r) => r.organization.id === user.activeOrganizationId) ?? rows[0];
   const role = active.membership.role as Role;
   const disabledModules = new Set(withDependents(active.organization.disabledModules));
-  const permissions = permissionsFor(role, active.membership.permissions, active.customRights);
-  for (const [granted, modules] of PERMISSION_MODULES) {
-    if (modules.every((m) => disabledModules.has(m))) for (const p of granted) permissions.delete(p);
-  }
   // What the plan does not include (or everything, once the subscription ended) is not allowed —
   // in every action and route, not only on the pages. Billing and settings stay reachable.
   const ent = await entitlementsOf(active.organization.id);
   if (!ent.unlimited && !ent.active) for (const m of ["chat", "hr", "personal"] as const) disabledModules.add(m);
+  // A plan by area: the modules of the areas it does not include are off, with what builds on them.
+  if (!ent.unlimited && ent.active && ent.areas.length < AREAS.length) {
+    const included = new Set<AppModule>(modulesOfAreas(ent.areas));
+    for (const m of withDependents(APP_MODULES.filter((m) => m !== "personal" && !included.has(m)))) disabledModules.add(m);
+  }
+  const permissions = permissionsFor(role, active.membership.permissions, active.customRights);
+  for (const [granted, modules] of PERMISSION_MODULES) {
+    if (modules.every((m) => disabledModules.has(m))) for (const p of granted) permissions.delete(p);
+  }
   if (!ent.unlimited) {
     for (const p of [...permissions]) {
       if (p === "billing.manage" || p === "settings.manage") continue;

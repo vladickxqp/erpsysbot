@@ -12,6 +12,7 @@ import { getDb } from "@/db/client";
 import { automations, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { isLocale, MESSAGES, translator } from "@/i18n";
+import { areasOfIndustries } from "@/lib/areas";
 import { AUTOMATION_TEMPLATE_KEYS, AUTOMATION_TEMPLATES, INDUSTRIES, proposal, workspaceTypeOf } from "@/lib/industries";
 import { APP_MODULES, withDependents } from "@/lib/modules";
 import { audit } from "./audit";
@@ -43,7 +44,7 @@ export async function applyBusinessProfile(ctx: Context, raw: ProfileInput): Pro
 
   await getDb()
     .update(organizations)
-    .set({ industries, workspaceType: workspaceTypeOf(industries), disabledModules: off })
+    .set({ industries, areas: areasOfIndustries(industries), workspaceType: workspaceTypeOf(industries), disabledModules: off })
     .where(eq(organizations.id, ctx.organization.id));
 
   const t = translator(MESSAGES[isLocale(ctx.organization.locale) ? ctx.organization.locale : "de"]);

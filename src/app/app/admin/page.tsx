@@ -49,7 +49,7 @@ export default async function AdminPage() {
           review: c.suspensionKind === "REVIEW",
           mine: c.id === ctx.organization.id,
         }))}
-        plans={plans.map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents, maxUsers: p.maxUsers, aiPerDay: p.aiPerDay, modules: p.modules, stripePriceId: p.stripePriceId, active: p.active }))}
+        plans={plans.map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents, maxUsers: p.maxUsers, aiPerDay: p.aiPerDay, modules: p.modules, areas: p.areas, stripePriceId: p.stripePriceId, active: p.active }))}
         invites={invites.map((i) => ({ id: i.id, email: i.email, expiresAt: i.expiresAt.toISOString() }))}
       />
     </>

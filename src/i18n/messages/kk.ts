@@ -7,6 +7,7 @@ import orderFlow from "./orderFlow/kk";
 import store from "./store/kk";
 import dropship from "./dropship/kk";
 import aichat from "./aichat/kk";
+import areas from "./areas/kk";
 
 const kk: Messages = {
   hub,
@@ -17,6 +18,7 @@ const kk: Messages = {
   store,
   dropship,
   aichat,
+  areas,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",

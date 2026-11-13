@@ -2,7 +2,9 @@ import { ArrowRight, Bot, Check, ChevronDown, Clapperboard, Download, FolderKanb
 import Link from "next/link";
 import { LegalLinks } from "@/components/app/legal-links";
 import { Logo } from "@/components/app/logo";
+import { AreaPricing } from "@/components/landing/area-pricing";
 import { Audiences } from "@/components/landing/audiences";
+import { groupPlans } from "@/lib/areas";
 import { BackdropScene } from "@/components/landing/backdrop-scene";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { ProductMock } from "@/components/landing/product-mock";
@@ -207,6 +209,29 @@ export default async function Home() {
       <section id="pricing" className="relative scroll-mt-20 px-4 py-24 sm:px-6 sm:py-32">
         <div className="glow top-40 left-1/4" />
         <Heading title={t("landing.pricing.title")} sub={t("landing.pricing.sub", { days: TRIAL_DAYS })} />
+        {plans.some((p) => p.areas.length) ? (
+          <AreaPricing
+            month={t("billing.month")}
+            choose={user ? t("nav.dashboard") : t("landing.pricing.choose")}
+            href={startHref}
+            shelves={groupPlans(plans).map((group) => ({
+              key: group.key,
+              label: t(`areas.plan_${group.key}`),
+              plans: group.plans.map((plan, i) => ({
+                id: plan.id,
+                name: plan.name,
+                price: money(plan.priceCents),
+                featured: i === group.plans.length - 1,
+                lines: [
+                  t("billing.users", { count: plan.maxUsers }),
+                  ...(plan.aiPerDay > 0 ? [t("billing.ai", { count: plan.aiPerDay })] : []),
+                  ...plan.areas.map((a) => t(`areas.${a}`)),
+                  t("areas.core"),
+                ],
+              })),
+            }))}
+          />
+        ) : (
         <div className="mx-auto mt-14 grid max-w-6xl items-stretch gap-5 lg:grid-cols-3">
           {plans.map((plan, i) => {
             const previous = plans[i - 1];
@@ -249,6 +274,7 @@ export default async function Home() {
             );
           })}
         </div>
+        )}
         <Reveal className="mt-8 text-center text-sm text-white/50">{t("landing.pricing.noCard")}</Reveal>
       </section>
 

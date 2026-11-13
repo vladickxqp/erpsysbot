@@ -25,6 +25,7 @@ import { setCompanyLogo, updateCompany, type CompanyInput } from "@/server/compa
 import { deleteInvoiceTemplate, saveInvoiceTemplate, TemplateError, type TemplateInput } from "@/server/invoice-templates";
 import { takeMailThrottle } from "@/server/mail";
 import { deleteAccount, deleteCompany, PrivacyError } from "@/server/privacy";
+import { AreaError, setCompanyAreas } from "@/server/areas";
 import { setCompanyModules, setMyModules } from "@/server/modules";
 import { ForbiddenError } from "@/server/permissions";
 import { publicBase, requireContext } from "@/server/request";
@@ -234,4 +235,18 @@ export async function setLogoAction(documentId: string | null): Promise<Security
 export async function calendarLinkAction(): Promise<{ url: string }> {
   const ctx = await requireContext();
   return { url: `${await publicBase()}/api/calendar/${await newCalendarLink(ctx)}.ics` };
+}
+
+export async function saveAreasAction(areas: string[]): Promise<{ ok?: boolean; error?: string }> {
+  const ctx = await requireContext();
+  try {
+    await setCompanyAreas(ctx, areas);
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "common.forbidden" };
+    if (e instanceof AreaError) return { error: `areas.error.${e.code}` };
+    if (e instanceof ZodError) return { error: "auth.check" };
+    throw e;
+  }
 }

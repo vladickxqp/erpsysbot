@@ -207,6 +207,8 @@ export const organizations = pgTable("organizations", {
   workspaceType: text("workspace_type"),
   /** What the company does, several at once (src/lib/industries.ts). */
   industries: text("industries").array().notNull().default(sql`'{}'::text[]`),
+  /** The areas it works in (src/lib/areas.ts); empty: worked out from what it does. */
+  areas: text("areas").array().notNull().default(sql`'{}'::text[]`),
   /** Picture from the documents store, printed on invoices and quotes. */
   logoDocumentId: uuid("logo_document_id"),
   /** What the payment provider keeps of a sale: percent of the gross amount plus a fixed part (margins). */
@@ -296,6 +298,8 @@ export const plans = pgTable("plans", {
   aiPerDay: integer("ai_per_day").notNull().default(0),
   /** Module keys this plan includes (e.g. "invoices", "finance", "automation"). */
   modules: text("modules").array().notNull().default(sql`'{}'::text[]`),
+  /** The areas it includes (src/lib/areas.ts), with all their modules; empty: only the modules listed. */
+  areas: text("areas").array().notNull().default(sql`'{}'::text[]`),
   stripePriceId: text("stripe_price_id"),
   active: boolean("active").notNull().default(true),
   position: integer("position").notNull().default(0),
@@ -1470,6 +1474,8 @@ export const dashboards = pgTable(
     position: integer("position").notNull().default(0),
     /** [{ id, type, size 1–4, collapsed }] — checked by src/server/dashboards.ts. */
     widgets: jsonb("widgets").notNull().default(sql`'[]'::jsonb`),
+    /** The area this board opens with (src/lib/areas.ts), if any. */
+    area: text("area"),
     createdAt: createdAt(),
   },
   (t) => [index("dashboards_user_idx").on(t.organizationId, t.userId, t.position)],
