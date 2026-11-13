@@ -20,6 +20,8 @@ const sites: typeof de = {
   addPage: "Бет қосу",
   deletePageAsk: "Бетті жою керек пе?",
   deleteAsk: "Сайтты жою керек пе?",
+  confirmName: "Растау үшін атауы",
+  deleted: "Жойылды",
   undo: "Болдырмау",
   redo: "Қайталау",
   changed: "Жарияланбаған өзгерістер",

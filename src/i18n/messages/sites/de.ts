@@ -18,6 +18,8 @@ const sites = {
   addPage: "Seite hinzufügen",
   deletePageAsk: "Seite löschen?",
   deleteAsk: "Website löschen?",
+  confirmName: "Name zur Bestätigung",
+  deleted: "Gelöscht",
   undo: "Rückgängig",
   redo: "Wiederholen",
   changed: "Nicht veröffentlichte Änderungen",

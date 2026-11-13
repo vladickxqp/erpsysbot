@@ -20,6 +20,8 @@ const sites: typeof de = {
   addPage: "Add page",
   deletePageAsk: "Delete page?",
   deleteAsk: "Delete website?",
+  confirmName: "Name to confirm",
+  deleted: "Deleted",
   undo: "Undo",
   redo: "Redo",
   changed: "Unpublished changes",

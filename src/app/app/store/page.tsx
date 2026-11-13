@@ -16,7 +16,7 @@ export default async function StoresPage() {
   return (
     <>
       <PageHeader title={t("store.title")} />
-      <StoresView stores={stores.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status }))} />
+      <StoresView stores={stores.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status }))} canDelete={ctx.permissions.has("settings.manage")} />
     </>
   );
 }

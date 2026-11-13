@@ -116,9 +116,9 @@ export async function discardChangesAction(id: string): Promise<StoreResult> {
   return run(() => discardChanges(ctx, id));
 }
 
-export async function deleteStoreAction(id: string): Promise<StoreResult> {
+export async function deleteStoreAction(id: string, confirmName?: string): Promise<StoreResult> {
   const ctx = await requireContext();
-  return run(() => deleteStore(ctx, id));
+  return run(() => deleteStore(ctx, id, confirmName));
 }
 
 // --- The builder's AI -----------------------------------------------------------------------------

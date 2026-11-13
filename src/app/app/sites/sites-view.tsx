@@ -14,6 +14,7 @@ import { themeVars, type SiteKind, type Theme } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { FONT_STACKS } from "@/app/shop/[slug]/fonts";
 import { createStoreAction } from "../store/actions";
+import { DeleteSite } from "./delete-site";
 
 type Row = { id: string; name: string; slug: string; status: string; kind: SiteKind; theme: Theme };
 
@@ -22,7 +23,7 @@ const KINDS = [
   { kind: "company", icon: Building2 },
 ] as const;
 
-export function SitesView({ sites, ai }: { sites: Row[]; ai: boolean }) {
+export function SitesView({ sites, ai, canDelete = false }: { sites: Row[]; ai: boolean; canDelete?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
   const [name, setName] = useState("");
@@ -91,9 +92,12 @@ export function SitesView({ sites, ai }: { sites: Row[]; ai: boolean }) {
                   <Link href={`/app/sites/${s.id}`} className="min-w-0 truncate font-medium hover:underline">
                     {s.name}
                   </Link>
-                  <Badge variant={s.status === "PUBLISHED" ? "secondary" : "outline"} className={s.status === "PUBLISHED" ? "border-success/20 bg-success/10 text-success" : undefined}>
-                    {t(`store.status.${s.status}`)}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge variant={s.status === "PUBLISHED" ? "secondary" : "outline"} className={s.status === "PUBLISHED" ? "border-success/20 bg-success/10 text-success" : undefined}>
+                      {t(`store.status.${s.status}`)}
+                    </Badge>
+                    {canDelete && <DeleteSite site={s} selling={false} />}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
                   <span>{t(`sites.kind.${s.kind}`)}</span>

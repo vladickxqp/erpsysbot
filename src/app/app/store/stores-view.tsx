@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/client";
+import { DeleteSite } from "../sites/delete-site";
 import { createStoreAction } from "./actions";
 
 type Row = { id: string; name: string; slug: string; status: string };
 
-export function StoresView({ stores }: { stores: Row[] }) {
+export function StoresView({ stores, canDelete = false }: { stores: Row[]; canDelete?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
   const [name, setName] = useState("");
@@ -51,9 +52,12 @@ export function StoresView({ stores }: { stores: Row[] }) {
                     <Store className="size-4 shrink-0" />
                     <span className="truncate">{s.name}</span>
                   </Link>
-                  <Badge variant={s.status === "PUBLISHED" ? "secondary" : "outline"} className={s.status === "PUBLISHED" ? "border-success/20 bg-success/10 text-success" : undefined}>
-                    {t(`store.status.${s.status}`)}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge variant={s.status === "PUBLISHED" ? "secondary" : "outline"} className={s.status === "PUBLISHED" ? "border-success/20 bg-success/10 text-success" : undefined}>
+                      {t(`store.status.${s.status}`)}
+                    </Badge>
+                    {canDelete && <DeleteSite site={s} selling />}
+                  </div>
                 </div>
                 <a href={`/shop/${s.slug}`} target="_blank" rel="noreferrer" className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline">
                   /shop/{s.slug} <ExternalLink className="size-3.5" />

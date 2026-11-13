@@ -747,11 +747,12 @@ export async function setStoreStatus(ctx: Context, id: string, status: Exclude<S
   });
 }
 
-export async function deleteStore(ctx: Context, id: string): Promise<void> {
+/** A site goes for good; one that is online only when its name is typed again (`confirmName`). Orders of a shop stay. */
+export async function deleteStore(ctx: Context, id: string, confirmName?: string): Promise<void> {
   allow(ctx, await kindOf(ctx, id), "settings.manage");
   await withTenant(ctx.organization.id, async (tx) => {
     const row = await storeOf(tx, id);
-    if (row.status === "PUBLISHED") throw new StoreError("PUBLISHED");
+    if (row.status === "PUBLISHED" && (confirmName ?? "").trim() !== row.name.trim()) throw new StoreError("PUBLISHED");
     await tx.delete(stores).where(eq(stores.id, id));
     await audit(tx, ctx, "store.delete", "store", id, { slug: row.slug });
   });

@@ -20,6 +20,7 @@ export default async function SitesPage() {
       <SitesView
         sites={sites.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status, kind: s.kind, theme: s.theme }))}
         ai={ctx.permissions.has("ai.use") && assistantAvailable()}
+        canDelete={ctx.permissions.has("settings.manage")}
       />
     </>
   );

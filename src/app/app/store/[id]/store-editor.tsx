@@ -20,7 +20,6 @@ import { CHECKS_OF, REQUIRED_LEGAL_OF, type Section, type SiteKind, type SitePag
 import { STORE_PAGES, type Check as CheckName, type Design, type Pages, type Payments, type ShippingOption, type StorePage } from "@/lib/store";
 import { parseMoney } from "@/server/money";
 import {
-  deleteStoreAction,
   discardChangesAction,
   publishChangesAction,
   saveBasicsAction,
@@ -29,6 +28,7 @@ import {
   saveShippingAction,
   setStoreStatusAction,
 } from "../actions";
+import { DeleteSite } from "../../sites/delete-site";
 import { AiDialog } from "./ai-dialog";
 import { Field, newId, Preview, useSave } from "./editor-ui";
 import { PagesTab } from "./pages-tab";
@@ -469,20 +469,7 @@ function PublishTab({ store, checks, can }: EditorProps) {
                 {t("store.publish")}
               </Button>
             )}
-            {!published && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                disabled={pending}
-                onClick={() => {
-                  if (!window.confirm(t(selling ? "store.deleteAsk" : "sites.deleteAsk"))) return;
-                  run(() => deleteStoreAction(store.id), () => router.push(selling ? "/app/store" : "/app/sites"));
-                }}
-              >
-                <Trash2 className="size-4" /> {t("common.delete")}
-              </Button>
-            )}
+            <DeleteSite site={store} selling={selling} button onDeleted={() => router.push(selling ? "/app/store" : "/app/sites")} />
           </div>
         )}
       </div>

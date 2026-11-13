@@ -20,6 +20,8 @@ const sites: typeof de = {
   addPage: "Додати сторінку",
   deletePageAsk: "Видалити сторінку?",
   deleteAsk: "Видалити сайт?",
+  confirmName: "Назва для підтвердження",
+  deleted: "Видалено",
   undo: "Скасувати",
   redo: "Повторити",
   changed: "Неопубліковані зміни",

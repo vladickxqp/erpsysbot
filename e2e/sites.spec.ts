@@ -109,5 +109,15 @@ test("a company website is built, published, and a visitor's message becomes a l
   // The message is a lead in the CRM.
   await page.goto("/app/clients");
   await expect(page.getByText(/Muster/).first()).toBeVisible();
+
+  // The site goes again; being online, only with its name typed.
+  await page.goto("/app/sites");
+  await page.getByRole("button", { name: "Löschen" }).click();
+  const asking = page.getByRole("dialog");
+  await expect(asking.getByRole("button", { name: "Löschen" })).toBeDisabled();
+  await asking.getByLabel("Name zur Bestätigung").fill("E2E Elektro");
+  await asking.getByRole("button", { name: "Löschen" }).click();
+  await expect(page.getByText("Gelöscht").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "E2E Elektro" })).toHaveCount(0);
   expect(problems).toEqual([]);
 });
