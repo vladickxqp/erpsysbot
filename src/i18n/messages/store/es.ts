@@ -88,6 +88,7 @@ const store: typeof de = {
     shipping: "Un método de envío",
     address: "Dirección y correo de la empresa",
     legal: "Aviso legal, privacidad, condiciones, desistimiento",
+    texts: "Todos los marcadores [ … ] sustituidos",
   },
   publish: "Publicar",
   unpublish: "Desconectar",

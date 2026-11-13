@@ -331,6 +331,8 @@ const hub: HubMessages = {
     supplierOutOfStock: "{supplier} не може поставити замовлення {number} (замовлення {order})",
     supplierPrice: "{supplier}: нова закупівельна ціна на {product} ({from} → {to}, маржа {margin})",
     shopOrder: "Нове замовлення з магазину {number} на {amount} ({store})",
+    siteMessage: "Нове повідомлення з сайту {site}: {name}",
+    siteSignup: "Підписка на розсилку на сайті {site}: {name}",
     shopPayment: "Перевірте оплату замовлення {number} ({store})",
     automationFailed: "Автоматизацію «{name}» не виконано",
     clientAssigned: "Новий клієнт для вас: {client}",

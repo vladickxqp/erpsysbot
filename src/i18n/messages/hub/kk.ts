@@ -331,6 +331,8 @@ const hub: HubMessages = {
     supplierOutOfStock: "{supplier} {number} тапсырысты жеткізе алмайды ({order} тапсырыс)",
     supplierPrice: "{supplier}: {product} үшін жаңа сатып алу бағасы ({from} → {to}, маржа {margin})",
     shopOrder: "Дүкеннен жаңа тапсырыс {number}, {amount} ({store})",
+    siteMessage: "{site} сайтынан жаңа хабарлама: {name}",
+    siteSignup: "{site} сайтында таратылымға жазылу: {name}",
     shopPayment: "{number} тапсырыстың төлемін тексеріңіз ({store})",
     automationFailed: "«{name}» автоматтандыруы сәтсіз аяқталды",
     clientAssigned: "Сізге жаңа клиент: {client}",

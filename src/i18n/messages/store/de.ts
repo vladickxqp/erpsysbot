@@ -86,6 +86,7 @@ const store = {
     shipping: "Eine Versandart",
     address: "Firmenanschrift und E-Mail",
     legal: "Impressum, Datenschutz, AGB, Widerruf",
+    texts: "Alle Platzhalter [ … ] ersetzt",
   },
   publish: "Veröffentlichen",
   unpublish: "Offline nehmen",

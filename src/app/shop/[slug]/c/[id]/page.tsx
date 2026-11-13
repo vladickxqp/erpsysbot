@@ -3,10 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { storeCategories, storeProducts } from "@/server/storefront";
 import { PriceNote, ProductGrid } from "../../product-grid";
-import { shopOf } from "../../store";
+import { sellingShopOf } from "../../store";
 
 async function load(slug: string, id: string) {
-  const store = await shopOf(slug);
+  const store = await sellingShopOf(slug);
   const categories = await storeCategories(store);
   const category = categories.find((c) => c.id === id);
   if (!category) notFound();

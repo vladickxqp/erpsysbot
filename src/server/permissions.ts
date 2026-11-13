@@ -42,6 +42,7 @@ export const PERMISSIONS = [
   "content.read",
   "content.manage",
   "content.publish",
+  "sites.manage",
   "time.read",
   "time.manage",
 ] as const;
@@ -69,6 +70,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "documents.read", "documents.manage",
     "inventory.manage",
     "content.read", "content.manage", "content.publish",
+    "sites.manage",
     "time.read", "time.manage",
   ],
   EMPLOYEE: [

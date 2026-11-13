@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { orderForBuyer } from "@/server/storefront";
-import { shopOf, shopWords } from "../../store";
+import { sellingShopOf, shopWords } from "../../store";
 import { LOOK } from "../../ui";
 import { WaitForPayment } from "./wait-for-payment";
 
@@ -12,11 +12,11 @@ const STEPS = ["RESERVED", "PICKING", "PACKED", "SHIPPED", "DELIVERED"] as const
 
 export default async function BuyerOrderPage({ params, searchParams }: { params: Promise<{ slug: string; token: string }>; searchParams: Promise<{ paid?: string }> }) {
   const { slug, token } = await params;
-  const store = await shopOf(slug);
+  const store = await sellingShopOf(slug);
   const order = await orderForBuyer(store, token);
   if (!order) notFound();
   const { t, money } = shopWords(store);
-  const look = LOOK[store.design.template];
+  const look = LOOK;
   const back = (await searchParams).paid === "1";
   const cancelled = order.fulfillment === "CANCELLED";
   const at = STEPS.indexOf(order.fulfillment as (typeof STEPS)[number]);

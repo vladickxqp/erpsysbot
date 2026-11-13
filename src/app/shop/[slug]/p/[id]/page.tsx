@@ -3,12 +3,12 @@ import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { storeProduct } from "@/server/storefront";
 import { PriceNote } from "../../product-grid";
-import { shopOf, shopWords } from "../../store";
+import { sellingShopOf, shopWords } from "../../store";
 import { LOOK, PlainText, ShopImage } from "../../ui";
 import { BuyBox } from "./buy-box";
 
 async function load(slug: string, id: string) {
-  const store = await shopOf(slug);
+  const store = await sellingShopOf(slug);
   const product = await storeProduct(store, id);
   if (!product) notFound();
   return { store, product };
@@ -24,7 +24,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug, id } = await params;
   const { store, product } = await load(slug, id);
   const { t } = shopWords(store);
-  const look = LOOK[store.design.template];
+  const look = LOOK;
   const [main, ...more] = product.images;
   const facts = Object.entries(product.attributes).filter(([k, v]) => k.trim() && v.trim());
   return (

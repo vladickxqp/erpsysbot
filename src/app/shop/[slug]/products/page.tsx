@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import { storeProducts } from "@/server/storefront";
 import { PriceNote, ProductGrid } from "../product-grid";
-import { shopOf, shopWords } from "../store";
+import { sellingShopOf, shopWords } from "../store";
 import { fieldClass, ShopButton } from "../ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { t } = shopWords(await shopOf((await params).slug));
+  const { t } = shopWords(await sellingShopOf((await params).slug));
   return { title: t("store.shop.allProducts") };
 }
 
 export default async function AllProducts({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ q?: string }> }) {
-  const store = await shopOf((await params).slug);
+  const store = await sellingShopOf((await params).slug);
   const { t } = shopWords(store);
   const q = ((await searchParams).q ?? "").slice(0, 100);
   const products = await storeProducts(store, { q, limit: 120 });

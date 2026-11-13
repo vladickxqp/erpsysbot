@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { shopOf, shopWords } from "../store";
+import { sellingShopOf, shopWords } from "../store";
 import { CheckoutForm } from "./checkout-form";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { t } = shopWords(await shopOf((await params).slug));
+  const { t } = shopWords(await sellingShopOf((await params).slug));
   return { title: t("store.shop.checkout"), robots: { index: false } };
 }
 
 export default async function CheckoutPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ shipping?: string }> }) {
-  const store = await shopOf((await params).slug);
+  const store = await sellingShopOf((await params).slug);
   const { shipping } = await searchParams;
   // Named on the server: browsers name some countries differently than Node.
   const names = new Intl.DisplayNames([store.locale], { type: "region" });

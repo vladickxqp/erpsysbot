@@ -18,7 +18,8 @@ import { withTenant, type Tx } from "@/db/tenant";
 import { formatMoney, isLocale, MESSAGES, translator, type Locale } from "@/i18n";
 import { allowedRates } from "@/lib/countries";
 import { withDependents } from "@/lib/modules";
-import { grossCents, MAX_CART_LINES, MAX_QUANTITY, netOfGross, shippingCents, type Block, type Design, type Pages, type PaymentMethod, type ShippingOption } from "@/lib/store";
+import { siteModule, type Section, type SiteKind, type SitePage, type Theme } from "@/lib/site";
+import { grossCents, MAX_CART_LINES, MAX_QUANTITY, netOfGross, shippingCents, type Design, type Pages, type PaymentMethod, type ShippingOption } from "@/lib/store";
 import { choiceLabel, type VariantChoice, type VariantOption } from "@/lib/variants";
 import { audit } from "./audit";
 import { companyContext } from "./automations";
@@ -33,7 +34,7 @@ import { heldStock } from "./order-flow";
 import { isSuspended } from "./platform";
 import { appUrl } from "./settings";
 import { lineRows } from "./orders";
-import { viewOf, visibleProductFilter, withChildren, type StoreRow } from "./stores";
+import { contentOf, viewOf, visibleProductFilter, withChildren, type StoreRow } from "./stores";
 
 export class StorefrontError extends Error {
   constructor(
@@ -66,9 +67,15 @@ export type PublicStore = {
   name: string;
   slug: string;
   status: string;
+  /** The company's own people see edits that are not published yet. */
+  draft: boolean;
+  /** A store sells; a creator's or company website shows sections and takes messages. */
+  kind: SiteKind;
   locale: Locale;
   design: Design;
-  blocks: Block[];
+  theme: Theme;
+  blocks: Section[];
+  customPages: SitePage[];
   pages: Pages;
   shipping: ShippingOption[];
   shipCountries: string[];
@@ -96,10 +103,15 @@ export async function findStore(slug: string, previewFor?: Pick<Context, "organi
     .limit(1);
   if (!row || (await isSuspended(row.org.id))) return null;
   // Switched off by the company (or what it needs): closed to everyone.
-  if (withDependents(row.org.disabledModules).includes("store")) return null;
-  const own = !!previewFor && previewFor.organization.id === row.org.id && previewFor.permissions.has("products.manage");
+  if (withDependents(row.org.disabledModules).includes(siteModule(row.store.kind))) return null;
+  const own =
+    !!previewFor &&
+    previewFor.organization.id === row.org.id &&
+    (previewFor.permissions.has(row.store.kind === "creator" || row.store.kind === "company" ? "sites.manage" : "products.manage") || previewFor.permissions.has("settings.manage"));
   if (row.store.status !== "PUBLISHED" && !own) return null;
-  return publicOf(row.store, row.org, row.store.status !== "PUBLISHED");
+  // Visitors see what was published; the company's own people see their edits (with a note when they differ).
+  const shown = !own && row.store.live ? { ...row.store, ...(row.store.live as ReturnType<typeof contentOf>) } : row.store;
+  return { ...publicOf(shown, row.org, row.store.status !== "PUBLISHED"), draft: own && viewOf(row.store).changed };
 }
 
 function publicOf(storeRow: StoreRow, org: typeof organizations.$inferSelect, preview: boolean): PublicStore {
@@ -113,9 +125,13 @@ function publicOf(storeRow: StoreRow, org: typeof organizations.$inferSelect, pr
     name: view.name,
     slug: view.slug,
     status: view.status,
+    draft: false,
+    kind: view.kind,
     locale: isLocale(view.locale) ? view.locale : "de",
     design: view.design,
+    theme: view.theme,
     blocks: view.blocks,
+    customPages: view.customPages,
     pages: view.pages,
     shipping: view.shipping,
     shipCountries: view.shipCountries.length ? view.shipCountries : [org.country],
@@ -498,7 +514,7 @@ async function event(tx: Tx, organizationId: string, orderId: string, kind: stri
 
 /** The buyer's order: a client (found by e-mail or new), the order with its goods reserved, and a link to follow it. */
 export async function placeOrder(store: PublicStore, raw: CheckoutInput, visitor = "anonymous"): Promise<Placed> {
-  if (store.preview) throw new StorefrontError("CLOSED");
+  if (store.preview || store.kind !== "store") throw new StorefrontError("CLOSED");
   const input = checkoutInput.parse(raw);
   if (!store.methods.includes(input.payment)) throw new StorefrontError("PAYMENT");
   if (!store.shipping.some((o) => o.id === input.shippingId)) throw new StorefrontError("SHIPPING");
@@ -678,14 +694,16 @@ export async function orderForBuyer(store: PublicStore, token: string): Promise<
 
 // --- Pictures ----------------------------------------------------------------------------------
 
-/** A picture the store shows: its logo, a block's picture or a picture of a product it offers. Nothing else of the company's files. */
+/** A picture the site shows: its logo, a picture in one of its sections or a picture of a product it offers. Nothing else of the company's files. */
 export async function storeImage(store: PublicStore, documentId: string): Promise<{ file: string; size: number; mime: string } | null> {
   if (!z.string().uuid().safeParse(documentId).success) return null;
   return withTenant(store.organizationId, async (tx) => {
     const [doc] = await tx.select().from(documents).where(eq(documents.id, documentId)).limit(1);
     if (!doc || !/^image\/(png|jpeg|webp|gif)$/.test(doc.mimeType)) return null;
-    let shown = store.design.logoId === documentId || store.blocks.some((b) => b.imageId === documentId);
-    if (!shown) {
+    let shown =
+      store.design.logoId === documentId ||
+      [...store.blocks, ...store.customPages.flatMap((p) => p.sections)].some((s) => s.imageId === documentId || (s.items ?? []).some((i) => i.imageId === documentId));
+    if (!shown && store.kind === "store") {
       const filter = await visibleProductFilter(tx, store.categoryIds);
       const [hit] = await tx
         .select({ id: productImages.id })

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { ZodError } from "zod";
 import { currentContext } from "@/server/request";
 import { checkout } from "@/server/shop-payments";
+import { sendContact, type ContactInput } from "@/server/site-contact";
 import { findStore, priceCart, StorefrontError, type CartInput, type CheckoutInput, type PricedLine } from "@/server/storefront";
 
 export type CartView = {
@@ -56,6 +57,22 @@ export async function checkoutAction(slug: string, input: CheckoutInput): Promis
   } catch (e) {
     if (e instanceof StorefrontError) return { ok: false, error: `store.shop.error.${e.code}`, lines: e.lines };
     if (e instanceof ZodError) return { ok: false, error: "store.shop.error.FORM" };
+    throw e;
+  }
+}
+
+export type ContactResult = { ok: true } | { ok: false; error: string };
+
+/** A visitor's message or newsletter sign-up from a site's form. */
+export async function sendContactAction(slug: string, input: ContactInput): Promise<ContactResult> {
+  const store = await findStore(slug, await currentContext());
+  if (!store) return { ok: false, error: "sites.public.error.CLOSED" };
+  try {
+    await sendContact(store, input, await visitor());
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof StorefrontError) return { ok: false, error: e.code === "BUSY" ? "sites.public.error.BUSY" : "sites.public.error.CLOSED" };
+    if (e instanceof ZodError) return { ok: false, error: "sites.public.error.FORM" };
     throw e;
   }
 }

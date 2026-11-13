@@ -27,6 +27,7 @@ function contentSecurity(nonce: string, frameable = false): string {
     "font-src 'self' data:",
     `connect-src 'self'${dev ? " ws:" : ""}`,
     "worker-src 'self'",
+    ...(frameable ? ["frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com"] : []),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

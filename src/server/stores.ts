@@ -1,9 +1,12 @@
 /**
- * A company's online stores, as the app manages them: name and address,
- * design, the home page's blocks, the store's pages, shipping, payment and
- * publication. Editing needs products.manage; payment keys and going online
- * need settings.manage. A store is published only when every check passes —
- * which says the required parts are filled in, not that they are legally sound.
+ * A company's websites, as the app manages them: online stores (Commerce)
+ * and the creator's and company websites built the same way
+ * (src/lib/site.ts) — name and address, theme, the sections of the home page
+ * and of its own pages, the legal pages, and for a store shipping and
+ * payment. Editing a store needs products.manage, a website sites.manage;
+ * payment keys and going online need settings.manage. A site is published
+ * only when every check of its kind passes — which says the required parts
+ * are filled in, not that they are legally sound.
  */
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
@@ -12,37 +15,49 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { documents, organizations, productCategories, products, stores } from "@/db/schema";
 import { withTenant, type Tx } from "@/db/tenant";
-import { isLocale } from "@/i18n";
+import { isLocale, MESSAGES, translator } from "@/i18n";
 import {
-  BLOCK_TYPES,
-  CHECKS,
-  DEFAULT_DESIGN,
-  EMPTY_PAGES,
-  HEX,
-  MAX_BLOCKS,
-  REQUIRED_LEGAL,
-  TEMPLATES,
-  slugify,
-  starterBlocks,
-  validSlug,
-  type Block,
-  type Check,
-  type Design,
-  type Pages,
-  type Payments,
-  type ShippingOption,
-  type StoreStatus,
-} from "@/lib/store";
+  BACKGROUNDS,
+  CHECKS_OF,
+  embedOf,
+  FEATURE_ICONS,
+  FONT_PAIRS,
+  isSiteKind,
+  MAX_ITEMS,
+  MAX_PAGES,
+  MAX_SECTIONS,
+  PLACEHOLDER,
+  PRESET_NAMES,
+  RADII,
+  REQUIRED_LEGAL_OF,
+  safeLink,
+  SECTION_TYPES,
+  sectionTexts,
+  siteModule,
+  slugifyPage,
+  STARTER_PRESET,
+  starterSections,
+  STORE_ONLY,
+  THEME_PRESETS,
+  themeOf,
+  validPageSlug,
+  VARIANTS,
+  type Section,
+  type SiteKind,
+  type SitePage,
+  type Theme,
+} from "@/lib/site";
+import { DEFAULT_DESIGN, EMPTY_PAGES, HEX, slugify, validSlug, type Check, type Design, type Pages, type Payments, type ShippingOption, type StoreStatus } from "@/lib/store";
 import { audit } from "./audit";
 import { NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { assertModule } from "./modules";
-import { requirePermission } from "./permissions";
+import { requirePermission, type Permission } from "./permissions";
 import { hint, seal, unseal } from "./secret-box";
 
 export class StoreError extends Error {
   constructor(
-    public readonly code: "SLUG_INVALID" | "SLUG_TAKEN" | "CHECKS" | "STRIPE_KEY" | "STRIPE_WEBHOOK" | "PUBLISHED" | "MEDIA",
+    public readonly code: "SLUG_INVALID" | "SLUG_TAKEN" | "CHECKS" | "STRIPE_KEY" | "STRIPE_WEBHOOK" | "PUBLISHED" | "MEDIA" | "KIND" | "PAGE_SLUG",
     public readonly failed: Check[] = [],
   ) {
     super(code);
@@ -51,22 +66,43 @@ export class StoreError extends Error {
 
 export type StoreRow = typeof stores.$inferSelect;
 
-/** A store as the app shows it: everything but the secrets, which only say whether they are set. */
-export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "design" | "blocks" | "pages" | "shipping" | "payments"> & {
+/** A site as the app shows it: everything but the secrets, which only say whether they are set. */
+export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "live" | "kind" | "design" | "blocks" | "customPages" | "pages" | "shipping" | "payments"> & {
+  kind: SiteKind;
+  /** Published, with edits visitors do not see yet. */
+  changed: boolean;
   design: Design;
-  blocks: Block[];
+  theme: Theme;
+  blocks: Section[];
+  customPages: SitePage[];
   pages: Pages;
   shipping: ShippingOption[];
   payments: Payments;
   stripe: { key: boolean; webhook: boolean; hint: string | null };
 };
 
+const kindOfRow = (row: { kind: string }): SiteKind => (isSiteKind(row.kind) ? row.kind : "store");
+
+/** The parts of a site visitors see, as they are now: what publishing copies to `live`. */
+export const contentOf = (row: Pick<StoreRow, "design" | "blocks" | "customPages" | "pages">) => ({ design: row.design, blocks: row.blocks, customPages: row.customPages, pages: row.pages });
+
+/** Whether a site differs from what visitors see; jsonb keeps keys in its own order, so each part is compared. */
+function differs(row: StoreRow, live: unknown): boolean {
+  const now: Record<string, unknown> = contentOf(row);
+  const was = (live ?? {}) as Record<string, unknown>;
+  return Object.keys(now).some((k) => JSON.stringify(now[k]) !== JSON.stringify(was[k]));
+}
+
 export function viewOf(row: StoreRow): StoreView {
-  const { stripeSecretKey, stripeWebhookSecret, ...rest } = row;
+  const { stripeSecretKey, stripeWebhookSecret, live, ...rest } = row;
   return {
     ...rest,
+    kind: kindOfRow(row),
+    changed: row.status === "PUBLISHED" && !!live && differs(row, live),
     design: { ...DEFAULT_DESIGN, ...((row.design ?? {}) as Partial<Design>) },
-    blocks: (row.blocks ?? []) as Block[],
+    theme: themeOf(row.design),
+    blocks: (row.blocks ?? []) as Section[],
+    customPages: (row.customPages ?? []) as SitePage[],
     pages: { ...EMPTY_PAGES, ...((row.pages ?? {}) as Partial<Pages>) },
     shipping: (row.shipping ?? []) as ShippingOption[],
     payments: { bank: false, stripe: false, ...((row.payments ?? {}) as Partial<Payments>) },
@@ -86,25 +122,45 @@ async function storeOf(tx: Tx, id: string): Promise<StoreRow> {
   return row;
 }
 
-/** The right, and the module switched on: a store of a company without it stays closed in every action. */
-function allow(ctx: Context, permission: "products.manage" | "settings.manage") {
-  requirePermission(ctx.permissions, permission);
-  assertModule(ctx, "store");
+/** The right to edit a kind of site: products.manage for a store, sites.manage for a website. */
+export const editRight = (kind: SiteKind): Permission => (kind === "store" ? "products.manage" : "sites.manage");
+
+/** The right, and the kind's module switched on: a site of a company without it stays closed in every action. */
+function allow(ctx: Context, kind: SiteKind, permission: "edit" | "settings.manage" = "edit") {
+  requirePermission(ctx.permissions, permission === "edit" ? editRight(kind) : permission);
+  assertModule(ctx, siteModule(kind));
 }
 
-function canSee(ctx: Context) {
-  allow(ctx, ctx.permissions.has("products.manage") ? "products.manage" : "settings.manage");
+function canSee(ctx: Context, kind: SiteKind) {
+  allow(ctx, kind, ctx.permissions.has(editRight(kind)) ? "edit" : "settings.manage");
 }
 
-export async function listStores(ctx: Context): Promise<StoreView[]> {
-  canSee(ctx);
-  const rows = await withTenant(ctx.organization.id, (tx) => tx.select().from(stores).orderBy(asc(stores.createdAt)));
+/** The kind of one of the company's sites, for the right and the module it needs. */
+async function kindOf(ctx: Context, id: string): Promise<SiteKind> {
+  const [row] = await withTenant(ctx.organization.id, (tx) => tx.select({ kind: stores.kind }).from(stores).where(eq(stores.id, id)).limit(1));
+  if (!row) throw new NotFoundError();
+  return kindOfRow(row);
+}
+
+/** The company's stores (Commerce) or its websites. */
+export async function listStores(ctx: Context, scope: "store" | "sites" = "store"): Promise<StoreView[]> {
+  canSee(ctx, scope === "store" ? "store" : "company");
+  const kinds: SiteKind[] = scope === "store" ? ["store"] : ["creator", "company"];
+  const rows = await withTenant(ctx.organization.id, (tx) => tx.select().from(stores).where(inArray(stores.kind, kinds)).orderBy(asc(stores.createdAt)));
   return rows.map(viewOf);
 }
 
 export async function getStore(ctx: Context, id: string): Promise<StoreView> {
-  canSee(ctx);
+  canSee(ctx, await kindOf(ctx, id));
   return viewOf(await withTenant(ctx.organization.id, (tx) => storeOf(tx, id)));
+}
+
+/** What the AI needs to know of a site it helps to build; only for those who may edit it. */
+export async function siteBasics(ctx: Context, id: string): Promise<{ kind: SiteKind; locale: string; name: string }> {
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind);
+  const row = await withTenant(ctx.organization.id, (tx) => storeOf(tx, id));
+  return { kind, locale: row.locale, name: row.name };
 }
 
 /** The slug is free across all companies (stores live at one address each). */
@@ -124,28 +180,33 @@ export async function suggestSlug(name: string): Promise<string> {
 
 const name = z.string().trim().min(1).max(120);
 
-export async function createStore(ctx: Context, raw: { name: string }): Promise<StoreView> {
-  allow(ctx, "products.manage");
+export async function createStore(ctx: Context, raw: { name: string; kind?: SiteKind }): Promise<StoreView> {
+  const kind = raw.kind ?? "store";
+  if (!isSiteKind(kind)) throw new StoreError("KIND");
+  allow(ctx, kind);
   const storeName = name.parse(raw.name);
   const slug = await suggestSlug(storeName);
+  const locale = isLocale(ctx.organization.locale) ? ctx.organization.locale : "de";
   try {
     const row = await withTenant(ctx.organization.id, async (tx) => {
       const [created] = await tx
         .insert(stores)
         .values({
           organizationId: ctx.organization.id,
+          kind,
           name: storeName,
           slug,
-          locale: isLocale(ctx.organization.locale) ? ctx.organization.locale : "de",
-          design: DEFAULT_DESIGN,
-          blocks: starterBlocks(storeName, randomUUID),
+          locale,
+          design: { ...DEFAULT_DESIGN, ...themeOf({ preset: STARTER_PRESET[kind] }) },
+          blocks: starterSections(kind, storeName, randomUUID, translator(MESSAGES[locale])),
+          customPages: [],
           pages: EMPTY_PAGES,
           shipping: [],
           payments: { bank: false, stripe: false },
           contactEmail: ctx.organization.email,
         })
         .returning();
-      await audit(tx, ctx, "store.create", "store", created.id, { slug });
+      await audit(tx, ctx, "store.create", "store", created.id, { slug, kind });
       return created;
     });
     return viewOf(row);
@@ -177,7 +238,7 @@ const basicsInput = z.object({
 export type BasicsInput = z.input<typeof basicsInput>;
 
 export async function saveBasics(ctx: Context, id: string, raw: BasicsInput): Promise<void> {
-  allow(ctx, "products.manage");
+  allow(ctx, await kindOf(ctx, id));
   const input = basicsInput.parse(raw);
   if (!validSlug(input.slug)) throw new StoreError("SLUG_INVALID");
   if (!(await slugFree(input.slug, id))) throw new StoreError("SLUG_TAKEN");
@@ -215,51 +276,227 @@ const text = (max: number) =>
     .optional()
     .transform((v) => v ?? "");
 
-const designInput = z.object({
-  template: z.enum(TEMPLATES),
+const themeInput = z.object({
+  preset: z.string().refine((p) => PRESET_NAMES.includes(p)),
+  mode: z.enum(["light", "dark"]),
+  font: z.enum(FONT_PAIRS),
+  radius: z.enum(RADII),
+  animate: z.boolean(),
   primary: z.string().regex(HEX),
   accent: z.string().regex(HEX),
   logoId: z.string().uuid().nullish().transform((v) => v ?? null),
   tagline: text(160),
 });
+export type ThemeInput = z.input<typeof themeInput>;
 
-export async function saveDesign(ctx: Context, id: string, raw: z.input<typeof designInput>): Promise<void> {
-  allow(ctx, "products.manage");
-  const design = designInput.parse(raw);
+/** The look: a preset with the company's colours, fonts and corners, its logo and tagline. */
+export async function saveTheme(ctx: Context, id: string, raw: ThemeInput): Promise<void> {
+  allow(ctx, await kindOf(ctx, id));
+  const input = themeInput.parse(raw);
   await withTenant(ctx.organization.id, async (tx) => {
-    await storeOf(tx, id);
-    await assertImages(tx, [design.logoId]);
-    await tx.update(stores).set({ design, updatedAt: new Date() }).where(eq(stores.id, id));
-    await audit(tx, ctx, "store.design", "store", id);
+    const row = await storeOf(tx, id);
+    await assertImages(tx, [input.logoId]);
+    await tx
+      .update(stores)
+      .set({ design: { ...((row.design ?? {}) as object), ...input }, updatedAt: new Date() })
+      .where(eq(stores.id, id));
+    await audit(tx, ctx, "store.theme", "store", id, { preset: input.preset });
   });
 }
 
-const blockInput = z.object({
+const optionalId = z.string().uuid().nullish().transform((v) => v ?? null);
+/** Only links a visitor may follow are kept (src/lib/site.ts safeLink). */
+const link = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .transform((v) => safeLink(v) ?? "");
+
+const itemInput = z.object({
   id: z.string().min(1).max(64),
-  type: z.enum(BLOCK_TYPES),
   title: text(160),
-  text: text(4000),
-  imageId: z.string().uuid().nullish().transform((v) => v ?? null),
-  productIds: z.array(z.string().uuid()).max(24).default([]),
-  categoryId: z.string().uuid().nullish().transform((v) => v ?? null),
-  limit: z.coerce.number().int().min(1).max(24).default(8),
-  buttonLabel: text(40),
+  text: text(1200),
+  value: text(60),
+  label: text(120),
+  imageId: optionalId,
+  link,
+  icon: z.enum(FEATURE_ICONS).optional().catch(undefined),
+  highlight: z.boolean().optional().default(false),
 });
 
-export async function saveBlocks(ctx: Context, id: string, raw: unknown[]): Promise<void> {
-  allow(ctx, "products.manage");
-  const blocks = z.array(blockInput).max(MAX_BLOCKS).parse(raw);
+const sectionInput = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.enum(SECTION_TYPES),
+    variant: z.string().max(20).optional(),
+    background: z.enum(BACKGROUNDS).optional().catch(undefined),
+    title: text(160),
+    subtitle: text(300),
+    text: text(4000),
+    buttonLabel: text(40),
+    link,
+    imageId: optionalId,
+    productIds: z.array(z.string().uuid()).max(24).default([]),
+    categoryId: optionalId,
+    limit: z.coerce.number().int().min(1).max(24).default(8),
+    videoUrl: z
+      .string()
+      .trim()
+      .max(300)
+      .optional()
+      .transform((v) => (v && embedOf(v) ? v : "")),
+    hidden: z.boolean().optional().default(false),
+    items: z.array(itemInput).max(MAX_ITEMS).default([]),
+  })
+  .transform((s): Section => ({ ...s, variant: VARIANTS[s.type]?.includes(s.variant ?? "") ? s.variant : VARIANTS[s.type]?.[0] }));
+
+/** Sections as sent, checked; a website keeps no store sections (they need a catalogue). */
+const sectionsOf = (kind: SiteKind, raw: unknown): Section[] =>
+  z
+    .array(sectionInput)
+    .max(MAX_SECTIONS)
+    .parse(raw)
+    .filter((s) => kind === "store" || !STORE_ONLY.includes(s.type));
+
+/** What is not the company's own is refused (pictures) or dropped (products, categories), not trusted. */
+async function cleanSections(tx: Tx, list: Section[]): Promise<Section[]> {
+  await assertImages(tx, list.flatMap((s) => [s.imageId, ...(s.items ?? []).map((i) => i.imageId)]));
+  const productIds = [...new Set(list.flatMap((s) => s.productIds ?? []))];
+  const known = productIds.length ? new Set((await tx.select({ id: products.id }).from(products).where(inArray(products.id, productIds))).map((p) => p.id)) : new Set<string>();
+  const categoryIds = [...new Set(list.map((s) => s.categoryId).filter((v): v is string => !!v))];
+  const cats = categoryIds.length
+    ? new Set((await tx.select({ id: productCategories.id }).from(productCategories).where(inArray(productCategories.id, categoryIds))).map((c) => c.id))
+    : new Set<string>();
+  return list.map((s) => ({ ...s, productIds: (s.productIds ?? []).filter((p) => known.has(p)), categoryId: s.categoryId && cats.has(s.categoryId) ? s.categoryId : null }));
+}
+
+/** The sections of the home page ("home") or of one of the site's own pages (by its id). */
+export async function saveSections(ctx: Context, id: string, page: string, raw: unknown[]): Promise<void> {
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind);
+  const list = sectionsOf(kind, raw);
   await withTenant(ctx.organization.id, async (tx) => {
-    await storeOf(tx, id);
-    await assertImages(tx, blocks.map((b) => b.imageId));
-    const productIds = [...new Set(blocks.flatMap((b) => b.productIds))];
-    const known = productIds.length ? new Set((await tx.select({ id: products.id }).from(products).where(inArray(products.id, productIds))).map((p) => p.id)) : new Set<string>();
-    const categoryIds = [...new Set(blocks.map((b) => b.categoryId).filter((v): v is string => !!v))];
-    const cats = categoryIds.length ? new Set((await tx.select({ id: productCategories.id }).from(productCategories).where(inArray(productCategories.id, categoryIds))).map((c) => c.id)) : new Set<string>();
-    // What is not the company's own is dropped, not trusted.
-    const clean: Block[] = blocks.map((b) => ({ ...b, productIds: b.productIds.filter((p) => known.has(p)), categoryId: b.categoryId && cats.has(b.categoryId) ? b.categoryId : null }));
-    await tx.update(stores).set({ blocks: clean, updatedAt: new Date() }).where(eq(stores.id, id));
-    await audit(tx, ctx, "store.blocks", "store", id, { blocks: clean.length });
+    const row = await storeOf(tx, id);
+    const clean = await cleanSections(tx, list);
+    if (page === "home") {
+      await tx.update(stores).set({ blocks: clean, updatedAt: new Date() }).where(eq(stores.id, id));
+    } else {
+      const pages = (row.customPages ?? []) as SitePage[];
+      if (!pages.some((p) => p.id === page)) throw new NotFoundError();
+      await tx
+        .update(stores)
+        .set({ customPages: pages.map((p) => (p.id === page ? { ...p, sections: clean } : p)), updatedAt: new Date() })
+        .where(eq(stores.id, id));
+    }
+    await audit(tx, ctx, "store.sections", "store", id, { page, sections: clean.length });
+  });
+}
+
+const pageListInput = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(64).optional(),
+      title: z.string().trim().min(1).max(80),
+      slug: z.string().trim().toLowerCase().max(40),
+      inMenu: z.boolean().default(true),
+    }),
+  )
+  .max(MAX_PAGES);
+export type PageListInput = z.input<typeof pageListInput>;
+
+/** The site's own pages: order, titles, addresses, place in the menu; a new page starts with a title section. */
+export async function saveSitePages(ctx: Context, id: string, raw: PageListInput): Promise<SitePage[]> {
+  allow(ctx, await kindOf(ctx, id));
+  const list = pageListInput.parse(raw);
+  const slugs = new Set<string>();
+  for (const p of list) {
+    if (!validPageSlug(p.slug) || slugs.has(p.slug)) throw new StoreError("PAGE_SLUG");
+    slugs.add(p.slug);
+  }
+  return withTenant(ctx.organization.id, async (tx) => {
+    const row = await storeOf(tx, id);
+    const before = new Map(((row.customPages ?? []) as SitePage[]).map((p) => [p.id, p]));
+    const pages: SitePage[] = list.map((p) => {
+      const old = p.id ? before.get(p.id) : undefined;
+      return {
+        id: old?.id ?? randomUUID(),
+        title: p.title,
+        slug: p.slug,
+        inMenu: p.inMenu,
+        sections: old?.sections ?? [{ id: randomUUID(), type: "hero", variant: "centered", background: "soft", title: p.title, text: "" }],
+      };
+    });
+    await tx.update(stores).set({ customPages: pages, updatedAt: new Date() }).where(eq(stores.id, id));
+    await audit(tx, ctx, "store.site_pages", "store", id, { pages: pages.map((p) => p.slug) });
+    return pages;
+  });
+}
+
+const applyInput = z.object({
+  theme: z.object({
+    preset: z.string().optional(),
+    mode: z.enum(["light", "dark"]).optional(),
+    font: z.enum(FONT_PAIRS).optional(),
+    radius: z.enum(RADII).optional(),
+    primary: z.string().regex(HEX).optional(),
+    accent: z.string().regex(HEX).optional(),
+  }),
+  tagline: text(160),
+  sections: z.array(z.unknown()).max(MAX_SECTIONS),
+  pages: z
+    .array(z.object({ title: z.string().trim().min(1).max(80), slug: z.string().trim().max(40).default(""), sections: z.array(z.unknown()).max(MAX_SECTIONS) }))
+    .max(MAX_PAGES),
+  categories: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
+  /** Add the suggested categories the catalogue does not have yet (stores only). */
+  createCategories: z.boolean().default(false),
+});
+export type ApplyInput = z.input<typeof applyInput>;
+
+/** A proposal (from the AI) taken over: the theme, the home page and the own pages are replaced; nothing goes online by itself. */
+export async function applySite(ctx: Context, id: string, raw: ApplyInput): Promise<void> {
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind);
+  const input = applyInput.parse(raw);
+  const home = sectionsOf(kind, input.sections);
+  const taken = new Set<string>();
+  const drafts = input.pages.map((p) => {
+    const slug = validPageSlug(p.slug) && !taken.has(p.slug) ? p.slug : slugifyPage(p.title, taken);
+    taken.add(slug);
+    return { title: p.title, slug, sections: sectionsOf(kind, p.sections) };
+  });
+  const theme: Partial<Theme> = {};
+  if (input.theme.preset && PRESET_NAMES.includes(input.theme.preset)) theme.preset = input.theme.preset;
+  if (input.theme.mode) theme.mode = input.theme.mode;
+  if (input.theme.font) theme.font = input.theme.font;
+  if (input.theme.radius) theme.radius = input.theme.radius;
+  if (input.theme.primary) theme.primary = input.theme.primary;
+  if (input.theme.accent) theme.accent = input.theme.accent;
+  await withTenant(ctx.organization.id, async (tx) => {
+    const row = await storeOf(tx, id);
+    const pages: SitePage[] = [];
+    for (const d of drafts) pages.push({ id: randomUUID(), title: d.title, slug: d.slug, inMenu: true, sections: await cleanSections(tx, d.sections) });
+    // A new preset brings its own colours and fonts unless the proposal names them.
+    const design = { ...((row.design ?? {}) as object), ...(theme.preset ? THEME_PRESETS[theme.preset] : {}), ...theme, ...(input.tagline ? { tagline: input.tagline } : {}) };
+    await tx
+      .update(stores)
+      .set({ design, blocks: await cleanSections(tx, home), customPages: pages, updatedAt: new Date() })
+      .where(eq(stores.id, id));
+    let created = 0;
+    if (kind === "store" && input.createCategories && input.categories.length) {
+      const existing = await tx.select({ name: productCategories.name, parentId: productCategories.parentId }).from(productCategories);
+      const names = new Set(existing.filter((c) => !c.parentId).map((c) => c.name.toLowerCase()));
+      const fresh = [...new Map(input.categories.map((c) => [c.toLowerCase(), c])).values()].filter((c) => !names.has(c.toLowerCase()));
+      if (fresh.length) {
+        const rows = await tx
+          .insert(productCategories)
+          .values(fresh.map((n, i) => ({ organizationId: ctx.organization.id, name: n, position: existing.length + i })))
+          .onConflictDoNothing()
+          .returning({ id: productCategories.id });
+        created = rows.length;
+      }
+    }
+    await audit(tx, ctx, "store.ai_apply", "store", id, { sections: home.length, pages: pages.length, categories: created });
   });
 }
 
@@ -275,7 +512,7 @@ const pagesInput = z.object({
 });
 
 export async function savePages(ctx: Context, id: string, raw: Partial<Pages>): Promise<void> {
-  allow(ctx, "products.manage");
+  allow(ctx, await kindOf(ctx, id));
   const pages: Pages = pagesInput.parse(raw);
   await withTenant(ctx.organization.id, async (tx) => {
     await storeOf(tx, id);
@@ -296,7 +533,9 @@ const shippingInput = z
   .max(10);
 
 export async function saveShippingOptions(ctx: Context, id: string, raw: z.input<typeof shippingInput>): Promise<void> {
-  allow(ctx, "products.manage");
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind);
+  if (kind !== "store") throw new StoreError("KIND");
   const options: ShippingOption[] = shippingInput.parse(raw).map((o) => ({ ...o, id: o.id ?? randomUUID() }));
   await withTenant(ctx.organization.id, async (tx) => {
     await storeOf(tx, id);
@@ -326,7 +565,9 @@ const paymentsInput = z.object({
 });
 
 export async function savePayments(ctx: Context, id: string, raw: z.input<typeof paymentsInput>, check: KeyCheck = stripeKeyWorks): Promise<void> {
-  allow(ctx, "settings.manage");
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind, "settings.manage");
+  if (kind !== "store") throw new StoreError("KIND");
   const input = paymentsInput.parse(raw);
   const patch: Partial<typeof stores.$inferInsert> = { updatedAt: new Date() };
   if (input.removeStripe) Object.assign(patch, { stripeSecretKey: null, stripeWebhookSecret: null, stripeKeyHint: null });
@@ -383,7 +624,7 @@ export async function visibleProductFilter(tx: Tx, categoryIds: readonly string[
 export type Checklist = { passed: Record<Check, boolean>; missingPages: string[]; ready: boolean };
 
 export async function checklist(ctx: Context, id: string): Promise<Checklist> {
-  canSee(ctx);
+  canSee(ctx, await kindOf(ctx, id));
   const org = await companyOf(ctx.organization.id);
   return withTenant(ctx.organization.id, async (tx) => checksOf(tx, await storeOf(tx, id), org));
 }
@@ -396,39 +637,47 @@ async function companyOf(organizationId: string) {
 
 async function checksOf(tx: Tx, row: StoreRow, org: Awaited<ReturnType<typeof companyOf>> | undefined): Promise<Checklist> {
   const store = viewOf(row);
-  const filter = await visibleProductFilter(tx, row.categoryIds);
-  const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(products).where(filter);
-  const missingPages = REQUIRED_LEGAL.filter((p) => !store.pages[p].trim());
+  const selling = store.kind === "store";
+  let offered = 0;
+  if (selling) {
+    const filter = await visibleProductFilter(tx, row.categoryIds);
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(products).where(filter);
+    offered = Number(n);
+  }
+  const missingPages = REQUIRED_LEGAL_OF[store.kind].filter((p) => !store.pages[p].trim());
+  const shown = [...store.blocks, ...store.customPages.flatMap((p) => p.sections)].filter((s) => !s.hidden);
   const passed: Record<Check, boolean> = {
     name: !!store.name.trim() && validSlug(store.slug),
-    products: Number(n) > 0,
-    payment: (store.payments.bank && !!org?.iban) || (store.payments.stripe && store.stripe.key && store.stripe.webhook),
-    shipping: store.shipping.length > 0,
+    // What a store needs to sell; a website sells nothing.
+    products: !selling || offered > 0,
+    payment: !selling || (store.payments.bank && !!org?.iban) || (store.payments.stripe && store.stripe.key && store.stripe.webhook),
+    shipping: !selling || store.shipping.length > 0,
     address: !!(org?.street && org.postalCode && org.city && (store.contactEmail || org.email)),
     legal: missingPages.length === 0,
+    texts: !sectionTexts(shown).some((text) => PLACEHOLDER.test(text)),
   };
-  return { passed, missingPages, ready: CHECKS.every((c) => passed[c]) };
+  return { passed, missingPages, ready: CHECKS_OF[store.kind].every((c) => passed[c]) };
 }
 
 export async function setStoreStatus(ctx: Context, id: string, status: Exclude<StoreStatus, "DRAFT">): Promise<void> {
-  allow(ctx, "settings.manage");
+  allow(ctx, await kindOf(ctx, id), "settings.manage");
   const org = status === "PUBLISHED" ? await companyOf(ctx.organization.id) : undefined;
   await withTenant(ctx.organization.id, async (tx) => {
     const row = await storeOf(tx, id);
     if (status === "PUBLISHED") {
       const checks = await checksOf(tx, row, org);
-      if (!checks.ready) throw new StoreError("CHECKS", CHECKS.filter((c) => !checks.passed[c]));
+      if (!checks.ready) throw new StoreError("CHECKS", CHECKS_OF[kindOfRow(row)].filter((c) => !checks.passed[c]));
     }
     await tx
       .update(stores)
-      .set({ status, updatedAt: new Date(), ...(status === "PUBLISHED" ? { publishedAt: new Date() } : {}) })
+      .set({ status, updatedAt: new Date(), ...(status === "PUBLISHED" ? { publishedAt: new Date(), live: contentOf(row) } : {}) })
       .where(eq(stores.id, id));
     await audit(tx, ctx, status === "PUBLISHED" ? "store.publish" : "store.unpublish", "store", id);
   });
 }
 
 export async function deleteStore(ctx: Context, id: string): Promise<void> {
-  allow(ctx, "settings.manage");
+  allow(ctx, await kindOf(ctx, id), "settings.manage");
   await withTenant(ctx.organization.id, async (tx) => {
     const row = await storeOf(tx, id);
     if (row.status === "PUBLISHED") throw new StoreError("PUBLISHED");
@@ -437,9 +686,38 @@ export async function deleteStore(ctx: Context, id: string): Promise<void> {
   });
 }
 
+/** Edits of a published site go online; the checks of its kind must pass again. */
+export async function publishChanges(ctx: Context, id: string): Promise<void> {
+  allow(ctx, await kindOf(ctx, id), "settings.manage");
+  const org = await companyOf(ctx.organization.id);
+  await withTenant(ctx.organization.id, async (tx) => {
+    const row = await storeOf(tx, id);
+    if (row.status !== "PUBLISHED") throw new StoreError("CHECKS");
+    const checks = await checksOf(tx, row, org);
+    if (!checks.ready) throw new StoreError("CHECKS", CHECKS_OF[kindOfRow(row)].filter((c) => !checks.passed[c]));
+    await tx.update(stores).set({ live: contentOf(row), publishedAt: new Date(), updatedAt: new Date() }).where(eq(stores.id, id));
+    await audit(tx, ctx, "store.publish_changes", "store", id);
+  });
+}
+
+/** Edits not yet published are dropped: the site is again what visitors see. */
+export async function discardChanges(ctx: Context, id: string): Promise<void> {
+  allow(ctx, await kindOf(ctx, id));
+  await withTenant(ctx.organization.id, async (tx) => {
+    const row = await storeOf(tx, id);
+    const live = row.live as ReturnType<typeof contentOf> | null;
+    if (!live) return;
+    await tx
+      .update(stores)
+      .set({ design: live.design, blocks: live.blocks, customPages: live.customPages, pages: live.pages, updatedAt: new Date() })
+      .where(eq(stores.id, id));
+    await audit(tx, ctx, "store.discard_changes", "store", id);
+  });
+}
+
 /** Products to choose for a product row on the home page. */
 export async function productChoices(ctx: Context): Promise<{ id: string; name: string }[]> {
-  allow(ctx, "products.manage");
+  allow(ctx, "store");
   return withTenant(ctx.organization.id, (tx) =>
     tx
       .select({ id: products.id, name: products.name })
@@ -450,9 +728,9 @@ export async function productChoices(ctx: Context): Promise<{ id: string; name: 
   );
 }
 
-/** Images of the company, to choose a logo or a block's picture from. */
-export async function storeImages(ctx: Context) {
-  allow(ctx, "products.manage");
+/** Images of the company, to choose a logo or a section's picture from. */
+export async function storeImages(ctx: Context, kind: SiteKind = "store") {
+  allow(ctx, kind);
   return withTenant(ctx.organization.id, (tx) =>
     tx
       .select({ id: documents.id, name: documents.name })

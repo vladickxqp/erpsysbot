@@ -8,6 +8,7 @@ import store from "./store/uk";
 import dropship from "./dropship/uk";
 import aichat from "./aichat/uk";
 import areas from "./areas/uk";
+import sites from "./sites/uk";
 
 const uk: Messages = {
   hub,
@@ -19,6 +20,7 @@ const uk: Messages = {
   dropship,
   aichat,
   areas,
+  sites,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Увесь ваш бізнес. Уся ваша робота." },
   common: {
     save: "Зберегти",
@@ -1440,6 +1442,7 @@ const uk: Messages = {
       automation: "Автоматизації",
       content: "Контент",
       time: "Облік часу",
+      sites: "Сайти",
     },
     action: { admin: "Адміністрування", read: "Перегляд", create: "Створення", update: "Редагування", delete: "Видалення", manage: "Керування", issue: "Виставлення", cancel: "Сторнування", export: "Експорт", use: "Використання", publish: "Публікація" },
   },

@@ -65,7 +65,7 @@ test("a store is set up, published, and a visitor orders from it", async ({ page
   await page.getByRole("button", { name: "Speichern" }).click();
   await expect(page.getByText("Gespeichert").first()).toBeVisible();
 
-  await page.getByRole("tab", { name: "Seiten" }).click();
+  await page.getByRole("tab", { name: "Rechtliches" }).click();
   for (const [label, text] of [["Impressum", "E2E Laden GmbH"], ["Datenschutz", "Daten"], ["AGB", "Bedingungen"], ["Widerrufsbelehrung", "Widerruf"]]) {
     await page.getByLabel(new RegExp(`^${label}`)).fill(text);
   }

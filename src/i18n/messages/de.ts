@@ -7,6 +7,7 @@ import store from "./store/de";
 import dropship from "./dropship/de";
 import aichat from "./aichat/de";
 import areas from "./areas/de";
+import sites from "./sites/de";
 
 const de = {
   hub,
@@ -18,6 +19,7 @@ const de = {
   dropship,
   aichat,
   areas,
+  sites,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
@@ -1439,6 +1441,7 @@ const de = {
       automation: "Automationen",
       content: "Inhalte",
       time: "Zeiterfassung",
+      sites: "Websites",
     },
     action: { admin: "Verwaltung", read: "Ansehen", create: "Anlegen", update: "Bearbeiten", delete: "Löschen", manage: "Verwalten", issue: "Festschreiben", cancel: "Stornieren", export: "Exportieren", use: "Nutzen", publish: "Veröffentlichen" },
   },

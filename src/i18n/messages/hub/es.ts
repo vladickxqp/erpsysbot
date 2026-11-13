@@ -331,6 +331,8 @@ const hub: HubMessages = {
     supplierOutOfStock: "{supplier} no puede entregar el pedido al proveedor {number} (pedido {order})",
     supplierPrice: "{supplier}: nuevo precio de compra de {product} ({from} → {to}, margen {margin})",
     shopOrder: "Nuevo pedido de la tienda {number} por {amount} ({store})",
+    siteMessage: "Nuevo mensaje desde {site}: {name}",
+    siteSignup: "Suscripción al boletín desde {site}: {name}",
     shopPayment: "Revise el pago del pedido {number} ({store})",
     automationFailed: "La automatización «{name}» falló",
     clientAssigned: "Nuevo cliente para ti: {client}",

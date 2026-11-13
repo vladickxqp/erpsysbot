@@ -12,6 +12,13 @@ export const shopOf = cache(async (slug: string): Promise<PublicStore> => {
   return store;
 });
 
+/** A store's own pages (catalogue, cart, checkout, orders): not part of a creator's or company website. */
+export const sellingShopOf = cache(async (slug: string): Promise<PublicStore> => {
+  const store = await shopOf(slug);
+  if (store.kind !== "store") notFound();
+  return store;
+});
+
 /** Texts and amounts in the store's own language and currency. */
 export function shopWords(store: PublicStore) {
   const t = translator(MESSAGES[store.locale]);

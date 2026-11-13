@@ -23,7 +23,7 @@ export const isArea = (value: unknown): value is Area => typeof value === "strin
 export const cleanAreas = (values: readonly unknown[] | null | undefined): Area[] => AREAS.filter((a) => (values ?? []).includes(a));
 
 /** In every area. */
-export const CORE_MODULES: AppModule[] = ["crm", "calendar", "tasks", "documents", "media", "invoices", "finance", "reports", "team", "chat", "automation", "assistant", "integrations"];
+export const CORE_MODULES: AppModule[] = ["crm", "calendar", "tasks", "documents", "media", "invoices", "finance", "reports", "team", "chat", "automation", "assistant", "integrations", "sites"];
 
 /** What each area adds to the core; a module may serve several areas. */
 export const AREA_MODULES: Record<Area, AppModule[]> = {

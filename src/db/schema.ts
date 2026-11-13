@@ -960,10 +960,16 @@ export const stores = pgTable(
     slug: text("slug").notNull(),
     /** DRAFT, PUBLISHED or UNPUBLISHED. */
     status: text("status").notNull().default("DRAFT"),
+    /** store (sells, with cart and checkout), creator or company: what the site is for (src/lib/site.ts). */
+    kind: text("kind").notNull().default("store"),
     locale: text("locale").notNull().default("de"),
     design: jsonb("design").notNull().default({}),
-    /** The home page, block by block. */
+    /** The home page, section by section. */
     blocks: jsonb("blocks").notNull().default([]),
+    /** The site's own pages besides the home page, each with its sections. */
+    customPages: jsonb("custom_pages").notNull().default([]),
+    /** What visitors see of a published site (design, blocks, customPages, pages); edits wait until they are published. */
+    live: jsonb("live"),
     /** About, contact and the legal pages, as the company wrote them. */
     pages: jsonb("pages").notNull().default({}),
     /** The categories it shows; empty: all. */

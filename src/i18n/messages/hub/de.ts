@@ -330,6 +330,8 @@ const hub = {
     supplierOutOfStock: "{supplier} kann Lieferantenbestellung {number} nicht liefern (Auftrag {order})",
     supplierPrice: "{supplier}: neuer Einkaufspreis für {product} ({from} → {to}, Marge {margin})",
     shopOrder: "Neue Shop-Bestellung {number} über {amount} ({store})",
+    siteMessage: "Neue Nachricht über {site}: {name}",
+    siteSignup: "Newsletter-Anmeldung über {site}: {name}",
     shopPayment: "Zahlung zu Bestellung {number} prüfen ({store})",
     automationFailed: "Automation „{name}“ ist fehlgeschlagen",
     clientAssigned: "Neuer Kunde für dich: {client}",

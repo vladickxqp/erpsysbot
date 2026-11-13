@@ -51,7 +51,7 @@ export const AUTOMATION_TEMPLATE_KEYS = Object.keys(AUTOMATION_TEMPLATES) as Aut
 
 type Profile = { modules: AppModule[]; widgets: WidgetName[]; automations: AutomationTemplate[] };
 
-const BASE: AppModule[] = ["crm", "calendar", "tasks", "quotes", "invoices", "finance", "documents", "reports", "team", "assistant", "integrations", "automation"];
+const BASE: AppModule[] = ["crm", "calendar", "tasks", "quotes", "invoices", "finance", "documents", "reports", "team", "assistant", "integrations", "automation", "sites"];
 const STORE_WIDGETS: WidgetName[] = ["quickActions", "openOrders", "revenue", "profit", "outstanding", "insights", "clients", "cashFlow", "recentInvoices"];
 const PROJECT_WIDGETS: WidgetName[] = ["quickActions", "projects", "myTasks", "teamWorkload", "timeWeek", "deadlines", "outstanding", "revenue", "clients"];
 const WORKSHOP_WIDGETS: WidgetName[] = ["quickActions", "agenda", "openOrders", "myTasks", "timeWeek", "outstanding", "revenue", "clients", "insights"];
@@ -65,7 +65,7 @@ export const INDUSTRY_PROFILES: Record<Industry, Profile> = {
   IT_COMPANY: { modules: [...BASE, "pipeline", "time", "hr", "chat"], widgets: PROJECT_WIDGETS, automations: ["overdueReminder", "projectDoneInvoice"] },
   SOFTWARE: { modules: [...BASE, "pipeline", "time", "hr", "chat"], widgets: PROJECT_WIDGETS, automations: ["overdueReminder", "projectDoneInvoice"] },
   FREELANCER: {
-    modules: ["crm", "calendar", "tasks", "time", "quotes", "invoices", "finance", "documents", "reports", "assistant", "integrations"],
+    modules: ["crm", "calendar", "tasks", "time", "quotes", "invoices", "finance", "documents", "reports", "assistant", "integrations", "sites"],
     widgets: ["quickActions", "insights", "myTasks", "projects", "timeWeek", "outstanding", "revenue", "expenses", "agenda"],
     automations: ["overdueReminder", "projectDoneInvoice"],
   },
@@ -75,7 +75,7 @@ export const INDUSTRY_PROFILES: Record<Industry, Profile> = {
   MANUFACTURING: { modules: [...BASE, "products", "inventory", "orders", "time", "hr"], widgets: PRODUCTION_WIDGETS, automations: ["overdueReminder", "lowStock", "newOrderTask"] },
   LOGISTICS: { modules: [...BASE, "orders", "time", "hr", "chat"], widgets: PRODUCTION_WIDGETS, automations: ["overdueReminder", "newOrderTask"] },
   CREATOR: {
-    modules: ["crm", "calendar", "tasks", "time", "quotes", "invoices", "finance", "documents", "media", "content", "social", "reports", "team", "chat", "assistant", "integrations"],
+    modules: ["crm", "calendar", "tasks", "time", "quotes", "invoices", "finance", "documents", "media", "content", "social", "reports", "team", "chat", "assistant", "integrations", "sites"],
     widgets: ["quickActions", "insights", "content", "social", "myTasks", "deadlines", "revenue", "expenses", "agenda"],
     automations: ["overdueReminder"],
   },

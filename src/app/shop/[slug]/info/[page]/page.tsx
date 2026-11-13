@@ -7,8 +7,8 @@ import { PlainText } from "../../ui";
 async function load(slug: string, page: string) {
   if (!isStorePage(page)) notFound();
   const store = await shopOf(slug);
-  // The shipping page always lists the options; the others exist once they have text.
-  if (page !== "shipping" && !store.pages[page].trim()) notFound();
+  // A store's shipping page always lists the options; the others exist once they have text.
+  if (page === "shipping" ? store.kind !== "store" : !store.pages[page].trim()) notFound();
   return { store, page: page as StorePage };
 }
 

@@ -1,0 +1,77 @@
+/* The websites' own look; the layout sets the variables from the site's theme (theme.ts). */
+
+[data-site] {
+  font-family: var(--site-body-font);
+}
+
+[data-site] :is(h1, h2, h3, .site-heading) {
+  font-family: var(--site-heading-font);
+  letter-spacing: -0.015em;
+}
+
+/* Sections float in once as they come into view, unless the visitor asked for less motion. */
+.site-reveal {
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.site-reveal[data-hidden] {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.site-gradient {
+  background-image: linear-gradient(120deg, var(--shop-primary), var(--shop-accent), var(--shop-primary));
+  background-size: 220% 220%;
+  animation: site-gradient 16s ease infinite;
+}
+
+@keyframes site-gradient {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.site-glow {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--shop-accent) 45%, transparent), transparent);
+  filter: blur(40px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-reveal,
+  .site-reveal[data-hidden] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .site-gradient {
+    animation: none;
+  }
+}
+
+/* A site in dark mode: the store's own pages (product, cart, checkout) follow its colours. */
+[data-site-mode="dark"] .bg-white {
+  background-color: var(--site-card);
+}
+
+[data-site-mode="dark"] :is(.bg-slate-50, .bg-slate-100, .bg-stone-50) {
+  background-color: var(--site-soft);
+}
+
+[data-site-mode="dark"] :is(.text-slate-900, .text-stone-900) {
+  color: var(--site-fg);
+}
+
+[data-site-mode="dark"] :is(.text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400) {
+  color: var(--site-muted);
+}
+
+[data-site-mode="dark"] :is(.border-slate-200, .border-slate-300) {
+  border-color: var(--site-border);
+}

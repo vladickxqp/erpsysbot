@@ -6,7 +6,7 @@ import { LOOK, ShopImage } from "./ui";
 
 export function ProductGrid({ store, products }: { store: PublicStore; products: ShopProduct[] }) {
   const { t, money } = shopWords(store);
-  const look = LOOK[store.design.template];
+  const look = LOOK;
   if (!products.length) return <p className="py-8 text-center text-sm text-slate-500">{t("store.shop.noProducts")}</p>;
   return (
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">

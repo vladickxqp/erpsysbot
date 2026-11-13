@@ -17,6 +17,7 @@ export const APP_MODULES = [
   "products",
   "inventory",
   "store",
+  "sites",
   "documents",
   "media",
   "content",
@@ -52,6 +53,7 @@ const PATHS: [string, AppModule][] = [
   ["/app/products", "products"],
   ["/app/purchasing", "inventory"],
   ["/app/store", "store"],
+  ["/app/sites", "sites"],
   ["/app/documents", "documents"],
   ["/app/media", "media"],
   ["/app/content", "content"],
@@ -113,5 +115,5 @@ export const WORKSPACE_OFF: Record<WorkspaceType, AppModule[]> = {
   BUSINESS: ["content", "social", "time", "personal"],
   CREATOR: ["pipeline", "orders", "products", "inventory", "store", "automation", "personal", "hr"],
   FREELANCER: ["orders", "products", "inventory", "store", "content", "social", "team", "automation", "personal", "hr", "chat"],
-  PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "store", "content", "social", "reports", "team", "automation", "integrations", "hr", "chat"],
+  PERSONAL: ["crm", "pipeline", "orders", "quotes", "invoices", "products", "inventory", "store", "sites", "content", "social", "reports", "team", "automation", "integrations", "hr", "chat"],
 };

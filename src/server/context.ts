@@ -47,6 +47,7 @@ const PERMISSION_MODULES: [Permission[], AppModule[]][] = [
   [["documents.read", "documents.manage"], ["documents", "media"]],
   [["content.manage", "content.publish"], ["content"]],
   [["content.read"], ["content", "social"]],
+  [["sites.manage"], ["sites"]],
   [["automation.manage"], ["automation"]],
   [["employees.read", "employees.manage"], ["team"]],
   [["ai.use", "ai.admin"], ["assistant"]],

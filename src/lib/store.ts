@@ -70,7 +70,7 @@ export type PaymentMethod = "bank" | "stripe";
 export type Payments = { bank: boolean; stripe: boolean };
 
 /** What must be in place before a store goes online. */
-export const CHECKS = ["name", "products", "payment", "shipping", "address", "legal"] as const;
+export const CHECKS = ["name", "products", "payment", "shipping", "address", "legal", "texts"] as const;
 export type Check = (typeof CHECKS)[number];
 
 /**
