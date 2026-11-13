@@ -99,31 +99,37 @@ async function ask(ctx: Context, create: CreateMessage, system: string, prompt: 
   requirePermission(ctx.permissions, "ai.use");
   if (!assistantAvailable() && create === createMessage) throw new AssistantError("NOT_CONFIGURED");
   await checkAiLimits(ctx);
-  let response: Anthropic.Beta.BetaMessage;
-  try {
-    response = await create({
-      model: assistantModel(),
-      max_tokens: 8000,
-      system,
-      messages: [{ role: "user", content: prompt }],
-      output_config: { effort: "low", format: { type: "json_schema", schema } },
-    } as Anthropic.Beta.MessageCreateParamsNonStreaming);
-  } catch (e) {
-    const status = (e as { status?: number }).status;
-    if (status === 401 || status === 403) throw new AssistantError("NOT_CONFIGURED");
-    if (status === 429 || (status !== undefined && status >= 500) || (e instanceof Error && /not reachable|stopped answering/i.test(e.message))) throw new AssistantError("BUSY");
-    throw new AssistantError("FAILED");
-  }
-  await recordGeneration(ctx, kind, response);
-  const text = response.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .replace(/^```(?:json)?\s*|\s*```$/g, "");
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new AssistantError("FAILED");
+  // An answer that cannot be read (cut off, not JSON) is asked for once more before giving up.
+  for (let attempt = 0; ; attempt++) {
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      response = await create({
+        model: assistantModel(),
+        max_tokens: 8000,
+        system,
+        messages: [{ role: "user", content: prompt }],
+        output_config: { effort: "low", format: { type: "json_schema", schema } },
+      } as Anthropic.Beta.MessageCreateParamsNonStreaming);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      console.warn(`site-ai: request failed (${status ?? (e instanceof Error ? e.message.slice(0, 80) : "error")})`);
+      if (status === 401 || status === 403) throw new AssistantError("NOT_CONFIGURED");
+      if (status === 429 || (status !== undefined && status >= 500) || (e instanceof Error && /not reachable|stopped answering/i.test(e.message))) throw new AssistantError("BUSY");
+      throw new AssistantError("FAILED");
+    }
+    await recordGeneration(ctx, kind, response);
+    if (response.stop_reason === "refusal") throw new AssistantError("REFUSED");
+    const text = response.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .replace(/^```(?:json)?\s*|\s*```$/g, "");
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.warn(`site-ai: unreadable answer (${response.stop_reason}, ${text.length} characters)${attempt === 0 ? ", asking again" : ""}`);
+      if (attempt >= 1) throw new AssistantError("FAILED");
+    }
   }
 }
 

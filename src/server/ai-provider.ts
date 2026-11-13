@@ -172,6 +172,19 @@ export function fromChat(body: unknown, model: string): Message {
 const resting = new Map<string, number>();
 const REST_MS = 5 * 60_000;
 
+/**
+ * How long a model rests after failing: until its daily quota comes back when
+ * that is what ran out (Gemini says when), otherwise a few minutes.
+ */
+export function restFor(e: unknown): number {
+  if (!(e instanceof Anthropic.APIError) || e.status !== 429) return REST_MS;
+  const text = String(e.message ?? "");
+  if (!/per ?day|PerDay|daily/i.test(text)) return REST_MS;
+  const m = /retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i.exec(text);
+  const ms = m ? ((Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 1000 : 0;
+  return Math.min(24 * 3_600_000, Math.max(REST_MS, ms || 3_600_000));
+}
+
 /** Tests start with every model awake. */
 export function wakeGeminiModels(): void {
   resting.clear();
@@ -199,7 +212,7 @@ export async function geminiCreate(params: Params, fetcher: typeof fetch = fetch
       failure = e;
       const next = e instanceof Anthropic.APIConnectionError || (e instanceof Anthropic.APIError && e.status !== undefined && NEXT_MODEL.has(e.status));
       if (!next) throw e;
-      resting.set(model, Date.now() + REST_MS);
+      resting.set(model, Date.now() + restFor(e));
     }
   }
   throw failure;
@@ -253,7 +266,10 @@ async function geminiOnce(params: Params, fetcher: typeof fetch, firstByteMs: nu
       return fromChat(body, params.model);
     }
     try {
-      return fromChat(await readStream(res, () => clearTimeout(firstByte)), params.model);
+      const body = await readStream(res, () => clearTimeout(firstByte));
+      // A stream that ends without saying why was cut off (Gemini does that under load): half an answer is no answer.
+      if (!body.choices?.[0]?.finish_reason) throw new Anthropic.APIConnectionError({ message: "AI service stopped answering" });
+      return fromChat(body, params.model);
     } catch (e) {
       if (e instanceof Anthropic.APIError) throw e;
       throw new Anthropic.APIConnectionError({ message: "AI service stopped answering", cause: e instanceof Error ? e : undefined });
