@@ -13,6 +13,8 @@ export function startScheduler(): void {
     await job(() => import("./notifications").then((m) => m.deliverWaiting()));
     await job(() => import("./daily-jobs").then((m) => m.runDailyJobs()));
     await job(() => import("./assistant/agents").then((m) => m.runDueAgents()));
+    // Parcels sent with DHL, when the server has a key: at most every two hours each.
+    await job(() => import("./shipments").then((m) => m.syncDhl()));
   };
   timer = setInterval(run, 15 * 60_000);
   timer.unref?.();

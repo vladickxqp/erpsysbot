@@ -181,6 +181,7 @@ const store: typeof de = {
     paid: {
       UNPAID: "Әлі төленбеген",
       PAID: "Төленді",
+      PARTIALLY_REFUNDED: "Ішінара қайтарылды",
       REFUNDED: "Қайтарылды",
     },
     progress: "Барысы",

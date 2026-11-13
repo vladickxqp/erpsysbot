@@ -15,7 +15,7 @@ export type Channel = (typeof CHANNELS)[number];
 export const FULFILLMENT = ["UNFULFILLED", "RESERVED", "PICKING", "PACKED", "AT_SUPPLIER", "SHIPPED", "DELIVERED", "CANCELLED"] as const;
 export type Fulfillment = (typeof FULFILLMENT)[number];
 
-export const PAYMENT = ["UNPAID", "PAID", "REFUNDED"] as const;
+export const PAYMENT = ["UNPAID", "PAID", "PARTIALLY_REFUNDED", "REFUNDED"] as const;
 export type Payment = (typeof PAYMENT)[number];
 
 export const ORDER_ACTIONS = ["confirm", "pick", "pack", "ship", "deliver", "cancel", "markPaid", "markUnpaid", "refund"] as const;
@@ -61,7 +61,7 @@ export const STATUS_AFTER: Partial<Record<OrderAction, OrderStatus>> = {
 export function canDo(action: OrderAction, state: { fulfillment: Fulfillment; payment: Payment }): boolean {
   if (action === "markPaid") return state.payment === "UNPAID" && state.fulfillment !== "CANCELLED";
   if (action === "markUnpaid") return state.payment === "PAID" && state.fulfillment !== "CANCELLED";
-  if (action === "refund") return state.payment === "PAID";
+  if (action === "refund") return state.payment === "PAID" || state.payment === "PARTIALLY_REFUNDED";
   return FROM[action].includes(state.fulfillment);
 }
 

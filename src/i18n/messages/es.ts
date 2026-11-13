@@ -9,6 +9,7 @@ import dropship from "./dropship/es";
 import aichat from "./aichat/es";
 import areas from "./areas/es";
 import sites from "./sites/es";
+import aftersales from "./aftersales/es";
 
 const es: Messages = {
   hub,
@@ -21,6 +22,7 @@ const es: Messages = {
   aichat,
   areas,
   sites,
+  aftersales,
   brand: { name: "NEXORA ONE", tagline: "Una plataforma. Todo tu negocio. Todo tu trabajo." },
   common: {
     save: "Guardar",
@@ -1208,6 +1210,10 @@ const es: Messages = {
       store: "Tienda online",
       supplier: "Proveedor",
       supplier_order: "Pedido a proveedor",
+      return: "Devolución",
+      refund: "Reembolso",
+      shipment: "Envío",
+      supplier_return: "Devolución al proveedor",
       task: "Tarea",
       team: "Equipo",
       transaction: "Movimiento",

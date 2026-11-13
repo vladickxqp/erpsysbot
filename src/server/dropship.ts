@@ -43,6 +43,7 @@ import { nextNumber } from "./numbers";
 import { requirePermission } from "./permissions";
 import { hint, seal, unseal } from "./secret-box";
 import { appUrl } from "./settings";
+import { deliverShipments, recordShipment } from "./shipments";
 
 export class DropshipError extends Error {
   constructor(public readonly code: "STEP" | "SETUP") {
@@ -561,6 +562,9 @@ export async function applySupplierAction(
   if (action === "cancel") Object.assign(patch, { status: "CANCELLED", cancelledAt: now, nextAttemptAt: null });
   for (const key of ["externalRef", "carrier", "trackingNumber", "note"] as const) if (input[key]) data[key] = input[key];
   await tx.update(supplierOrders).set(patch).where(eq(supplierOrders.id, id));
+  // The supplier's parcel is a shipment of the customer's order.
+  if (action === "ship") await recordShipment(tx, { organizationId: so.organizationId, orderId: so.orderId, supplierOrderId: id, carrier: patch.carrier ?? null, trackingNumber: patch.trackingNumber ?? null, userId: actor.userId, source: "supplier", at: now });
+  if (action === "deliver") await deliverShipments(tx, { organizationId: so.organizationId, supplierOrderId: id }, actor.userId, "supplier", now);
   await orderEvent(tx, actor, so.orderId, `supplier.${action}`, data);
   if (actor.ctx) await audit(tx, actor.ctx, `supplier_order.${action}`, "supplier_order", id, { from, number: so.number }, actor.via);
   const status = action === "retry" ? await evaluate(tx, company, id) : ((patch.status ?? from) as SupplierOrderStatus);

@@ -181,6 +181,7 @@ const store: typeof de = {
     paid: {
       UNPAID: "Pendiente de pago",
       PAID: "Pagado",
+      PARTIALLY_REFUNDED: "Reembolsado en parte",
       REFUNDED: "Reembolsado",
     },
     progress: "Progreso",

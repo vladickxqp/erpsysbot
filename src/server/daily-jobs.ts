@@ -13,6 +13,7 @@ import { computeInsights } from "./insights";
 import { today } from "./money";
 import { companyLeads, notify } from "./notifications";
 import { isSuspended } from "./platform";
+import { checkShipments } from "./shipments";
 
 const HOUR = 8;
 const done = new Map<string, string>();
@@ -91,5 +92,6 @@ export async function runDailyJobs(at = new Date()): Promise<void> {
     if (await isSuspended(org.id)) continue;
     await followUpInvoices(org.id, day);
     await pushInsights(org.id);
+    await checkShipments(org.id, at).catch((e) => console.error("daily: shipments failed", e instanceof Error ? e.message : e));
   }
 }

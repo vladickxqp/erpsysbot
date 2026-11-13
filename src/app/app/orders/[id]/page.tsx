@@ -11,6 +11,10 @@ import { supplierOrdersOf } from "@/server/dropship";
 import { SupplierOrderList } from "../../purchasing/supplier-orders";
 import { OrderDetail } from "./order-detail";
 import { OrderFlowPanel } from "./order-flow-panel";
+import { refundsOf } from "@/server/refunds";
+import { returnableLines, returnsOfOrder } from "@/server/returns";
+import { shipmentsOf } from "@/server/shipments";
+import { AfterSale } from "./after-sale";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePageContext("orders.read");
@@ -31,6 +35,9 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   // Companies that sell goods see the way of the goods; service companies keep the plain order.
   const flow = [...ctx.disabledModules].includes("products") ? null : await getOrderFlow(ctx, id);
   const supplierOrders = flow ? await supplierOrdersOf(ctx, id) : [];
+  const after = flow
+    ? await Promise.all([shipmentsOf(ctx, id), returnsOfOrder(ctx, id), returnableLines(ctx, id), refundsOf(ctx, id)]).then(([shipments, returns, lines, refunds]) => ({ shipments, returns, lines, refunds }))
+    : null;
   const { t } = await getT();
   return (
     <OrderDetail
@@ -73,6 +80,16 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             hasLines={items.length > 0}
             canUpdate={ctx.permissions.has("orders.update")}
           />
+          {after && (
+            <AfterSale
+              orderId={order.id}
+              shipments={after.shipments}
+              returns={after.returns}
+              lines={after.lines.map((l) => ({ orderItemId: l.orderItemId, description: l.description, left: l.left, allowed: l.allowed, until: l.until }))}
+              refunds={after.refunds}
+              can={{ update: ctx.permissions.has("orders.update"), refund: ctx.permissions.has("orders.update") && (ctx.permissions.has("finance.create") || ctx.permissions.has("settings.manage")) }}
+            />
+          )}
           {supplierOrders.length > 0 && (
             <Card className="mb-6">
               <CardHeader>

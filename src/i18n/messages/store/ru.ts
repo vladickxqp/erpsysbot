@@ -181,6 +181,7 @@ const store: typeof de = {
     paid: {
       UNPAID: "Ещё не оплачен",
       PAID: "Оплачен",
+      PARTIALLY_REFUNDED: "Частично возвращено",
       REFUNDED: "Деньги возвращены",
     },
     progress: "Ход заказа",

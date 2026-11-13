@@ -950,6 +950,190 @@ export const supplierOrderItems = pgTable(
   (t) => [index("supplier_order_items_order_idx").on(t.supplierOrderId), index("supplier_order_items_offer_idx").on(t.offerId)],
 );
 
+// --- Shipments, returns, refunds ------------------------------------------------------------------
+
+/** A parcel on its way to a customer: from the company's warehouse or straight from a supplier (src/lib/shipping.ts). */
+export const shipments = pgTable(
+  "shipments",
+  {
+    id: id(),
+    organizationId: orgId(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    /** Sent by this supplier order (direct shipping); null: from the company. */
+    supplierOrderId: uuid("supplier_order_id").references(() => supplierOrders.id, { onDelete: "set null" }),
+    /** CARRIERS; "other" keeps its name in carrierName. */
+    carrier: text("carrier").notNull().default("other"),
+    carrierName: text("carrier_name"),
+    trackingNumber: text("tracking_number"),
+    /** SHIPMENT_STATUSES */
+    status: text("status").notNull().default("IN_TRANSIT"),
+    /** What it cost to send (net); null: not known. */
+    costCents: integer("cost_cents"),
+    /** PROBLEMS, as the daily check found it. */
+    problem: text("problem"),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    /** Last asked the carrier's tracking interface. */
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("shipments_order_idx").on(t.orderId), index("shipments_org_status_idx").on(t.organizationId, t.status)],
+);
+
+/** What happened to a parcel: entered by a person, reported by a supplier or by the carrier. */
+export const shipmentEvents = pgTable(
+  "shipment_events",
+  {
+    id: id(),
+    organizationId: orgId(),
+    shipmentId: uuid("shipment_id")
+      .notNull()
+      .references(() => shipments.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    note: text("note"),
+    location: text("location"),
+    /** manual, supplier or carrier */
+    source: text("source").notNull().default("manual"),
+    /** The carrier's own event, kept once. */
+    externalKey: text("external_key"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    userId: uuid("user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("shipment_events_shipment_idx").on(t.shipmentId, t.occurredAt), uniqueIndex("shipment_events_external_key").on(t.shipmentId, t.externalKey)],
+);
+
+/** Goods a customer sends back (src/lib/returns.ts). */
+export const returns = pgTable(
+  "returns",
+  {
+    id: id(),
+    organizationId: orgId(),
+    number: integer("number").notNull(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    /** RETURN_STATUSES */
+    status: text("status").notNull().default("REQUESTED"),
+    reason: text("reason").notNull(),
+    resolution: text("resolution").notNull().default("REFUND"),
+    /** What the customer wrote. */
+    description: text("description"),
+    /** For the company only. */
+    note: text("note"),
+    /** Photos the customer sent (documents). */
+    photoIds: uuid("photo_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** shop: asked for by the buyer; manual: entered by the company. */
+    channel: text("channel").notNull().default("manual"),
+    /** Gross amount to refund: worked out from the lines, changed by a person. */
+    refundCents: integer("refund_cents").notNull().default(0),
+    createdBy: uuid("created_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("returns_org_number_key").on(t.organizationId, t.number), index("returns_order_idx").on(t.orderId), index("returns_org_status_idx").on(t.organizationId, t.status)],
+);
+
+export const returnItems = pgTable(
+  "return_items",
+  {
+    id: id(),
+    organizationId: orgId(),
+    returnId: uuid("return_id")
+      .notNull()
+      .references(() => returns.id, { onDelete: "cascade" }),
+    orderItemId: uuid("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    /** After inspection: CONDITIONS. */
+    condition: text("condition"),
+    /** Put back on the shelf (booked once). */
+    restocked: numeric("restocked", { precision: 12, scale: 3 }).notNull().default("0"),
+  },
+  (t) => [index("return_items_return_idx").on(t.returnId), index("return_items_order_item_idx").on(t.orderItemId)],
+);
+
+/** What happened to a return: added, never changed. */
+export const returnEvents = pgTable(
+  "return_events",
+  {
+    id: id(),
+    organizationId: orgId(),
+    returnId: uuid("return_id")
+      .notNull()
+      .references(() => returns.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    data: jsonb("data").notNull().default(sql`'{}'::jsonb`),
+    userId: uuid("user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("return_events_return_idx").on(t.returnId, t.createdAt)],
+);
+
+/** The supplier's side of a return: its yes, the parcel back and what it paid or credited. */
+export const supplierReturns = pgTable(
+  "supplier_returns",
+  {
+    id: id(),
+    organizationId: orgId(),
+    returnId: uuid("return_id")
+      .notNull()
+      .references(() => returns.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    supplierOrderId: uuid("supplier_order_id").references(() => supplierOrders.id, { onDelete: "set null" }),
+    /** SUPPLIER_RETURN_STATUSES */
+    status: text("status").notNull().default("REQUESTED"),
+    /** Net, in the supplier's currency: what it should pay back. */
+    expectedCents: integer("expected_cents").notNull().default(0),
+    /** What it actually paid back or credited. */
+    settledCents: integer("settled_cents"),
+    currency: text("currency").notNull(),
+    reference: text("reference"),
+    note: text("note"),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("supplier_returns_return_idx").on(t.returnId), index("supplier_returns_org_status_idx").on(t.organizationId, t.status)],
+);
+
+/** Money paid back to a customer: how much, how, the provider's reference and whether it went through. */
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: id(),
+    organizationId: orgId(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    returnId: uuid("return_id").references(() => returns.id, { onDelete: "set null" }),
+    amountCents: integer("amount_cents").notNull(),
+    reason: text("reason"),
+    /** stripe, bank or manual */
+    provider: text("provider").notNull(),
+    /** PENDING, SUCCEEDED or FAILED */
+    status: text("status").notNull().default("PENDING"),
+    reference: text("reference"),
+    error: text("error"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("refunds_order_idx").on(t.orderId), index("refunds_org_status_idx").on(t.organizationId, t.status)],
+);
+
 /** An online store of a company (src/lib/store.ts); its address is unique across all companies. */
 export const stores = pgTable(
   "stores",

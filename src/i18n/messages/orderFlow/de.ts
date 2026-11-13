@@ -26,6 +26,7 @@ const orderFlow = {
   payment: {
     UNPAID: "Unbezahlt",
     PAID: "Bezahlt",
+    PARTIALLY_REFUNDED: "Teilweise erstattet",
     REFUNDED: "Erstattet",
   },
   channel: {
@@ -82,6 +83,8 @@ const orderFlow = {
     paidAfterCancel: "Nach dem Storno bezahlt: bitte erstatten oder neu anlegen",
     expired: "Zahlungszeit abgelaufen, Reservierung frei",
     partialRefund: "Teilweise erstattet",
+    returned: "Retoure angelegt",
+    refunded: "Geld erstattet",
     shipBySupplier: "Vom Lieferanten versendet",
     deliverBySupplier: "Zugestellt",
     supplier: {

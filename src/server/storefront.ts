@@ -651,6 +651,7 @@ export async function mailBuyer(
 }
 
 export type BuyerOrder = {
+  id: string;
   number: number;
   createdAt: Date;
   fulfillment: string;
@@ -676,6 +677,7 @@ export async function orderForBuyer(store: PublicStore, token: string): Promise<
     if (!order) return null;
     const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id)).orderBy(asc(orderItems.position));
     return {
+      id: order.id,
       number: order.number,
       createdAt: order.createdAt,
       fulfillment: order.fulfillmentStatus,

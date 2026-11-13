@@ -18,6 +18,7 @@ import type { Context } from "./context";
 import { actorOf, afterPayment, cancelSupplierOrdersOf, companyOf, createSupplierOrders, followUp, openSupplierOrders, ownGoodsCount, planDropship } from "./dropship";
 import { deductForOrder } from "./inventory";
 import { requirePermission } from "./permissions";
+import { deliverShipments, recordShipment } from "./shipments";
 
 export class OrderFlowError extends Error {
   constructor(
@@ -175,9 +176,11 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
       data.trackingNumber = input.trackingNumber;
       // Out of the warehouse: out of the stock, once.
       data.booked = await deductForOrder(tx, ctx, id);
+      await recordShipment(tx, { organizationId: ctx.organization.id, orderId: id, carrier: input.carrier, trackingNumber: input.trackingNumber, userId: ctx.user.userId, source: "manual", at: now });
     }
     if (action === "deliver") {
       patch.deliveredAt = now;
+      await deliverShipments(tx, { organizationId: ctx.organization.id, orderId: id }, ctx.user.userId, "manual", now);
       await deductForOrder(tx, ctx, id);
     }
     if (action === "cancel") {

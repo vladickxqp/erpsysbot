@@ -28,6 +28,7 @@ const orderFlow: typeof de = {
   payment: {
     UNPAID: "Sin pagar",
     PAID: "Pagado",
+    PARTIALLY_REFUNDED: "Reembolsado en parte",
     REFUNDED: "Reembolsado",
   },
   channel: {
@@ -84,6 +85,8 @@ const orderFlow: typeof de = {
     paidAfterCancel: "Pagado tras la cancelación: reembolsar o volver a crear",
     expired: "Tiempo de pago agotado, reserva liberada",
     partialRefund: "Reembolso parcial",
+    returned: "Devolución creada",
+    refunded: "Dinero reembolsado",
     shipBySupplier: "Enviado por el proveedor",
     deliverBySupplier: "Entregado",
     supplier: {

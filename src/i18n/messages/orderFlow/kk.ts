@@ -28,6 +28,7 @@ const orderFlow: typeof de = {
   payment: {
     UNPAID: "Төленбеген",
     PAID: "Төленді",
+    PARTIALLY_REFUNDED: "Ішінара қайтарылды",
     REFUNDED: "Қайтарылды",
   },
   channel: {
@@ -84,6 +85,8 @@ const orderFlow: typeof de = {
     paidAfterCancel: "Болдырмағаннан кейін төленді: ақшаны қайтарыңыз немесе қайта жасаңыз",
     expired: "Төлем уақыты бітті, резерв алынды",
     partialRefund: "Ішінара қайтарылды",
+    returned: "Қайтару жасалды",
+    refunded: "Ақша қайтарылды",
     shipBySupplier: "Жеткізуші жіберді",
     deliverBySupplier: "Жеткізілді",
     supplier: {

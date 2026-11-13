@@ -179,6 +179,7 @@ const store = {
     paid: {
       UNPAID: "Noch nicht bezahlt",
       PAID: "Bezahlt",
+      PARTIALLY_REFUNDED: "Teilweise erstattet",
       REFUNDED: "Erstattet",
     },
     progress: "Fortschritt",

@@ -28,6 +28,7 @@ const orderFlow: typeof de = {
   payment: {
     UNPAID: "Не оплачене",
     PAID: "Оплачене",
+    PARTIALLY_REFUNDED: "Частково повернено",
     REFUNDED: "Повернуто",
   },
   channel: {
@@ -84,6 +85,8 @@ const orderFlow: typeof de = {
     paidAfterCancel: "Оплачено після скасування: поверніть кошти або створіть заново",
     expired: "Час оплати минув, резерв знято",
     partialRefund: "Часткове повернення",
+    returned: "Створено повернення",
+    refunded: "Кошти повернено",
     shipBySupplier: "Відправлено постачальником",
     deliverBySupplier: "Доставлено",
     supplier: {

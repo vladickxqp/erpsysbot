@@ -8,6 +8,7 @@ import dropship from "./dropship/de";
 import aichat from "./aichat/de";
 import areas from "./areas/de";
 import sites from "./sites/de";
+import aftersales from "./aftersales/de";
 
 const de = {
   hub,
@@ -20,6 +21,7 @@ const de = {
   aichat,
   areas,
   sites,
+  aftersales,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",
@@ -1207,6 +1209,10 @@ const de = {
       store: "Onlineshop",
       supplier: "Lieferant",
       supplier_order: "Lieferantenbestellung",
+      return: "Retoure",
+      refund: "Erstattung",
+      shipment: "Sendung",
+      supplier_return: "Lieferanten-Rücksendung",
       task: "Aufgabe",
       team: "Team",
       transaction: "Buchung",
