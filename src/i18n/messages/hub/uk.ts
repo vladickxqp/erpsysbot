@@ -123,6 +123,8 @@ const hub: HubMessages = {
     tool_plan_content: "Запланувати контент",
     tool_save_document: "Зберегти файл",
     tool_send_payment_reminder: "Надіслати нагадування про оплату",
+    tool_record_expense: "Провести витрату",
+    tool_update_company: "Змінити дані фірми",
     summary: "AI-зведення",
     summarize: "Зробити зведення",
     daySummary: "Огляд дня",

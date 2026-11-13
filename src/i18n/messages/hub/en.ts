@@ -123,6 +123,8 @@ const hub: HubMessages = {
     tool_plan_content: "Schedule content",
     tool_save_document: "Save file",
     tool_send_payment_reminder: "Send payment reminder",
+    tool_record_expense: "Record expense",
+    tool_update_company: "Update company details",
     summary: "AI summary",
     summarize: "Summarize",
     daySummary: "Day overview",

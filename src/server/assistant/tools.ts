@@ -9,11 +9,15 @@
 import { openCents } from "@/lib/invoicing";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z, ZodError } from "zod";
-import { INVOICE_FILTERS, ORDER_STATUSES } from "@/lib/domain";
+import { EXPENSE_CATEGORIES, INVOICE_FILTERS, ORDER_STATUSES } from "@/lib/domain";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db/client";
+import { organizations } from "@/db/schema";
 import { createClient, displayName, DuplicateClientError, getClient, listClients, NotFoundError } from "../clients";
+import { updateCompany, type CompanyInput } from "../company";
 import type { Context } from "../context";
 import { clientStats, invoiceStats, openOrderStats } from "../dashboard";
-import { financeSummary } from "../finance";
+import { createTransaction, financeSummary } from "../finance";
 import { createInvoiceDraft, getInvoice, listInvoices } from "../invoices";
 import { defaultUnit } from "@/i18n";
 import { allowedRates } from "@/lib/countries";
@@ -94,7 +98,124 @@ function tool<S extends z.ZodTypeAny>(
   return { definition, input, run: run as Tool["run"] };
 }
 
+const companyField = (max: number) => z.string().trim().max(max).optional();
+
 export const TOOLS: Tool[] = [
+  tool(
+    {
+      name: "record_expense",
+      description:
+        "Prepare one expense the company paid (a receipt, a supplier bill, a fuel slip) for the finance records. One call per receipt. The amount is the total paid including tax, in the company currency.",
+      input_schema: {
+        type: "object",
+        properties: {
+          vendor: { type: "string", description: "Who was paid" },
+          date: { type: "string", description: "YYYY-MM-DD, the date on the receipt" },
+          amount: { type: "number", description: "Total paid including tax" },
+          category: { type: "string", enum: [...EXPENSE_CATEGORIES] },
+          description: { type: "string", description: "What was bought, and the file name of the receipt" },
+          method: { type: "string", description: "cash, card, transfer … when the receipt says" },
+        },
+        required: ["vendor", "date", "amount", "category"],
+      },
+    },
+    z.object({
+      vendor: z.string().trim().min(1).max(200),
+      date: isoDate,
+      amount: z.number().positive().max(10_000_000),
+      category: z.enum(EXPENSE_CATEGORIES),
+      description: z.string().trim().max(280).optional(),
+      method: z.string().trim().max(30).optional(),
+    }),
+    async (ctx, input, via) => {
+      const row = await createTransaction(
+        ctx,
+        {
+          type: "EXPENSE",
+          amountCents: Math.round(input.amount * 100),
+          bookedOn: input.date,
+          category: input.category,
+          description: [input.vendor, input.description].filter(Boolean).join(" – "),
+          method: input.method ?? null,
+        },
+        via,
+      );
+      return { booked: true, id: row.id, amount: major(row.amountCents), date: row.bookedOn, link: "/app/finance" };
+    },
+  ),
+  tool(
+    {
+      name: "update_company",
+      description:
+        "Prepare changes to the company's own details: name, legal name, address, VAT ID, tax number, contact, bank account. Only the fields given change; everything else stays as it is.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          legal_name: { type: "string" },
+          street: { type: "string" },
+          postal_code: { type: "string" },
+          city: { type: "string" },
+          vat_id: { type: "string" },
+          tax_number: { type: "string" },
+          email: { type: "string" },
+          phone: { type: "string" },
+          website: { type: "string" },
+          iban: { type: "string" },
+          bic: { type: "string" },
+          bank_name: { type: "string" },
+        },
+      },
+    },
+    z
+      .object({
+        name: z.string().trim().min(2).max(120).optional(),
+        legal_name: companyField(200),
+        street: companyField(160),
+        postal_code: companyField(20),
+        city: companyField(100),
+        vat_id: companyField(40),
+        tax_number: companyField(40),
+        email: companyField(200),
+        phone: companyField(40),
+        website: companyField(200),
+        iban: companyField(40),
+        bic: companyField(30),
+        bank_name: companyField(100),
+      })
+      .refine((v) => Object.values(v).some((x) => x), "nothing to change"),
+    async (ctx, input) => {
+      // As the company is now (the yes may come long after the proposal), not as it was when the page loaded.
+      const [o] = await getDb().select().from(organizations).where(eq(organizations.id, ctx.organization.id));
+      // Empty or missing: what the company has now stays.
+      const pick = (value: string | undefined, current: string | null) => (value ? value : current);
+      await updateCompany(ctx, {
+        name: input.name || o.name,
+        legalName: pick(input.legal_name, o.legalName),
+        street: pick(input.street, o.street),
+        postalCode: pick(input.postal_code, o.postalCode),
+        city: pick(input.city, o.city),
+        vatId: pick(input.vat_id, o.vatId),
+        taxNumber: pick(input.tax_number, o.taxNumber),
+        email: pick(input.email, o.email),
+        phone: pick(input.phone, o.phone),
+        website: pick(input.website, o.website),
+        iban: pick(input.iban, o.iban),
+        bic: pick(input.bic, o.bic),
+        bankName: pick(input.bank_name, o.bankName),
+        currency: o.currency,
+        taxRates: o.taxRates,
+        smallBusiness: o.smallBusiness,
+        paymentTermsDays: o.paymentTermsDays,
+        invoiceNumberFormat: o.invoiceNumberFormat,
+        creditNoteNumberFormat: o.creditNoteNumberFormat,
+        einvoiceFormat: o.einvoiceFormat as CompanyInput["einvoiceFormat"],
+        quoteNumberFormat: o.quoteNumberFormat,
+        invoiceFooter: o.invoiceFooter,
+      });
+      return { updated: true, changed: Object.keys(input).filter((k) => input[k as keyof typeof input]), link: "/app/settings" };
+    },
+  ),
   tool(
     {
       name: "business_overview",
@@ -846,6 +967,8 @@ const RISK: Record<string, "low" | "confirm"> = {
   plan_content: "confirm",
   save_document: "confirm",
   send_payment_reminder: "confirm",
+  record_expense: "confirm",
+  update_company: "confirm",
 };
 
 /** The right a proposal needs before it is even offered. */
@@ -858,6 +981,8 @@ const NEEDS: Record<string, Permission> = {
   plan_content: "content.manage",
   save_document: "documents.manage",
   send_payment_reminder: "invoices.issue",
+  record_expense: "finance.create",
+  update_company: "settings.manage",
 };
 
 export const riskOf = (name: string): "read" | "low" | "confirm" => RISK[name] ?? "read";

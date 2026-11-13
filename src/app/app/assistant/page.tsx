@@ -44,6 +44,7 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       contextType={context?.type ?? current?.contextType ?? null}
       query={sp.q ?? ""}
       archived={archived}
+      userName={ctx.user.name ?? ""}
     />
   );
 }

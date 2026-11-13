@@ -6,6 +6,7 @@ import catalog from "./catalog/es";
 import orderFlow from "./orderFlow/es";
 import store from "./store/es";
 import dropship from "./dropship/es";
+import aichat from "./aichat/es";
 
 const es: Messages = {
   hub,
@@ -15,6 +16,7 @@ const es: Messages = {
   orderFlow,
   store,
   dropship,
+  aichat,
   brand: { name: "NEXORA ONE", tagline: "Una plataforma. Todo tu negocio. Todo tu trabajo." },
   common: {
     save: "Guardar",

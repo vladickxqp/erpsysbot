@@ -122,6 +122,8 @@ const hub = {
     tool_plan_content: "Inhalte einplanen",
     tool_save_document: "Datei speichern",
     tool_send_payment_reminder: "Zahlungserinnerung senden",
+    tool_record_expense: "Ausgabe buchen",
+    tool_update_company: "Firmendaten ändern",
     summary: "KI-Zusammenfassung",
     summarize: "Zusammenfassen",
     daySummary: "Tagesüberblick",

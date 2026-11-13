@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fromChat, geminiCreate, toChat } from "@/server/ai-provider";
+import { fromChat, geminiCreate, toChat, wakeGeminiModels } from "@/server/ai-provider";
 import { askAssistantDetailed } from "@/server/assistant/run";
 import { createClient } from "@/server/clients";
 import { integrationStates } from "@/server/integrations";
@@ -11,6 +11,7 @@ type Params = Anthropic.Beta.MessageCreateParamsNonStreaming;
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  wakeGeminiModels();
 });
 
 const respond = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
@@ -172,6 +173,7 @@ describe("when a Gemini model is busy", () => {
     expect(asked).toEqual(["gemini-3.8-flash", "gemini-b", "gemini-c"]);
     expect(answer).toMatchObject({ model: "gemini-c", content: [{ type: "text", text: "Hallo" }] });
 
+    wakeGeminiModels();
     asked.length = 0;
     const bad = (async (_url: string, init: RequestInit) => {
       asked.push(JSON.parse(String(init.body)).model);
@@ -181,6 +183,7 @@ describe("when a Gemini model is busy", () => {
     expect(asked).toEqual(["gemini-3.8-flash"]);
 
     vi.stubEnv("GEMINI_FALLBACK_MODELS", "none");
+    wakeGeminiModels();
     asked.length = 0;
     await expect(geminiCreate(hello, fake, 0)).rejects.toBeInstanceOf(Anthropic.InternalServerError);
     expect(asked).toEqual(["gemini-3.8-flash"]);

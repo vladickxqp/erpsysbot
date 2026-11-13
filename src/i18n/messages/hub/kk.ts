@@ -123,6 +123,8 @@ const hub: HubMessages = {
     tool_plan_content: "Контентті жоспарлау",
     tool_save_document: "Файлды сақтау",
     tool_send_payment_reminder: "Төлем туралы еске салу жіберу",
+    tool_record_expense: "Шығысты тіркеу",
+    tool_update_company: "Компания деректерін өзгерту",
     summary: "ЖИ-шолу",
     summarize: "Қорытындылау",
     daySummary: "Күн шолуы",
