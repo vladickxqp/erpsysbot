@@ -11,6 +11,7 @@ import { assistantConversations, assistantMessages } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { getClient } from "../clients";
 import { getContent } from "../content";
+import { dayBounds } from "../calendar";
 import type { Context } from "../context";
 import { getInvoice } from "../invoices";
 import { today } from "../money";
@@ -112,7 +113,9 @@ async function history(ctx: Context, channel: Channel, conversationId: string | 
 }
 
 export async function usedToday(ctx: Context): Promise<number> {
-  const since = new Date(`${today(ctx.organization.timezone)}T00:00:00Z`);
+  // The day begins at midnight where the company is: midnight UTC of that date lies an hour or two later,
+  // and questions asked in between would not count.
+  const since = dayBounds(today(ctx.organization.timezone), ctx.organization.timezone).from;
   const [row] = await withTenant(ctx.organization.id, (tx) =>
     tx
       .select({ n: sql<number>`count(*)::int` })
