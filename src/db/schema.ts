@@ -1243,6 +1243,8 @@ export const stores = pgTable(
     /** Encrypted (src/server/secret-box.ts) and never sent to a browser. */
     stripeSecretKey: text("stripe_secret_key"),
     stripeWebhookSecret: text("stripe_webhook_secret"),
+    /** The webhook the app set up at Stripe itself ("we_…"); empty when the secret was typed in. */
+    stripeWebhookId: text("stripe_webhook_id"),
     /** "sk_test_…4242": which key is stored. */
     stripeKeyHint: text("stripe_key_hint"),
     contactEmail: text("contact_email"),

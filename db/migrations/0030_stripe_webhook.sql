@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "stripe_webhook_id" text;

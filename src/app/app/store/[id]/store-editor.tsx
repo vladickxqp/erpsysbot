@@ -54,7 +54,7 @@ export type EditorStore = {
   pages: Pages;
   shipping: ShippingOption[];
   payments: Payments;
-  stripe: { key: boolean; webhook: boolean; hint: string | null };
+  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null };
 };
 
 export type EditorProps = {
@@ -359,6 +359,8 @@ function PaymentTab({ store, webhookUrl, company, can }: EditorProps) {
   const [secretKey, setSecretKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const disabled = !can.settings;
+  // The webhook sets itself up with the key; its fields show only when that did not work or it was typed in.
+  const manual = store.stripe.key && !store.stripe.auto;
   const save = (removeStripe = false) =>
     run(
       () => savePaymentsAction(store.id, { bank, stripe: removeStripe ? false : stripe, secretKey: secretKey || undefined, webhookSecret: webhookSecret || undefined, removeStripe }),
@@ -388,7 +390,7 @@ function PaymentTab({ store, webhookUrl, company, can }: EditorProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">{t("store.method.stripe")}</CardTitle>
-          {store.stripe.hint && <Badge variant="outline">{store.stripe.hint}</Badge>}
+          {store.stripe.hint && <Badge variant={store.stripe.webhook ? "default" : "outline"}>{store.stripe.hint}</Badge>}
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
           <label className="flex items-center gap-2">
@@ -397,10 +399,12 @@ function PaymentTab({ store, webhookUrl, company, can }: EditorProps) {
           <Field label={`${t("store.secretKey")}${store.stripe.key ? ` · ${t("store.isSet")}` : ""}`}>
             <Input type="password" autoComplete="off" value={secretKey} onChange={(e) => setSecretKey(e.target.value.trim())} placeholder="sk_…" disabled={disabled} />
           </Field>
-          <Field label={`${t("store.webhookSecret")}${store.stripe.webhook ? ` · ${t("store.isSet")}` : ""}`}>
-            <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value.trim())} placeholder="whsec_…" disabled={disabled} />
-          </Field>
-          {webhookUrl && (
+          {manual && (
+            <Field label={`${t("store.webhookSecret")}${store.stripe.webhook ? ` · ${t("store.isSet")}` : ""}`}>
+              <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value.trim())} placeholder="whsec_…" disabled={disabled} />
+            </Field>
+          )}
+          {manual && webhookUrl && (
             <div className="grid gap-1">
               <span className="font-medium">{t("store.webhookUrl")}</span>
               <div className="flex items-center gap-2">

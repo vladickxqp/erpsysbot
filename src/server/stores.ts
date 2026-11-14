@@ -71,6 +71,7 @@ import type { Context } from "./context";
 import { assertModule } from "./modules";
 import { requirePermission, type Permission } from "./permissions";
 import { hint, seal, unseal } from "./secret-box";
+import { appUrl } from "./settings";
 
 export class StoreError extends Error {
   constructor(
@@ -84,7 +85,7 @@ export class StoreError extends Error {
 export type StoreRow = typeof stores.$inferSelect;
 
 /** A site as the app shows it: everything but the secrets, which only say whether they are set. */
-export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "live" | "kind" | "design" | "blocks" | "customPages" | "pages" | "shipping" | "payments"> & {
+export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "stripeWebhookId" | "live" | "kind" | "design" | "blocks" | "customPages" | "pages" | "shipping" | "payments"> & {
   kind: SiteKind;
   /** Published, with edits visitors do not see yet. */
   changed: boolean;
@@ -95,7 +96,7 @@ export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret"
   pages: Pages;
   shipping: ShippingOption[];
   payments: Payments;
-  stripe: { key: boolean; webhook: boolean; hint: string | null };
+  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null };
 };
 
 const kindOfRow = (row: { kind: string }): SiteKind => (isSiteKind(row.kind) ? row.kind : "store");
@@ -111,7 +112,7 @@ function differs(row: StoreRow, live: unknown): boolean {
 }
 
 export function viewOf(row: StoreRow): StoreView {
-  const { stripeSecretKey, stripeWebhookSecret, live, ...rest } = row;
+  const { stripeSecretKey, stripeWebhookSecret, stripeWebhookId, live, ...rest } = row;
   return {
     ...rest,
     kind: kindOfRow(row),
@@ -123,7 +124,7 @@ export function viewOf(row: StoreRow): StoreView {
     pages: { ...EMPTY_PAGES, ...((row.pages ?? {}) as Partial<Pages>) },
     shipping: (row.shipping ?? []) as ShippingOption[],
     payments: { bank: false, stripe: false, ...((row.payments ?? {}) as Partial<Payments>) },
-    stripe: { key: !!stripeSecretKey, webhook: !!stripeWebhookSecret, hint: row.stripeKeyHint },
+    stripe: { key: !!stripeSecretKey, webhook: !!stripeWebhookSecret, auto: !!stripeWebhookSecret && !!stripeWebhookId, hint: row.stripeKeyHint },
   };
 }
 
@@ -626,6 +627,29 @@ const stripeKeyWorks: KeyCheck = async (secretKey) => {
   }
 };
 
+/** What Stripe has to tell a store about its payments. */
+export const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "checkout.session.expired", "charge.refunded"] as const;
+
+/** Sets the store's webhook up at Stripe and takes it away again; tests put their own here. */
+export type WebhookSetup = {
+  /** The new webhook and its signing secret, or null when the key may not do this. */
+  create: (secretKey: string, url: string) => Promise<{ id: string; secret: string } | null>;
+  remove: (secretKey: string, id: string) => Promise<void>;
+};
+const stripeWebhooks: WebhookSetup = {
+  create: async (secretKey, url) => {
+    try {
+      const made = await new Stripe(secretKey).webhookEndpoints.create({ url, enabled_events: [...STRIPE_EVENTS] });
+      return made.secret ? { id: made.id, secret: made.secret } : null;
+    } catch {
+      return null;
+    }
+  },
+  remove: async (secretKey, id) => {
+    await new Stripe(secretKey).webhookEndpoints.del(id);
+  },
+};
+
 const paymentsInput = z.object({
   bank: z.boolean(),
   stripe: z.boolean(),
@@ -635,23 +659,30 @@ const paymentsInput = z.object({
   removeStripe: z.boolean().optional(),
 });
 
-export async function savePayments(ctx: Context, id: string, raw: z.input<typeof paymentsInput>, check: KeyCheck = stripeKeyWorks): Promise<void> {
+export async function savePayments(ctx: Context, id: string, raw: z.input<typeof paymentsInput>, check: KeyCheck = stripeKeyWorks, hooks: WebhookSetup = stripeWebhooks): Promise<void> {
   const kind = await kindOf(ctx, id);
   allow(ctx, kind, "settings.manage");
   if (kind !== "store") throw new StoreError("KIND");
   const input = paymentsInput.parse(raw);
   const patch: Partial<typeof stores.$inferInsert> = { updatedAt: new Date() };
-  if (input.removeStripe) Object.assign(patch, { stripeSecretKey: null, stripeWebhookSecret: null, stripeKeyHint: null });
+  if (input.removeStripe) Object.assign(patch, { stripeSecretKey: null, stripeWebhookSecret: null, stripeWebhookId: null, stripeKeyHint: null });
   if (input.secretKey) {
     if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/.test(input.secretKey) || !(await check(input.secretKey))) throw new StoreError("STRIPE_KEY");
     Object.assign(patch, { stripeSecretKey: seal(input.secretKey), stripeKeyHint: hint(input.secretKey) });
   }
   if (input.webhookSecret) {
     if (!/^whsec_[A-Za-z0-9+/=]{10,}$/.test(input.webhookSecret)) throw new StoreError("STRIPE_WEBHOOK");
-    patch.stripeWebhookSecret = seal(input.webhookSecret);
+    Object.assign(patch, { stripeWebhookSecret: seal(input.webhookSecret), stripeWebhookId: null });
+  } else if (input.secretKey) {
+    // A new key without a typed secret: the app sets the webhook up itself.
+    const base = appUrl();
+    const made = base ? await hooks.create(input.secretKey, `${base}/api/shop/stripe/${id}`) : null;
+    if (made) Object.assign(patch, { stripeWebhookSecret: seal(made.secret), stripeWebhookId: made.id });
   }
+  let old: { key: string | null; hook: string | null } = { key: null, hook: null };
   await withTenant(ctx.organization.id, async (tx) => {
     const row = await storeOf(tx, id);
+    old = { key: unseal(row.stripeSecretKey), hook: row.stripeWebhookId };
     const keySet = input.removeStripe ? false : !!(patch.stripeSecretKey ?? row.stripeSecretKey);
     const hookSet = input.removeStripe ? false : !!(patch.stripeWebhookSecret ?? row.stripeWebhookSecret);
     // Card payment is offered only with both: the key to start a payment and the secret to believe its result.
@@ -659,8 +690,10 @@ export async function savePayments(ctx: Context, id: string, raw: z.input<typeof
     patch.payments = payments;
     await tx.update(stores).set(patch).where(eq(stores.id, id));
     // Never the keys, only what changed.
-    await audit(tx, ctx, "store.payments", "store", id, { bank: payments.bank, stripe: payments.stripe, newKey: !!input.secretKey, newWebhook: !!input.webhookSecret, removed: !!input.removeStripe });
+    await audit(tx, ctx, "store.payments", "store", id, { bank: payments.bank, stripe: payments.stripe, newKey: !!input.secretKey, newWebhook: !!input.webhookSecret || !!patch.stripeWebhookId, removed: !!input.removeStripe });
   });
+  // The webhook the app made before is of no use any more: taken away at Stripe, as far as the old key still allows.
+  if (old.key && old.hook && patch.stripeWebhookId !== undefined) await hooks.remove(old.key, old.hook).catch(() => undefined);
 }
 
 /** The store's own secrets, for the payment code only. */
