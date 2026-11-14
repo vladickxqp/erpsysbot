@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { digitalOfOrder } from "@/server/digital";
 import { buyerReturnable, returnsForBuyer } from "@/server/returns";
 import { shipmentsForBuyer } from "@/server/shipments";
 import { orderForBuyer } from "@/server/storefront";
 import { sellingShopOf, shopWords } from "../../store";
-import { LOOK } from "../../ui";
+import { LOOK, PlainText } from "../../ui";
+import { DigitalEntry } from "./digital-entry";
 import { ReturnForm } from "./return-form";
 import { WaitForPayment } from "./wait-for-payment";
 
@@ -24,7 +26,8 @@ export default async function BuyerOrderPage({ params, searchParams }: { params:
   const cancelled = order.fulfillment === "CANCELLED";
   const at = STEPS.indexOf(order.fulfillment as (typeof STEPS)[number]);
   const bank = order.method === "bank" && order.payment === "UNPAID" && !cancelled && store.company.iban;
-  const [parcels, returns, returnable] = await Promise.all([
+  const [digital, parcels, returns, returnable] = await Promise.all([
+    digitalOfOrder(store.organizationId, order.id),
     shipmentsForBuyer(store.organizationId, order.id),
     returnsForBuyer(store.organizationId, order.id),
     store.preview ? Promise.resolve([]) : buyerReturnable(store.organizationId, order.id, store.smallBusiness),
@@ -60,6 +63,22 @@ export default async function BuyerOrderPage({ params, searchParams }: { params:
           </p>
         )}
       </div>
+
+      {digital.length > 0 && (
+        <div className={cn("grid gap-4 p-4 text-sm", look.card, look.radius)}>
+          <h2 className="font-semibold">{t("digital.buyer.title")}</h2>
+          {digital.map((d, i) => (
+            <div key={i} className="grid gap-2">
+              <span className="font-medium">{d.description}</span>
+              {d.note && <PlainText text={d.note} className="text-slate-600" />}
+              {d.entries.map((entry, j) => (
+                <DigitalEntry key={j} text={entry} copyLabel={t("digital.copy")} />
+              ))}
+              {d.missing > 0 && <span className="text-amber-700">{t("digital.buyer.pending")}</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {parcels.length > 0 && (
         <div className={cn("grid gap-3 p-4 text-sm", look.card, look.radius)}>

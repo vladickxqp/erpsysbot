@@ -51,7 +51,7 @@ export type EditorProduct = {
   active: boolean;
   categoryId: string | null;
   trackStock: boolean;
-  fulfillment: "STOCK" | "DROPSHIP";
+  fulfillment: "STOCK" | "DROPSHIP" | "DIGITAL";
   stock: number;
   minStock: number | null;
   weightGrams: number | null;
@@ -143,6 +143,8 @@ export function ProductEditor(props: {
   can: { manage: boolean; stock: boolean; settings: boolean };
   /** Held by open orders, in all and per variant. */
   held?: { total: number; byVariant: Record<string, number> };
+  /** A digital product's pool and note (src/server/digital.ts), as its own tab. */
+  digital?: ReactNode;
 }) {
   const { t } = useI18n();
   const { product } = props;
@@ -172,6 +174,7 @@ export function ProductEditor(props: {
               {t("catalog.tab.images")} {props.images.length > 0 && `(${props.images.length})`}
             </TabsTrigger>
             {product.trackStock && <TabsTrigger value="stock">{t("catalog.tab.stock")}</TabsTrigger>}
+            {props.digital && <TabsTrigger value="digital">{t("digital.title")}</TabsTrigger>}
           </TabsList>
           <TabsContent value="general">
             <General {...props} />
@@ -193,6 +196,7 @@ export function ProductEditor(props: {
               <Stock {...props} product={product} />
             </TabsContent>
           )}
+          {props.digital && <TabsContent value="digital">{props.digital}</TabsContent>}
         </Tabs>
       )}
     </>
@@ -218,7 +222,7 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
     active: product?.active ?? true,
     categoryId: product?.categoryId ?? "",
     trackStock: product?.trackStock ?? false,
-    fulfillment: (product?.fulfillment ?? "STOCK") as "STOCK" | "DROPSHIP",
+    fulfillment: (product?.fulfillment ?? "STOCK") as "STOCK" | "DROPSHIP" | "DIGITAL",
     minStock: product?.minStock === null || product?.minStock === undefined ? "" : String(product.minStock).replace(".", ","),
     weightGrams: product?.weightGrams?.toString() ?? "",
     lengthMm: product?.lengthMm?.toString() ?? "",
@@ -376,13 +380,14 @@ function General({ product, categories, rates, smallBusiness, can }: Parameters<
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
               <Field label={t("dropship.product.fulfillment")} className="col-span-2">
-                <Select value={v.fulfillment} onValueChange={(f) => set({ fulfillment: f as "STOCK" | "DROPSHIP" })} disabled={disabled}>
+                <Select value={v.fulfillment} onValueChange={(f) => set({ fulfillment: f as "STOCK" | "DROPSHIP" | "DIGITAL" })} disabled={disabled}>
                   <SelectTrigger className="w-full" aria-label={t("dropship.product.fulfillment")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="STOCK">{t("dropship.product.STOCK")}</SelectItem>
                     <SelectItem value="DROPSHIP">{t("dropship.product.DROPSHIP")}</SelectItem>
+                    <SelectItem value="DIGITAL">{t("digital.product")}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>

@@ -458,8 +458,12 @@ export const products = pgTable(
     purchasePriceCents: integer("purchase_price_cents"),
     /** Stock is kept only for tracked products; it changes only through stock movements. */
     trackStock: boolean("track_stock").notNull().default(false),
-    /** STOCK: from the company's own stock; DROPSHIP: a supplier ships it straight to the customer (src/lib/dropship.ts). */
+    /** STOCK: from the company's own stock; DROPSHIP: a supplier ships it straight to the customer (src/lib/dropship.ts); DIGITAL: it delivers itself once paid (src/server/digital.ts). */
     fulfillment: text("fulfillment").notNull().default("STOCK"),
+    /** A digital good every buyer gets alike (its note), instead of an entry of its own from the pool. */
+    digitalShared: boolean("digital_shared").notNull().default(false),
+    /** What the buyer of a digital good reads with it: how to use it, a link. */
+    digitalNote: text("digital_note"),
     stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3 }).notNull().default("0"),
     minStock: numeric("min_stock", { precision: 12, scale: 3 }),
     weightGrams: integer("weight_grams"),
@@ -812,6 +816,31 @@ export const videoProjects = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("video_projects_org_idx").on(t.organizationId, t.updatedAt)],
+);
+
+/**
+ * The pool of a digital product: codes, accounts, licences, each sold once.
+ * `content` is encrypted (src/server/secret-box.ts); a sold entry carries
+ * the order and the line it went to.
+ */
+export const digitalItems = pgTable(
+  "digital_items",
+  {
+    id: id(),
+    organizationId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references((): AnyPgColumn => products.id, { onDelete: "cascade" }),
+    variantId: uuid("variant_id").references((): AnyPgColumn => productVariants.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    /** AVAILABLE or SOLD. */
+    status: text("status").notNull().default("AVAILABLE"),
+    orderId: uuid("order_id").references((): AnyPgColumn => orders.id, { onDelete: "set null" }),
+    orderItemId: uuid("order_item_id"),
+    soldAt: timestamp("sold_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("digital_items_pool_idx").on(t.organizationId, t.productId, t.status), index("digital_items_order_idx").on(t.orderId)],
 );
 
 // --- Orders ------------------------------------------------------------------------------------

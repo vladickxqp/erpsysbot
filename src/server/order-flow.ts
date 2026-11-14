@@ -210,6 +210,8 @@ export async function runOrderAction(ctx: Context, id: string, action: OrderActi
   const later = (e: unknown) => console.error("dropship: follow-up failed", e instanceof Error ? e.message : e);
   if (action === "confirm") await followUp(ctx.organization.id, { orderId: id }).catch(later);
   if (action === "markPaid") await afterPayment(ctx.organization.id, id).catch(later);
+  // Digital goods go out the moment the order is paid.
+  if (action === "markPaid") await (await import("./digital")).deliverDigital(ctx.organization.id, id).catch((e) => console.error("digital: delivery failed", e instanceof Error ? e.message : e));
   return done;
 }
 

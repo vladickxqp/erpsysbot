@@ -12,6 +12,7 @@ import aftersales from "./aftersales/de";
 import look from "./look/de";
 import docs from "./docs/de";
 import video from "./video/de";
+import digital from "./digital/de";
 
 const de = {
   hub,
@@ -28,6 +29,7 @@ const de = {
   look,
   docs,
   video,
+  digital,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",

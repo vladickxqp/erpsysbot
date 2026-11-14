@@ -4,10 +4,12 @@ import { allowedRates } from "@/lib/countries";
 import type { VariantOption } from "@/lib/variants";
 import { getProductDetail, listCategories } from "@/server/catalog";
 import { NotFoundError } from "@/server/clients";
+import { digitalOverview } from "@/server/digital";
 import { dropshipOverview } from "@/server/dropship";
 import { listSuppliers } from "@/server/inventory";
 import { heldForProduct } from "@/server/order-flow";
 import { requirePageContext } from "@/server/request";
+import { DigitalPanel } from "./digital-panel";
 import { ProductEditor, type EditorProduct } from "./product-editor";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +32,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const p = detail?.product;
   const held = p?.trackStock ? await heldForProduct(ctx, p.id) : { total: 0, byVariant: {} };
   const dropship = p && p.fulfillment === "DROPSHIP" ? await dropshipOverview(ctx, p.id) : null;
+  const digital = p && p.fulfillment === "DIGITAL" && ctx.permissions.has("products.manage") ? await digitalOverview(ctx, p.id) : null;
   const product: EditorProduct | null = p
     ? {
         id: p.id,
@@ -45,7 +48,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         active: p.active,
         categoryId: p.categoryId,
         trackStock: p.trackStock,
-        fulfillment: p.fulfillment === "DROPSHIP" ? "DROPSHIP" : "STOCK",
+        fulfillment: p.fulfillment === "DROPSHIP" ? "DROPSHIP" : p.fulfillment === "DIGITAL" ? "DIGITAL" : "STOCK",
         stock: Number(p.stockQuantity),
         minStock: p.minStock === null ? null : Number(p.minStock),
         weightGrams: p.weightGrams,
@@ -99,6 +102,21 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       }))}
       bestOfferId={detail?.bestOfferId ?? null}
       dropship={dropship}
+      digital={
+        p && digital ? (
+          <DigitalPanel
+            productId={p.id}
+            shared={digital.shared}
+            note={digital.note}
+            available={digital.available}
+            sold={digital.sold}
+            waiting={digital.waiting}
+            items={digital.items.map((i) => ({ id: i.id, variantId: i.variantId, status: i.status, mask: i.mask, orderId: i.orderId, orderNumber: i.orderNumber, soldAt: i.soldAt?.toISOString() ?? null }))}
+            variants={(detail?.variants ?? []).map((v) => ({ id: v.id, label: Object.values(v.options as Record<string, string>).join(" / ") }))}
+            canManage={ctx.permissions.has("products.manage")}
+          />
+        ) : undefined
+      }
       held={held}
       movements={(detail?.movements ?? []).map((m) => ({ id: m.id, type: m.type, quantity: Number(m.quantity), variantId: m.variantId, note: m.note, at: m.createdAt.toISOString() }))}
       margins={detail?.margins ?? null}

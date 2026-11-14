@@ -25,6 +25,7 @@ import { audit } from "./audit";
 import { companyContext } from "./automations";
 import { companyOf, createSupplierOrders, dropshipAvailable, followUp, planDropship } from "./dropship";
 import type { Context } from "./context";
+import { digitalAvailable } from "./digital";
 import { uploadDir } from "./documents";
 import { mailAvailable, sendMail, takeMailBudget } from "./mail";
 import { totals, type Line } from "./money";
@@ -229,6 +230,8 @@ export async function storeProducts(store: PublicStore, query: CatalogQuery = {}
     const images = await firstImages(tx, ids);
     // Goods the supplier ships: what the supplier reported less what open supplier orders take; unknown counts as available.
     const supplierLeft = await dropshipAvailable(tx, rows.filter((r) => r.fulfillment === "DROPSHIP").map((r) => r.id));
+    // Digital goods: what their pools still hold; goods everyone gets alike never run out.
+    const digitalLeft = await digitalAvailable(tx, rows.filter((r) => r.fulfillment === "DIGITAL").map((r) => r.id));
     const list = rows.map((p): ShopProduct => {
       const own = variants.filter((v) => v.productId === p.id);
       const prices = own.length ? own.map((v) => v.priceCents ?? p.priceCents) : [p.priceCents];
@@ -237,7 +240,11 @@ export async function storeProducts(store: PublicStore, query: CatalogQuery = {}
           ? own.length
             ? own.some((v) => supplierLeft(p.id, v.id) !== 0)
             : supplierLeft(p.id, null) !== 0
-          : !p.trackStock || (own.length ? own.some((v) => free(v.stockQuantity, heldOf(holdings, p.id, v.id)) > 0) : free(p.stockQuantity, heldOf(holdings, p.id, null)) > 0);
+          : p.fulfillment === "DIGITAL"
+            ? own.length
+              ? own.some((v) => digitalLeft(p.id, v.id) !== 0)
+              : digitalLeft(p.id, null) !== 0
+            : !p.trackStock || (own.length ? own.some((v) => free(v.stockQuantity, heldOf(holdings, p.id, v.id)) > 0) : free(p.stockQuantity, heldOf(holdings, p.id, null)) > 0);
       return {
         id: p.id,
         name: p.name,
@@ -302,6 +309,8 @@ export async function storeProduct(store: PublicStore, productId: string): Promi
     const holdings = await heldStock(tx, [productId]);
     const dropship = p.fulfillment === "DROPSHIP";
     const supplierLeft = await dropshipAvailable(tx, dropship ? [productId] : []);
+    const digital = p.fulfillment === "DIGITAL";
+    const digitalLeft = await digitalAvailable(tx, digital ? [productId] : []);
     const options = (p.variantOptions ?? []) as VariantOption[];
     return {
       ...base,
@@ -312,9 +321,9 @@ export async function storeProduct(store: PublicStore, productId: string): Promi
         label: choiceLabel(v.options as VariantChoice, options),
         options: v.options as VariantChoice,
         priceCents: grossCents(v.priceCents ?? p.priceCents, p.vatRate, store.smallBusiness),
-        available: dropship ? supplierLeft(p.id, v.id) : p.trackStock ? free(v.stockQuantity, heldOf(holdings, p.id, v.id)) : null,
+        available: dropship ? supplierLeft(p.id, v.id) : digital ? digitalLeft(p.id, v.id) : p.trackStock ? free(v.stockQuantity, heldOf(holdings, p.id, v.id)) : null,
       })),
-      stock: variantRows.length ? null : dropship ? supplierLeft(p.id, null) : p.trackStock ? free(p.stockQuantity, heldOf(holdings, p.id, null)) : null,
+      stock: variantRows.length ? null : dropship ? supplierLeft(p.id, null) : digital ? digitalLeft(p.id, null) : p.trackStock ? free(p.stockQuantity, heldOf(holdings, p.id, null)) : null,
       attributes: Object.fromEntries(Object.entries((p.attributes ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
       shippingNote: p.shippingNote,
       returnable: p.returnable,
@@ -382,9 +391,12 @@ async function priceIn(tx: Tx, store: PublicStore, raw: CartInput, shippingId: s
   const holdings = await heldStock(tx, ids);
   const images = await firstImages(tx, ids);
   const supplierLeft = await dropshipAvailable(tx, productRows.filter((r) => r.fulfillment === "DROPSHIP").map((r) => r.id));
+  const digitalLeft = await digitalAvailable(tx, productRows.filter((r) => r.fulfillment === "DIGITAL").map((r) => r.id));
 
   const lines: PricedLine[] = [];
   const orderLines: Line[] = [];
+  // Goods that travel: a cart of digital goods only is sent nowhere and costs no shipping.
+  let parcels = 0;
   for (const item of merged) {
     const p = productRows.find((r) => r.id === item.productId);
     const own = variantRows.filter((v) => v.productId === item.productId);
@@ -396,7 +408,15 @@ async function priceIn(tx: Tx, store: PublicStore, raw: CartInput, shippingId: s
     }
     const net = variant?.priceCents ?? p.priceCents;
     const stock: StockRow = { trackStock: p.trackStock, stockQuantity: variant ? variant.stockQuantity : p.stockQuantity };
-    const available = p.fulfillment === "DROPSHIP" ? supplierLeft(p.id, variant?.id ?? null) : stock.trackStock ? free(stock.stockQuantity, heldOf(holdings, p.id, variant?.id ?? null)) : null;
+    const available =
+      p.fulfillment === "DROPSHIP"
+        ? supplierLeft(p.id, variant?.id ?? null)
+        : p.fulfillment === "DIGITAL"
+          ? digitalLeft(p.id, variant?.id ?? null)
+          : stock.trackStock
+            ? free(stock.stockQuantity, heldOf(holdings, p.id, variant?.id ?? null))
+            : null;
+    if (p.fulfillment !== "DIGITAL") parcels++;
     const label = variant ? choiceLabel(variant.options as VariantChoice, (p.variantOptions ?? []) as VariantOption[]) : null;
     const unitPrice = grossCents(net, p.vatRate, store.smallBusiness);
     lines.push({
@@ -429,7 +449,7 @@ async function priceIn(tx: Tx, store: PublicStore, raw: CartInput, shippingId: s
   const option = shippingId ? store.shipping.find((o) => o.id === shippingId) ?? null : store.shipping.length === 1 ? store.shipping[0] : null;
   let shipping: PricedCart["shipping"] = null;
   if (option && orderLines.length) {
-    const cents = shippingCents(option, goodsCents);
+    const cents = parcels ? shippingCents(option, goodsCents) : 0;
     shipping = { option, cents };
     if (cents > 0) {
       // Shipping carries the company's standard rate.

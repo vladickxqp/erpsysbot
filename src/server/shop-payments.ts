@@ -167,6 +167,7 @@ export async function handleShopStripeWebhook(storeId: string, payload: string, 
       }).catch((e) => console.error("shop: notify failed", e instanceof Error ? e.message : e));
     }
     if (after.paid) await afterPayment(row.organizationId, after.paid.orderId).catch((e) => console.error("shop: supplier orders failed", e instanceof Error ? e.message : e));
+    if (after.paid) await (await import("./digital")).deliverDigital(row.organizationId, after.paid.orderId).catch((e) => console.error("digital: delivery failed", e instanceof Error ? e.message : e));
     if (after.paid?.email && store) {
       await mailBuyer(store, after.paid.email, "paid", after.paid).catch((e) => console.error("shop: mail failed", e instanceof Error ? e.message : e));
     }

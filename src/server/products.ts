@@ -49,7 +49,7 @@ export const productInput = z.object({
   purchasePriceCents: z.coerce.number().int().min(0).max(100_000_000).nullish(),
   trackStock: z.boolean().default(false),
   /** Left out: stays. A supplier's goods are not counted in the company's stock. */
-  fulfillment: z.enum(["STOCK", "DROPSHIP"]).optional(),
+  fulfillment: z.enum(["STOCK", "DROPSHIP", "DIGITAL"]).optional(),
   /** Stored as numeric; the stock itself changes only through stock movements. */
   minStock: z.coerce
     .number()
@@ -95,7 +95,8 @@ export async function listProducts(ctx: Context, opts: { q?: string; activeOnly?
 export async function saveProduct(ctx: Context, raw: ProductInput, id?: string, via: Via = "web"): Promise<Product> {
   requirePermission(ctx.permissions, "products.manage");
   const input = productInput.parse(raw);
-  if (input.fulfillment === "DROPSHIP" || input.kind === "SERVICE") input.trackStock = false;
+  // Only goods from the company's own shelves are counted there: a supplier's and digital ones have their own count.
+  if (input.fulfillment === "DROPSHIP" || input.fulfillment === "DIGITAL" || input.kind === "SERVICE") input.trackStock = false;
   checkRates([input], ctx.organization, () => ["vatRate"]);
   return withTenant(ctx.organization.id, async (tx) => {
     // The category's name is kept on the product too, for lists that read only that.

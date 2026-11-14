@@ -13,6 +13,7 @@ import aftersales from "./aftersales/ru";
 import look from "./look/ru";
 import docs from "./docs/ru";
 import video from "./video/ru";
+import digital from "./digital/ru";
 
 const ru: Messages = {
   hub,
@@ -29,6 +30,7 @@ const ru: Messages = {
   look,
   docs,
   video,
+  digital,
   brand: { name: "NEXORA ONE", tagline: "Одна платформа. Весь ваш бизнес. Вся ваша работа." },
   common: {
     save: "Сохранить",
