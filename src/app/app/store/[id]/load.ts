@@ -4,18 +4,21 @@ import { assistantAvailable } from "@/server/assistant/run";
 import { listCategories } from "@/server/catalog";
 import { NotFoundError } from "@/server/clients";
 import type { Context } from "@/server/context";
+import { connectAvailable } from "@/server/connect-env";
 import { webhookUrl } from "@/server/shop-payments";
-import { checklist, getStore, productChoices, storeImages } from "@/server/stores";
+import { checklist, getStore, productChoices, refreshConnect, storeImages } from "@/server/stores";
 import type { EditorProps } from "./store-editor";
 
 /** Everything the editor shows of one site. A store is edited under /app/store, a website under /app/sites. */
 export async function editorProps(ctx: Context, id: string, place: "store" | "sites"): Promise<EditorProps> {
-  const store = await getStore(ctx, id).catch((e) => {
+  let store = await getStore(ctx, id).catch((e) => {
     if (e instanceof NotFoundError) notFound();
     throw e;
   });
   const selling = store.kind === "store";
   if (selling !== (place === "store")) redirect(selling ? `/app/store/${id}` : `/app/sites/${id}`);
+  // Back from Stripe, or the connection not finished: ask Stripe once how it stands.
+  if (selling && store.stripe.connect.linked && !store.stripe.connect.ready && (await refreshConnect(ctx, id).catch(() => false))) store = await getStore(ctx, id);
   const [checks, images, categories, products] = await Promise.all([
     checklist(ctx, id),
     storeImages(ctx, store.kind),
@@ -48,6 +51,7 @@ export async function editorProps(ctx: Context, id: string, place: "store" | "si
     categories: categories.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
     products,
     webhookUrl: selling ? webhookUrl(store.id) : null,
+    connect: selling && connectAvailable(),
     company: { iban: !!ctx.organization.iban, country: ctx.organization.country },
     can: { settings: ctx.permissions.has("settings.manage"), ai: ctx.permissions.has("ai.use") && assistantAvailable() },
   };

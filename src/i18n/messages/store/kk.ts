@@ -105,6 +105,8 @@ const store: typeof de = {
     CHECKS: "Әлі бәрі дайын емес",
     STRIPE_KEY: "Stripe кілтті қабылдамады",
     STRIPE_WEBHOOK: "Вебхук кілті whsec_ деп басталады",
+    CONNECT: "Бұл серверде Stripe қосылымы бапталмаған",
+    CONNECT_FAILED: "Stripe қосылымды қабылдамады",
     PUBLISHED: "Алдымен жариялаудан алыңыз",
     MEDIA: "Тек өз суреттеріңіз",
   },

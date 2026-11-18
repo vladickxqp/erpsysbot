@@ -55,7 +55,7 @@ describe("a store's Stripe webhook", () => {
 
     await savePayments(ctx, store.id, { bank: false, stripe: false, removeStripe: true }, yes, stripe.hooks);
     expect(stripe.removed[1]).toEqual({ key: OTHER, id: "we_2" });
-    expect((await getStore(ctx, store.id)).stripe).toEqual({ key: false, webhook: false, auto: false, hint: null });
+    expect((await getStore(ctx, store.id)).stripe).toEqual({ key: false, webhook: false, auto: false, hint: null, connect: { linked: false, ready: false } });
   });
 
   it("falls back to the typed secret when the key may not set it up", async () => {

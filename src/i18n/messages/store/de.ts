@@ -103,6 +103,8 @@ const store = {
     CHECKS: "Noch nicht alles bereit",
     STRIPE_KEY: "Stripe hat den Schlüssel nicht angenommen",
     STRIPE_WEBHOOK: "Der Webhook-Schlüssel beginnt mit whsec_",
+    CONNECT: "Stripe-Verbindung ist auf diesem Server nicht eingerichtet",
+    CONNECT_FAILED: "Stripe hat die Verbindung nicht angenommen",
     PUBLISHED: "Erst offline nehmen",
     MEDIA: "Nur eigene Bilder",
   },

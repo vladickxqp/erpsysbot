@@ -19,7 +19,8 @@ import { companyContext } from "./automations";
 import type { Context } from "./context";
 import { companyLeads, notify } from "./notifications";
 import { appUrl } from "./settings";
-import { storeSecrets } from "./stores";
+import { cardKeyOf, setConnectReady, storeSecrets, type StoreRow } from "./stores";
+import { connectFeeOf, connectKey, connectWebhookSecret } from "./connect-env";
 import { afterPayment, cancelSupplierOrdersOf } from "./dropship";
 import { findStore, mailBuyer, placeOrder, StorefrontError, type CheckoutInput, type PublicStore } from "./storefront";
 
@@ -30,10 +31,10 @@ export class ShopPaymentError extends Error {
 }
 
 /** Starts a hosted payment; tests put their own here. */
-export type CreateSession = (secretKey: string, params: Stripe.Checkout.SessionCreateParams, idempotencyKey: string) => Promise<{ id: string; url: string | null }>;
+export type CreateSession = (secretKey: string, params: Stripe.Checkout.SessionCreateParams, idempotencyKey: string, stripeAccount?: string | null) => Promise<{ id: string; url: string | null }>;
 
-const createSession: CreateSession = async (secretKey, params, idempotencyKey) => {
-  const session = await new Stripe(secretKey).checkout.sessions.create(params, { idempotencyKey });
+const createSession: CreateSession = async (secretKey, params, idempotencyKey, stripeAccount) => {
+  const session = await new Stripe(secretKey).checkout.sessions.create(params, { idempotencyKey, ...(stripeAccount ? { stripeAccount } : {}) });
   return { id: session.id, url: session.url };
 };
 
@@ -76,9 +77,11 @@ export async function checkout(store: PublicStore, raw: CheckoutInput, visitor: 
 
 async function startCardPayment(store: PublicStore, placed: { orderId: string; number: number; token: string; grossCents: number }, email: string, create: CreateSession): Promise<string> {
   const [row] = await getDb().select().from(stores).where(eq(stores.id, store.id)).limit(1);
-  const { secretKey } = row ? storeSecrets(row) : { secretKey: null };
+  const card = row ? cardKeyOf(row) : null;
   const base = appUrl();
-  if (!secretKey || !base) throw new Error("card payment not set up");
+  if (!card || !base) throw new Error("card payment not set up");
+  // Through a connected account the platform keeps its share; with the shop's own key nothing is taken.
+  const fee = card.account ? connectFeeOf(placed.grossCents) : 0;
   const t = translator(MESSAGES[store.locale]);
   const items = await withTenant(store.organizationId, (tx) => tx.select().from(orderItems).where(and(eq(orderItems.orderId, placed.orderId))).orderBy(orderItems.position));
   const reference = `${store.slug}-${placed.number}`;
@@ -90,7 +93,7 @@ async function startCardPayment(store: PublicStore, placed: { orderId: string; n
   const back = `${base}/shop/${store.slug}/order/${placed.token}`;
   // One line with the order's total: what is charged is exactly what the order says.
   const session = await create(
-    secretKey,
+    card.secretKey,
     {
       mode: "payment",
       line_items: [
@@ -106,13 +109,14 @@ async function startCardPayment(store: PublicStore, placed: { orderId: string; n
       customer_email: email || undefined,
       client_reference_id: placed.orderId,
       metadata: { orderId: placed.orderId, storeId: store.id },
-      payment_intent_data: { metadata: { orderId: placed.orderId, storeId: store.id }, description: reference },
+      payment_intent_data: { metadata: { orderId: placed.orderId, storeId: store.id }, description: reference, ...(fee > 0 ? { application_fee_amount: fee } : {}) },
       success_url: `${back}?paid=1`,
       cancel_url: back,
       expires_at: Math.floor(Date.now() / 1000) + OPEN_MINUTES * 60,
       locale: STRIPE_LOCALES[store.locale] ?? "auto",
     },
     `order-${placed.orderId}`,
+    card.account,
   );
   if (!session.url) throw new Error("no payment page");
   await withTenant(store.organizationId, async (tx) => {
@@ -137,6 +141,38 @@ export async function handleShopStripeWebhook(storeId: string, payload: string, 
   } catch {
     throw new ShopPaymentError("SIGNATURE");
   }
+  return processShopEvent(row, stripeEvent);
+}
+
+/**
+ * A message about a connected shop's Stripe account, sent to the platform's
+ * Connect webhook: checked with the platform's secret, then handled like a
+ * shop's own message.
+ */
+export async function handleConnectWebhook(payload: string, signature: string | null): Promise<string> {
+  const key = connectKey();
+  const secret = connectWebhookSecret();
+  if (!key || !secret) throw new ShopPaymentError("UNKNOWN");
+  if (!signature) throw new ShopPaymentError("SIGNATURE");
+  let stripeEvent: Stripe.Event;
+  try {
+    stripeEvent = new Stripe(key).webhooks.constructEvent(payload, signature, secret);
+  } catch {
+    throw new ShopPaymentError("SIGNATURE");
+  }
+  if (!stripeEvent.account) return "ignored";
+  const [row] = await getDb().select().from(stores).where(eq(stores.stripeAccountId, stripeEvent.account)).limit(1);
+  if (!row) return "unknown account";
+  if (stripeEvent.type === "account.updated") {
+    const account = stripeEvent.data.object as Stripe.Account;
+    await setConnectReady(row, !!account.charges_enabled && !!account.details_submitted);
+    return "account";
+  }
+  return processShopEvent(row, stripeEvent);
+}
+
+async function processShopEvent(row: StoreRow, stripeEvent: Stripe.Event): Promise<string> {
+  const storeId = row.id;
   const ctx = await companyContext(row.organizationId);
   const [org] = await getDb().select({ currency: organizations.currency }).from(organizations).where(eq(organizations.id, row.organizationId));
   const after: After = {};

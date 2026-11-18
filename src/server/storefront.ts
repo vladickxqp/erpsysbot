@@ -35,7 +35,7 @@ import { heldStock } from "./order-flow";
 import { isSuspended } from "./platform";
 import { appUrl } from "./settings";
 import { lineRows } from "./orders";
-import { contentOf, viewOf, visibleProductFilter, withChildren, type StoreRow } from "./stores";
+import { cardReady, contentOf, viewOf, visibleProductFilter, withChildren, type StoreRow } from "./stores";
 
 export class StorefrontError extends Error {
   constructor(
@@ -119,7 +119,7 @@ function publicOf(storeRow: StoreRow, org: typeof organizations.$inferSelect, pr
   const view = viewOf(storeRow);
   const methods: PaymentMethod[] = [];
   if (view.payments.bank && org.iban) methods.push("bank");
-  if (view.payments.stripe && view.stripe.key && view.stripe.webhook) methods.push("stripe");
+  if (view.payments.stripe && cardReady(view)) methods.push("stripe");
   return {
     id: view.id,
     organizationId: org.id,

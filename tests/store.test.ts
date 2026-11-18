@@ -148,7 +148,7 @@ describe("managing a store", () => {
     expect(JSON.stringify(logged)).not.toContain("sk_test");
 
     await savePayments(ctx, store.id, { bank: true, stripe: true, removeStripe: true }, yes);
-    expect((await getStore(ctx, store.id)).stripe).toEqual({ key: false, webhook: false, auto: false, hint: null });
+    expect((await getStore(ctx, store.id)).stripe).toEqual({ key: false, webhook: false, auto: false, hint: null, connect: { linked: false, ready: false } });
   });
 });
 

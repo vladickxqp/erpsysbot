@@ -13,6 +13,7 @@ import {
   applySite,
   createStore,
   deleteStore,
+  disconnectStripe,
   discardChanges,
   publishChanges,
   saveBasics,
@@ -24,6 +25,7 @@ import {
   saveTheme,
   setStoreStatus,
   siteBasics,
+  startConnect,
   StoreError,
   type ApplyInput,
   type BasicsInput,
@@ -31,7 +33,7 @@ import {
   type ThemeInput,
 } from "@/server/stores";
 
-export type StoreResult = { ok?: boolean; id?: string; error?: string; failed?: string[]; pages?: SitePage[] };
+export type StoreResult = { ok?: boolean; id?: string; error?: string; failed?: string[]; pages?: SitePage[]; url?: string };
 
 const AI_ERROR = { NOT_CONFIGURED: "assistant.notConfigured", LIMIT: "assistant.limit", BUSY: "assistant.busy", REFUSED: "assistant.refused", FAILED: "assistant.failed" } as const;
 
@@ -97,6 +99,17 @@ export async function savePaymentsAction(
 ): Promise<StoreResult> {
   const ctx = await requireContext();
   return run(() => savePayments(ctx, id, input));
+}
+
+/** Where the company goes to connect its Stripe account. */
+export async function connectStripeAction(id: string): Promise<StoreResult> {
+  const ctx = await requireContext();
+  return run(async () => ({ url: await startConnect(ctx, id) }));
+}
+
+export async function disconnectStripeAction(id: string): Promise<StoreResult> {
+  const ctx = await requireContext();
+  return run(() => disconnectStripe(ctx, id));
 }
 
 export async function setStoreStatusAction(id: string, status: "PUBLISHED" | "UNPUBLISHED"): Promise<StoreResult> {

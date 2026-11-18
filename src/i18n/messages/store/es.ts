@@ -105,6 +105,8 @@ const store: typeof de = {
     CHECKS: "Aún no está todo listo",
     STRIPE_KEY: "Stripe no aceptó la clave",
     STRIPE_WEBHOOK: "El secreto del webhook empieza por whsec_",
+    CONNECT: "Stripe Connect no está configurado en este servidor",
+    CONNECT_FAILED: "Stripe no aceptó la conexión",
     PUBLISHED: "Primero desconéctala",
     MEDIA: "Solo imágenes propias",
   },

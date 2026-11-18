@@ -1260,6 +1260,9 @@ export const stores = pgTable(
     stripeWebhookSecret: text("stripe_webhook_secret"),
     /** The webhook the app set up at Stripe itself ("we_…"); empty when the secret was typed in. */
     stripeWebhookId: text("stripe_webhook_id"),
+    /** The company's Stripe account connected to the platform ("acct_…"), and whether it may take payments yet. */
+    stripeAccountId: text("stripe_account_id"),
+    stripeAccountReady: boolean("stripe_account_ready").notNull().default(false),
     /** "sk_test_…4242": which key is stored. */
     stripeKeyHint: text("stripe_key_hint"),
     contactEmail: text("contact_email"),

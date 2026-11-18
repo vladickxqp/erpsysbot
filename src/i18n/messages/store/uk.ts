@@ -105,6 +105,8 @@ const store: typeof de = {
     CHECKS: "Ще не все готово",
     STRIPE_KEY: "Stripe не прийняв ключ",
     STRIPE_WEBHOOK: "Ключ вебхука починається з whsec_",
+    CONNECT: "Підключення Stripe на цьому сервері не налаштовано",
+    CONNECT_FAILED: "Stripe не прийняв підключення",
     PUBLISHED: "Спочатку зніміть з публікації",
     MEDIA: "Лише власні зображення",
   },

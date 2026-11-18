@@ -20,6 +20,8 @@ import { CHECKS_OF, REQUIRED_LEGAL_OF, type Section, type SiteKind, type SitePag
 import { STORE_PAGES, type Check as CheckName, type Design, type Pages, type Payments, type ShippingOption, type StorePage } from "@/lib/store";
 import { parseMoney } from "@/server/money";
 import {
+  connectStripeAction,
+  disconnectStripeAction,
   discardChangesAction,
   publishChangesAction,
   saveBasicsAction,
@@ -54,7 +56,7 @@ export type EditorStore = {
   pages: Pages;
   shipping: ShippingOption[];
   payments: Payments;
-  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null };
+  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null; connect: { linked: boolean; ready: boolean } };
 };
 
 export type EditorProps = {
@@ -64,6 +66,8 @@ export type EditorProps = {
   categories: { id: string; name: string; parentId: string | null }[];
   products: { id: string; name: string }[];
   webhookUrl: string | null;
+  /** The server can connect Stripe accounts. */
+  connect: boolean;
   company: { iban: boolean; country: string };
   can: { settings: boolean; ai: boolean };
 };
@@ -351,7 +355,7 @@ function ShippingTab({ store }: EditorProps) {
 
 // --- Payment ------------------------------------------------------------------------------------
 
-function PaymentTab({ store, webhookUrl, company, can }: EditorProps) {
+function PaymentTab({ store, webhookUrl, connect, company, can }: EditorProps) {
   const { t } = useI18n();
   const { pending, run } = useSave();
   const [bank, setBank] = useState(store.payments.bank);
@@ -396,33 +400,63 @@ function PaymentTab({ store, webhookUrl, company, can }: EditorProps) {
           <label className="flex items-center gap-2">
             <Checkbox checked={stripe} onCheckedChange={(c) => setStripe(c === true)} disabled={disabled} /> {t("store.offer")}
           </label>
-          <Field label={`${t("store.secretKey")}${store.stripe.key ? ` · ${t("store.isSet")}` : ""}`}>
-            <Input type="password" autoComplete="off" value={secretKey} onChange={(e) => setSecretKey(e.target.value.trim())} placeholder="sk_…" disabled={disabled} />
-          </Field>
-          {manual && (
-            <Field label={`${t("store.webhookSecret")}${store.stripe.webhook ? ` · ${t("store.isSet")}` : ""}`}>
-              <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value.trim())} placeholder="whsec_…" disabled={disabled} />
-            </Field>
-          )}
-          {manual && webhookUrl && (
-            <div className="grid gap-1">
-              <span className="font-medium">{t("store.webhookUrl")}</span>
-              <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">{webhookUrl}</code>
+          {connect && (
+            <div className="flex flex-wrap items-center gap-2">
+              {store.stripe.connect.ready ? <Badge>{t("connect.connected")}</Badge> : store.stripe.connect.linked ? <Badge variant="outline">{t("connect.pending")}</Badge> : null}
+              {!store.stripe.connect.ready && (
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("store.copy")}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(webhookUrl).then(() => toast.success(t("store.copied")));
-                  }}
+                  disabled={disabled || pending}
+                  onClick={() =>
+                    run(
+                      () => connectStripeAction(store.id),
+                      (r) => {
+                        if (r.url) window.location.assign(r.url);
+                      },
+                    )
+                  }
                 >
-                  <Copy className="size-4" />
+                  {t(store.stripe.connect.linked ? "connect.resume" : "connect.start")}
                 </Button>
-              </div>
-              <span className="text-xs text-muted-foreground">checkout.session.completed · checkout.session.async_payment_succeeded · checkout.session.async_payment_failed · checkout.session.expired · charge.refunded</span>
+              )}
+              {store.stripe.connect.linked && (
+                <Button type="button" variant="ghost" disabled={disabled || pending} onClick={() => run(() => disconnectStripeAction(store.id))}>
+                  {t("connect.disconnect")}
+                </Button>
+              )}
             </div>
+          )}
+          {!store.stripe.connect.linked && (
+            <>
+            <Field label={`${t("store.secretKey")}${store.stripe.key ? ` · ${t("store.isSet")}` : ""}`}>
+              <Input type="password" autoComplete="off" value={secretKey} onChange={(e) => setSecretKey(e.target.value.trim())} placeholder="sk_…" disabled={disabled} />
+            </Field>
+            {manual && (
+              <Field label={`${t("store.webhookSecret")}${store.stripe.webhook ? ` · ${t("store.isSet")}` : ""}`}>
+                <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value.trim())} placeholder="whsec_…" disabled={disabled} />
+              </Field>
+            )}
+            {manual && webhookUrl && (
+              <div className="grid gap-1">
+                <span className="font-medium">{t("store.webhookUrl")}</span>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">{webhookUrl}</code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("store.copy")}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(webhookUrl).then(() => toast.success(t("store.copied")));
+                    }}
+                  >
+                    <Copy className="size-4" />
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">checkout.session.completed · checkout.session.async_payment_succeeded · checkout.session.async_payment_failed · checkout.session.expired · charge.refunded</span>
+              </div>
+            )}
+            </>
           )}
           {(store.stripe.key || store.stripe.webhook) && (
             <Button type="button" variant="ghost" className="w-fit text-destructive hover:text-destructive" disabled={disabled || pending} onClick={() => save(true)}>

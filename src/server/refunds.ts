@@ -18,7 +18,7 @@ import { NotFoundError } from "./clients";
 import type { Context } from "./context";
 import { ForbiddenError, requirePermission } from "./permissions";
 import { mailBuyer } from "./returns";
-import { storeSecrets } from "./stores";
+import { cardKeyOf } from "./stores";
 
 export class RefundError extends Error {
   constructor(public readonly code: "NOT_PAID" | "AMOUNT" | "PROVIDER" | "FAILED" | "STATE") {
@@ -27,10 +27,10 @@ export class RefundError extends Error {
 }
 
 /** Asks Stripe to pay back part of a payment; tests put their own answer here. */
-export type StripeRefund = (secretKey: string, p: { paymentIntent: string; amountCents: number; idempotencyKey: string; orderId: string }) => Promise<{ id: string; status: string }>;
+export type StripeRefund = (secretKey: string, p: { paymentIntent: string; amountCents: number; idempotencyKey: string; orderId: string; account?: string | null }) => Promise<{ id: string; status: string }>;
 
 const stripeRefund: StripeRefund = async (secretKey, p) => {
-  const refund = await new Stripe(secretKey).refunds.create({ payment_intent: p.paymentIntent, amount: p.amountCents, metadata: { orderId: p.orderId } }, { idempotencyKey: p.idempotencyKey });
+  const refund = await new Stripe(secretKey).refunds.create({ payment_intent: p.paymentIntent, amount: p.amountCents, metadata: { orderId: p.orderId } }, { idempotencyKey: p.idempotencyKey, ...(p.account ? { stripeAccount: p.account } : {}) });
   return { id: refund.id, status: refund.status ?? "pending" };
 };
 
@@ -118,11 +118,11 @@ export async function refundOrder(ctx: Context, orderId: string, raw: RefundInpu
       const [ret] = await tx.select({ orderId: returns.orderId }).from(returns).where(eq(returns.id, input.returnId));
       if (!ret || ret.orderId !== orderId) throw new NotFoundError();
     }
-    let secret: string | null = null;
+    let card: { secretKey: string; account: string | null } | null = null;
     if (input.provider === "stripe") {
       const [store] = order.storeId ? await tx.select().from(stores).where(eq(stores.id, order.storeId)) : [];
-      secret = store ? storeSecrets(store).secretKey : null;
-      if (order.paymentMethod !== "stripe" || !order.paymentReference?.startsWith("pi_") || !secret) throw new RefundError("PROVIDER");
+      card = store ? cardKeyOf(store) : null;
+      if (order.paymentMethod !== "stripe" || !order.paymentReference?.startsWith("pi_") || !card) throw new RefundError("PROVIDER");
     }
     const [row] = await tx
       .insert(refunds)
@@ -141,7 +141,7 @@ export async function refundOrder(ctx: Context, orderId: string, raw: RefundInpu
       .returning();
     await audit(tx, ctx, "refund.create", "refund", row.id, { order: order.number, amount: input.amountCents, provider: input.provider });
     const result = input.provider === "manual" ? await settle(tx, ctx, row.id) : null;
-    return { id: row.id, paymentIntent: order.paymentReference, secret, result };
+    return { id: row.id, paymentIntent: order.paymentReference, card, result };
   });
 
   if (input.provider === "manual") {
@@ -152,7 +152,7 @@ export async function refundOrder(ctx: Context, orderId: string, raw: RefundInpu
 
   // Stripe, outside the transaction: the refund row exists, its id makes the request count once.
   try {
-    const answer = await refund(planned.secret!, { paymentIntent: planned.paymentIntent!, amountCents: input.amountCents, idempotencyKey: `refund-${planned.id}`, orderId });
+    const answer = await refund(planned.card!.secretKey, { paymentIntent: planned.paymentIntent!, amountCents: input.amountCents, idempotencyKey: `refund-${planned.id}`, orderId, account: planned.card!.account });
     const ok = answer.status === "succeeded" || answer.status === "pending";
     const result = await withTenant(ctx.organization.id, async (tx) => {
       await tx
@@ -211,7 +211,7 @@ export async function refundsOf(ctx: Context, orderId: string): Promise<{ list: 
     return {
       list: rows.map((r) => ({ id: r.id, returnId: r.returnId, amountCents: r.amountCents, provider: r.provider, status: r.status, reason: r.reason, reference: r.reference, error: r.error, createdAt: r.createdAt.toISOString() })),
       leftCents: PAID.includes(order.paymentStatus) ? Math.max(0, order.grossCents - (await committed(tx, orderId))) : 0,
-      canStripe: order.paymentMethod === "stripe" && !!order.paymentReference?.startsWith("pi_") && !!store && !!storeSecrets(store).secretKey,
+      canStripe: order.paymentMethod === "stripe" && !!order.paymentReference?.startsWith("pi_") && !!store && !!cardKeyOf(store),
     };
   });
 }

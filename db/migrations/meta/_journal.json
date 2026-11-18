@@ -225,6 +225,13 @@
       "when": 1795016131641,
       "tag": "0031_geo_places",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795019366200,
+      "tag": "0032_stripe_connect",
+      "breakpoints": true
     }
   ]
 }

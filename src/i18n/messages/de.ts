@@ -14,6 +14,7 @@ import docs from "./docs/de";
 import video from "./video/de";
 import digital from "./digital/de";
 import tracking from "./tracking/de";
+import connect from "./connect/de";
 
 const de = {
   hub,
@@ -32,6 +33,7 @@ const de = {
   video,
   digital,
   tracking,
+  connect,
   brand: { name: "NEXORA ONE", tagline: "Eine Plattform. Dein ganzes Geschäft. Deine ganze Arbeit." },
   common: {
     save: "Speichern",

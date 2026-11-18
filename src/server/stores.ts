@@ -72,10 +72,11 @@ import { assertModule } from "./modules";
 import { requirePermission, type Permission } from "./permissions";
 import { hint, seal, unseal } from "./secret-box";
 import { appUrl } from "./settings";
+import { connectAvailable, connectKey } from "./connect-env";
 
 export class StoreError extends Error {
   constructor(
-    public readonly code: "SLUG_INVALID" | "SLUG_TAKEN" | "CHECKS" | "STRIPE_KEY" | "STRIPE_WEBHOOK" | "PUBLISHED" | "MEDIA" | "KIND" | "PAGE_SLUG",
+    public readonly code: "SLUG_INVALID" | "SLUG_TAKEN" | "CHECKS" | "STRIPE_KEY" | "STRIPE_WEBHOOK" | "CONNECT" | "CONNECT_FAILED" | "PUBLISHED" | "MEDIA" | "KIND" | "PAGE_SLUG",
     public readonly failed: Check[] = [],
   ) {
     super(code);
@@ -85,7 +86,7 @@ export class StoreError extends Error {
 export type StoreRow = typeof stores.$inferSelect;
 
 /** A site as the app shows it: everything but the secrets, which only say whether they are set. */
-export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "stripeWebhookId" | "live" | "kind" | "design" | "blocks" | "customPages" | "pages" | "shipping" | "payments"> & {
+export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret" | "stripeWebhookId" | "stripeAccountId" | "stripeAccountReady" | "live" | "kind" | "design" | "blocks" | "customPages" | "pages" | "shipping" | "payments"> & {
   kind: SiteKind;
   /** Published, with edits visitors do not see yet. */
   changed: boolean;
@@ -96,7 +97,7 @@ export type StoreView = Omit<StoreRow, "stripeSecretKey" | "stripeWebhookSecret"
   pages: Pages;
   shipping: ShippingOption[];
   payments: Payments;
-  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null };
+  stripe: { key: boolean; webhook: boolean; auto: boolean; hint: string | null; connect: { linked: boolean; ready: boolean } };
 };
 
 const kindOfRow = (row: { kind: string }): SiteKind => (isSiteKind(row.kind) ? row.kind : "store");
@@ -112,7 +113,7 @@ function differs(row: StoreRow, live: unknown): boolean {
 }
 
 export function viewOf(row: StoreRow): StoreView {
-  const { stripeSecretKey, stripeWebhookSecret, stripeWebhookId, live, ...rest } = row;
+  const { stripeSecretKey, stripeWebhookSecret, stripeWebhookId, stripeAccountId, stripeAccountReady, live, ...rest } = row;
   return {
     ...rest,
     kind: kindOfRow(row),
@@ -124,7 +125,7 @@ export function viewOf(row: StoreRow): StoreView {
     pages: { ...EMPTY_PAGES, ...((row.pages ?? {}) as Partial<Pages>) },
     shipping: (row.shipping ?? []) as ShippingOption[],
     payments: { bank: false, stripe: false, ...((row.payments ?? {}) as Partial<Payments>) },
-    stripe: { key: !!stripeSecretKey, webhook: !!stripeWebhookSecret, auto: !!stripeWebhookSecret && !!stripeWebhookId, hint: row.stripeKeyHint },
+    stripe: { key: !!stripeSecretKey, webhook: !!stripeWebhookSecret, auto: !!stripeWebhookSecret && !!stripeWebhookId, hint: row.stripeKeyHint, connect: { linked: !!stripeAccountId, ready: !!stripeAccountId && stripeAccountReady } },
   };
 }
 
@@ -686,7 +687,8 @@ export async function savePayments(ctx: Context, id: string, raw: z.input<typeof
     const keySet = input.removeStripe ? false : !!(patch.stripeSecretKey ?? row.stripeSecretKey);
     const hookSet = input.removeStripe ? false : !!(patch.stripeWebhookSecret ?? row.stripeWebhookSecret);
     // Card payment is offered only with both: the key to start a payment and the secret to believe its result.
-    const payments: Payments = { bank: input.bank, stripe: input.stripe && keySet && hookSet };
+    const connected = !!row.stripeAccountId && row.stripeAccountReady && connectAvailable();
+    const payments: Payments = { bank: input.bank, stripe: input.stripe && ((keySet && hookSet) || connected) };
     patch.payments = payments;
     await tx.update(stores).set(patch).where(eq(stores.id, id));
     // Never the keys, only what changed.
@@ -694,6 +696,101 @@ export async function savePayments(ctx: Context, id: string, raw: z.input<typeof
   });
   // The webhook the app made before is of no use any more: taken away at Stripe, as far as the old key still allows.
   if (old.key && old.hook && patch.stripeWebhookId !== undefined) await hooks.remove(old.key, old.hook).catch(() => undefined);
+}
+
+/** How the store takes card payments: its own Stripe key, or its account connected to the platform. */
+export function cardKeyOf(row: Pick<StoreRow, "stripeSecretKey" | "stripeAccountId" | "stripeAccountReady">): { secretKey: string; account: string | null } | null {
+  const own = unseal(row.stripeSecretKey);
+  if (own) return { secretKey: own, account: null };
+  const platform = connectKey();
+  return platform && row.stripeAccountId && row.stripeAccountReady ? { secretKey: platform, account: row.stripeAccountId } : null;
+}
+
+/** Card payment works: its own key and webhook secret, or a finished connection on a server with Connect. */
+export const cardReady = (view: Pick<StoreView, "stripe">): boolean => (view.stripe.key && view.stripe.webhook) || (view.stripe.connect.ready && connectAvailable());
+
+/** Talks to Stripe for the connection; tests put their own here. */
+export type ConnectApi = {
+  createAccount: (key: string, p: { country: string; email: string | null; storeId: string; organizationId: string }) => Promise<string>;
+  link: (key: string, account: string, refreshUrl: string, returnUrl: string) => Promise<string>;
+  ready: (key: string, account: string) => Promise<boolean>;
+};
+const stripeConnect: ConnectApi = {
+  createAccount: async (key, p) =>
+    (await new Stripe(key).accounts.create({ type: "standard", country: p.country, ...(p.email ? { email: p.email } : {}), metadata: { storeId: p.storeId, organizationId: p.organizationId } })).id,
+  link: async (key, account, refreshUrl, returnUrl) => (await new Stripe(key).accountLinks.create({ account, refresh_url: refreshUrl, return_url: returnUrl, type: "account_onboarding" })).url,
+  ready: async (key, account) => {
+    const found = await new Stripe(key).accounts.retrieve(account);
+    return !!found.charges_enabled && !!found.details_submitted;
+  },
+};
+
+/**
+ * The way to Stripe's own pages, where the company signs in to (or opens)
+ * its Stripe account and connects it; the account is made on the first click.
+ */
+export async function startConnect(ctx: Context, id: string, api: ConnectApi = stripeConnect): Promise<string> {
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind, "settings.manage");
+  if (kind !== "store") throw new StoreError("KIND");
+  const key = connectKey();
+  const base = appUrl();
+  if (!connectAvailable() || !key || !base) throw new StoreError("CONNECT");
+  let account = await withTenant(ctx.organization.id, async (tx) => (await storeOf(tx, id)).stripeAccountId);
+  if (!account) {
+    const org = await companyOf(ctx.organization.id);
+    const made = await api.createAccount(key, { country: org?.country ?? "DE", email: org?.email ?? null, storeId: id, organizationId: ctx.organization.id }).catch(() => null);
+    if (!made) throw new StoreError("CONNECT_FAILED");
+    account = made;
+    await withTenant(ctx.organization.id, async (tx) => {
+      await tx.update(stores).set({ stripeAccountId: made, stripeAccountReady: false, updatedAt: new Date() }).where(eq(stores.id, id));
+      await audit(tx, ctx, "store.connect", "store", id, { step: "account" });
+    });
+  }
+  const back = `${base}/app/store/${id}?tab=payment`;
+  const url = await api.link(key, account, `${back}&connect=retry`, `${back}&connect=done`).catch(() => null);
+  if (!url) throw new StoreError("CONNECT_FAILED");
+  return url;
+}
+
+/** Asks Stripe whether the connected account may take payments yet. */
+export async function refreshConnect(ctx: Context, id: string, api: ConnectApi = stripeConnect): Promise<boolean> {
+  canSee(ctx, await kindOf(ctx, id));
+  const row = await withTenant(ctx.organization.id, (tx) => storeOf(tx, id));
+  const key = connectKey();
+  if (!key || !row.stripeAccountId) return false;
+  const ready = await api.ready(key, row.stripeAccountId).catch(() => row.stripeAccountReady);
+  await setConnectReady(row, ready);
+  return ready;
+}
+
+/** The connection's state, from Stripe's message or a check; a connection that just became ready offers cards. */
+export async function setConnectReady(row: Pick<StoreRow, "id" | "organizationId">, ready: boolean): Promise<void> {
+  await withTenant(row.organizationId, async (tx) => {
+    const [fresh] = await tx.select().from(stores).where(eq(stores.id, row.id)).for("update");
+    if (!fresh || !fresh.stripeAccountId || fresh.stripeAccountReady === ready) return;
+    const payments: Payments = { bank: false, stripe: false, ...((fresh.payments ?? {}) as Partial<Payments>) };
+    await tx
+      .update(stores)
+      .set({ stripeAccountReady: ready, payments: ready ? { ...payments, stripe: true } : payments, updatedAt: new Date() })
+      .where(eq(stores.id, row.id));
+  });
+}
+
+/** The shop stops using its connected account; the account itself stays the company's at Stripe. */
+export async function disconnectStripe(ctx: Context, id: string): Promise<void> {
+  const kind = await kindOf(ctx, id);
+  allow(ctx, kind, "settings.manage");
+  await withTenant(ctx.organization.id, async (tx) => {
+    const row = await storeOf(tx, id);
+    const payments: Payments = { bank: false, stripe: false, ...((row.payments ?? {}) as Partial<Payments>) };
+    const own = !!row.stripeSecretKey && !!row.stripeWebhookSecret;
+    await tx
+      .update(stores)
+      .set({ stripeAccountId: null, stripeAccountReady: false, payments: { ...payments, stripe: payments.stripe && own }, updatedAt: new Date() })
+      .where(eq(stores.id, id));
+    await audit(tx, ctx, "store.connect", "store", id, { step: "disconnect" });
+  });
 }
 
 /** The store's own secrets, for the payment code only. */
@@ -754,7 +851,7 @@ async function checksOf(tx: Tx, row: StoreRow, org: Awaited<ReturnType<typeof co
     name: !!store.name.trim() && validSlug(store.slug),
     // What a store needs to sell; a website sells nothing.
     products: !selling || offered > 0,
-    payment: !selling || (store.payments.bank && !!org?.iban) || (store.payments.stripe && store.stripe.key && store.stripe.webhook),
+    payment: !selling || (store.payments.bank && !!org?.iban) || (store.payments.stripe && cardReady(store)),
     shipping: !selling || store.shipping.length > 0,
     address: !!(org?.street && org.postalCode && org.city && (store.contactEmail || org.email)),
     legal: missingPages.length === 0,
