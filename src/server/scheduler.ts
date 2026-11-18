@@ -15,6 +15,8 @@ export function startScheduler(): void {
     await job(() => import("./assistant/agents").then((m) => m.runDueAgents()));
     // Parcels sent with DHL, when the server has a key: at most every two hours each.
     await job(() => import("./shipments").then((m) => m.syncDhl()));
+    // Places parcels reported, for the shipment map: a few at a time, one a second.
+    await job(() => import("./geo").then((m) => m.locatePlaces()));
   };
   timer = setInterval(run, 15 * 60_000);
   timer.unref?.();

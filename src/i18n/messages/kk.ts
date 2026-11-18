@@ -14,6 +14,7 @@ import look from "./look/kk";
 import docs from "./docs/kk";
 import video from "./video/kk";
 import digital from "./digital/kk";
+import tracking from "./tracking/kk";
 
 const kk: Messages = {
   hub,
@@ -31,6 +32,7 @@ const kk: Messages = {
   docs,
   video,
   digital,
+  tracking,
   brand: { name: "NEXORA ONE", tagline: "Бір платформа. Бүкіл бизнесіңіз. Барлық жұмысыңыз." },
   common: {
     save: "Сақтау",

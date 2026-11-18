@@ -59,6 +59,7 @@ const PATHS: [string, AppModule][] = [
   ["/app/media", "media"],
   ["/app/content", "content"],
   ["/app/video", "content"],
+  ["/app/shipments", "orders"],
   ["/app/social", "social"],
   ["/app/reports", "reports"],
   ["/app/team", "team"],

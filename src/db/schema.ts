@@ -19,6 +19,7 @@ import {
   type AnyPgColumn,
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -1085,6 +1086,20 @@ export const shipmentEvents = pgTable(
   },
   (t) => [index("shipment_events_shipment_idx").on(t.shipmentId, t.occurredAt), uniqueIndex("shipment_events_external_key").on(t.shipmentId, t.externalKey)],
 );
+
+/**
+ * Places carriers reported, as OpenStreetMap located them (src/server/geo.ts).
+ * A platform table: only place names, shared by every company, never a person.
+ */
+export const geoPlaces = pgTable("geo_places", {
+  /** The place name as placeKey() writes it. */
+  key: text("key").primaryKey(),
+  found: boolean("found").notNull(),
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  label: text("label"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Goods a customer sends back (src/lib/returns.ts). */
 export const returns = pgTable(

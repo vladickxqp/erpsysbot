@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Film, Images, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Globe, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Store, Users, UsersRound, Wallet, Undo2, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, Inbox, MessagesSquare, Palmtree, Sun, ScrollText, Target, Timer, Clapperboard, CreditCard, Film, Images, MapPin, Plug, Share2, ShieldCheck, Workflow, FolderOpen, Globe, Truck, FileSignature, FileText, KanbanSquare, LayoutDashboard, ListTodo, Package, Settings, ShoppingCart, Sparkles, Store, Users, UsersRound, Wallet, Undo2, type LucideIcon } from "lucide-react";
 import { sectionOf, type Area } from "@/lib/areas";
 import type { AppModule } from "@/lib/modules";
 import type { Permission } from "@/server/permissions";
@@ -25,6 +25,7 @@ export const NAV: NavItem[] = [
   { href: "/app/personal", label: "personal.title", icon: Target, module: "personal" },
   { href: "/app/orders", label: "nav.orders", icon: ShoppingCart, needs: "orders.read", primary: true, module: "orders" },
   { href: "/app/returns", label: "aftersales.title", icon: Undo2, needs: "orders.read", module: "orders" },
+  { href: "/app/shipments", label: "tracking.title", icon: MapPin, needs: "orders.read", module: "orders" },
   { href: "/app/quotes", label: "nav.quotes", icon: FileSignature, needs: "orders.read", module: "quotes" },
   { href: "/app/invoices", label: "nav.invoices", icon: FileText, needs: "invoices.read", primary: true, module: "invoices" },
   { href: "/app/finance", label: "nav.finance", icon: Wallet, needs: "finance.read", module: "finance" },
